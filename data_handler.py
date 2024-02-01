@@ -2,7 +2,7 @@ import pandas as pd
 from enum import Enum
 from urllib.parse import urlencode
 import requests
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
 from typing import Union, List, Dict
 from api import RequestBuilder, Endpoint
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -36,7 +36,8 @@ class WebHandler:
             else:
                 response = requests.get(url, timeout=60).json()
         except Exception as e:
-            print(f"Error fetching data: {e}")
+            response_text = response.text if response else "No response"
+            print(f"Error fetching data: {e}, Response: {response_text}")
             return pd.DataFrame()
 
         if endpoint == Endpoint.LANDING_DATA:
@@ -98,19 +99,22 @@ class WebHandler:
             for future in as_completed(futures):
                 try:
                     data = future.result()
-                    results.append(data)
+                    results.extend(data)
                 except Exception as e:
                     print(f"Request failed: {e}")
+                    print(requests_info)
 
-            if concatenate and results:
-                return pd.concat(results, ignore_index=True)
-            else:
-                return results
+            # if concatenate and results:
+            return pd.concat(results, ignore_index=True) if results else pd.DataFrame()
+            # else:
+            #     return results
 
     def save_to_csv(self, data, file_name):
+        # todo: allow for calling data fetch within this function
         data.to_csv(f"{file_name}.csv", index=False)
 
     def save_to_database(self, data, table_name, db_file_name="data", db="sqlite", exists="replace"):
+        # todo: allow for calling data fetch within this function
         engine = create_engine(f"{db}:///{db_file_name}.db")
         data.to_sql(table_name, con=engine, if_exists=exists, index=False)
 

@@ -293,7 +293,7 @@ class Lookup:
             print(result)
         return result
 
-lookup_instance = Lookup()
+# lookup_instance = Lookup()
 
 # sample usage
 """
