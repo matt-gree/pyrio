@@ -50,9 +50,14 @@ class RequestBuilder:
 # @dataclass
 # class ParameterList:
 
+@dataclass
+class ParameterList:
+    """Base class for all ParameterLists - makes it easier to reference them in other functions."""
+    pass
+
 
 @dataclass
-class GamesParameterList:
+class GamesParameterList(ParameterList):
     tag: Optional[List[str]] = None
     exclude_tag: Optional[List[str]] = None
     start_time: Optional[int] = None
