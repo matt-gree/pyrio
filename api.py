@@ -47,8 +47,6 @@ class RequestBuilder:
     def build(self):
         return [(request.endpoint, request.parameters) for request in self.requests if request is not None]
 
-# @dataclass
-# class ParameterList:
 
 @dataclass
 class ParameterList:

@@ -30,6 +30,8 @@ s7_off_mario = handler.fetch_data(request_list)
 # You can save it to a CSV or a SQLite database
 handler.save_to_csv(s7_off_mario, file_name="Mario_LD_S7OFF")
 
+
+
 # Load it using pandas
 mario = pd.read_csv('Mario_LD_S7OFF.csv')
 

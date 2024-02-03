@@ -8,6 +8,8 @@ from api import RequestBuilder, Endpoint
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from requests_cache import CachedSession
 from sqlalchemy import create_engine
+from abc import ABC, abstractmethod
+
 
 class StatFileHandler:
     def __init__(self):
@@ -109,6 +111,7 @@ class WebHandler:
             # else:
             #     return results
 
+
     def save_to_csv(self, data, file_name):
         # todo: allow for calling data fetch within this function
         data.to_csv(f"{file_name}.csv", index=False)
@@ -161,3 +164,48 @@ class DatabaseHandler:
 # class RequestInfo:
 #     endpoint: Endpoint
 #     parameters: Parameters
+
+
+class DataProcessor(ABC):
+    @abstractmethod
+    def process(self, data: pd.DataFrame) -> pd.DataFrame:
+        """Process the DataFrame and return a dataframe based on the endpoint."""
+        pass
+
+
+class StatsDataProcessor(DataProcessor):
+    def process(self, data: pd.DataFrame) -> pd.DataFrame:
+        return data
+
+
+class LandingDataProcessor(DataProcessor):
+    def process(self, data: pd.DataFrame) -> pd.DataFrame:
+        return data
+
+
+class EventsDataProcessor(DataProcessor):
+    def process(self, data: pd.DataFrame) -> pd.DataFrame:
+        return data
+
+
+class GamesDataProcessor(DataProcessor):
+    def process(self, data: pd.DataFrame) -> pd.DataFrame:
+        return data
+
+
+class ProcessorFactory:
+    processors = {
+        Endpoint.LANDING_DATA: LandingDataProcessor(),
+        Endpoint.STATS: StatsDataProcessor(),
+        Endpoint.GAMES: GamesDataProcessor(),
+        Endpoint.EVENTS: EventsDataProcessor()
+    }
+
+    @staticmethod
+    def get_processor(endpoint: Endpoint) -> DataProcessor:
+        return ProcessorFactory.processors.get(endpoint, DataProcessor())
+
+
+def process_endpoint_data(endpoint: Endpoint, data: pd.DataFrame) -> pd.DataFrame:
+    processor = ProcessorFactory.get_processor(endpoint)
+    return processor.process(data)

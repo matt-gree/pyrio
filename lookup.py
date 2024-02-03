@@ -52,61 +52,61 @@ class Lookup:
     def __init__(self):
         self.dictionaries = {
             LookupDicts.CHAR_NAME: {
-            0: "Mario",
-            1: "Luigi",
-            2: "DK",
-            3: "Diddy",
-            4: "Peach",
-            5: "Daisy",
-            6: "Yoshi",
-            7: "Baby Mario",
-            8: "Baby Luigi",
-            9: "Bowser",
-            10: "Wario",
-            11: "Waluigi",
-            12: "Koopa(G)",
-            13: "Toad(R)",
-            14: "Boo",
-            15: "Toadette",
-            16: "Shy Guy(R)",
-            17: "Birdo",
-            18: "Monty",
-            19: "Bowser Jr",
-            20: "Paratroopa(R)",
-            21: "Pianta(B)",
-            22: "Pianta(R)",
-            23: "Pianta(Y)",
-            24: "Noki(B)",
-            25: "Noki(R)",
-            26: "Noki(G)",
-            27: "Bro(H)",
-            28: "Toadsworth",
-            29: "Toad(B)",
-            30: "Toad(Y)",
-            31: "Toad(G)",
-            32: "Toad(P)",
-            33: "Magikoopa(B)",
-            34: "Magikoopa(R)",
-            35: "Magikoopa(G)",
-            36: "Magikoopa(Y)",
-            37: "King Boo",
-            38: "Petey",
-            39: "Dixie",
-            40: "Goomba",
-            41: "Paragoomba",
-            42: "Koopa(R)",
-            43: "Paratroopa(G)",
-            44: "Shy Guy(B)",
-            45: "Shy Guy(Y)",
-            46: "Shy Guy(G)",
-            47: "Shy Guy(Bk)",
-            48: "Dry Bones(Gy)",
-            49: "Dry Bones(G)",
-            50: "Dry Bones(R)",
-            51: "Dry Bones(B)",
-            52: "Bro(F)",
-            53: "Bro(B)",
-        },
+                0: "Mario",
+                1: "Luigi",
+                2: "DK",
+                3: "Diddy",
+                4: "Peach",
+                5: "Daisy",
+                6: "Yoshi",
+                7: "Baby Mario",
+                8: "Baby Luigi",
+                9: "Bowser",
+                10: "Wario",
+                11: "Waluigi",
+                12: "Koopa(G)",
+                13: "Toad(R)",
+                14: "Boo",
+                15: "Toadette",
+                16: "Shy Guy(R)",
+                17: "Birdo",
+                18: "Monty",
+                19: "Bowser Jr",
+                20: "Paratroopa(R)",
+                21: "Pianta(B)",
+                22: "Pianta(R)",
+                23: "Pianta(Y)",
+                24: "Noki(B)",
+                25: "Noki(R)",
+                26: "Noki(G)",
+                27: "Bro(H)",
+                28: "Toadsworth",
+                29: "Toad(B)",
+                30: "Toad(Y)",
+                31: "Toad(G)",
+                32: "Toad(P)",
+                33: "Magikoopa(B)",
+                34: "Magikoopa(R)",
+                35: "Magikoopa(G)",
+                36: "Magikoopa(Y)",
+                37: "King Boo",
+                38: "Petey",
+                39: "Dixie",
+                40: "Goomba",
+                41: "Paragoomba",
+                42: "Koopa(R)",
+                43: "Paratroopa(G)",
+                44: "Shy Guy(B)",
+                45: "Shy Guy(Y)",
+                46: "Shy Guy(G)",
+                47: "Shy Guy(Bk)",
+                48: "Dry Bones(Gy)",
+                49: "Dry Bones(G)",
+                50: "Dry Bones(R)",
+                51: "Dry Bones(B)",
+                52: "Bro(F)",
+                53: "Bro(B)",
+            },
             LookupDicts.STADIUM: {
                 0: "Mario Stadium",
                 1: "Bowser Castle",
@@ -292,6 +292,39 @@ class Lookup:
         if auto_print:
             print(result)
         return result
+
+    def translate_values(self, dictionary_name, values):
+        dictionary = self.dictionaries.get(dictionary_name)
+        if not dictionary:
+            raise ValueError(f"Dictionary {dictionary_name} not found.")
+
+        translated = [self._lookup(dictionary, value) for value in values]
+        return translated
+    def create_translated_columns(self, df):
+        column_to_dict_map = {
+            'batter_char_id': LookupDicts.CHAR_NAME,
+            'pitcher_char_id': LookupDicts.CHAR_NAME,
+            'fielder_char_id': LookupDicts.CHAR_NAME,
+            'batting_hand': LookupDicts.HAND_BOOL,
+            # not sure about this one
+            'fielder_jump': LookupDicts.FIELDER_ACTIONS,
+            'fielder_position': LookupDicts.POSITION,
+            'fielding_hand': LookupDicts.HAND_BOOL,
+            'final_result': LookupDicts.FINAL_RESULT,
+            'manual_select_state': LookupDicts.MANUAL_SELECT,
+            'stick_input': LookupDicts.INPUT_DIRECTION,
+            'type_of_contact': LookupDicts.CONTACT_TYPE,
+            'type_of_swing': LookupDicts.TYPE_OF_SWING,
+            'stadium': LookupDicts.STADIUM
+        }
+
+        for column, dict_name in column_to_dict_map.items():
+            if column in df.columns:
+                translated_values = self.translate_values(dict_name, df[column])
+                df[f'{column}_str'] = translated_values
+                df[f'{column}_str'] = df[f'{column}_str'].astype('category')
+
+        return df
 
 # lookup_instance = Lookup()
 
