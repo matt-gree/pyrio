@@ -8,3 +8,4 @@ tbd/
 .idea/
 __init__.py
 *.parquet
+dme/
