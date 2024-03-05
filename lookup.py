@@ -264,18 +264,21 @@ class Lookup:
 
     def _lookup(self, dictionary, search_term):
         def single_lookup(term):
+            original_term = term
             if isinstance(term, str) and term.isdigit():
+                term = int(term)
+            if isinstance(term, float) and term.is_integer():
                 term = int(term)
 
             str_term = str(term).lower()
             adjusted_dict = {str(k).lower(): str(v).lower() for k, v in dictionary.items()}
 
             if str_term in adjusted_dict:
-                return dictionary[int(term)] if isinstance(term, int) else dictionary[term]
+                return dictionary.get(term, f"Invalid ID or Name: {original_term}")
             elif str_term in adjusted_dict.values():
                 return [key for key, value in dictionary.items() if value.lower() == str_term][0]
             else:
-                return f"Invalid ID or Name: {term}"
+                return f"Invalid ID or Name: {original_term}"
 
         if isinstance(search_term, list):
 
@@ -300,6 +303,7 @@ class Lookup:
 
         translated = [self._lookup(dictionary, value) for value in values]
         return translated
+
     def create_translated_columns(self, df):
         column_to_dict_map = {
             'batter_char_id': LookupDicts.CHAR_NAME,

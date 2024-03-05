@@ -2,3 +2,9 @@ __pycache__/
 api_cache.sqlite
 my_data.db
 .env
+data/
+tbd/
+*.ipynb
+.idea/
+__init__.py
+*.parquet

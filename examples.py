@@ -31,9 +31,8 @@ s7_off_mario = handler.fetch_data(request_list)
 handler.save_to_csv(s7_off_mario, file_name="Mario_LD_S7OFF")
 
 
-
 # Load it using pandas
-mario = pd.read_csv('Mario_LD_S7OFF.csv')
+mario = pd.read_csv('data/Mario_LD_S7OFF.csv')
 
 # wario_charge = wario[wario['type_of_swing'] == 2].copy()
 # wario_charge.loc[:, 'IsSour'] = wario_charge['type_of_contact'].isin([0, 4])

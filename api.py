@@ -1,6 +1,6 @@
 from dataclasses import dataclass, fields, asdict
 from typing import Optional, List, Union
-
+from lookup import Lookup
 # @dataclass
 # class StatsEndpoint:
 #     # todo: some way to readily retrieve and manipulate params for requests, such as a parameter/query builder
@@ -150,3 +150,56 @@ def simplify_parameter_type(param_type):
         .replace(', NoneType', '')
 
     return type_str
+
+
+class LandingData:
+
+    def __init__(self, df):
+        # I don't like this current setup at all, so I need to think through how I want to handle it.
+        self.lookup = Lookup()
+        self.data = self.lookup.create_translated_columns(df)
+        self.coords = self.get_coordinates()
+        self.hits = self.get_hits()
+        self.outs = self.get_outs()
+        self.sour = self.get_sour()
+        self.nice = self.get_nice()
+        self.perfect = self.get_perfect()
+        self.data = self.add_rng_values()
+        self.categorical = self.get_categorical_data()
+        self.numeric = self.get_numeric_data()
+
+    def get_coordinates(self):
+        return self.data[['ball_x_contact_pos', 'ball_x_landing_pos', 'ball_x_velocity', 'ball_y_landing_pos', 'ball_y_velocity', 'ball_z_contact_pos', 'ball_z_landing_pos', 'ball_z_velocity']]
+
+    def get_hits(self):
+        return self.data[self.data['final_result'].isin([7, 8, 9, 10])]
+
+    def get_outs(self):
+        return self.data[self.data['final_result'].isin([5, 6, 14, 15, 16])]
+
+    def get_sour(self):
+        return self.data[self.data['type_of_contact'].isin([7, 8, 9, 10])]
+
+    def get_nice(self):
+        return self.data[self.data['type_of_contact'].isin([7, 8, 9, 10])]
+
+    def get_perfect(self):
+        return self.data[self.data['type_of_contact'].isin([7, 8, 9, 10])]
+
+    def get_numeric_data(self):
+        return self.data.select_dtypes(include=['int64', 'float64'])
+
+    def get_categorical_data(self):
+        return self.data.select_dtypes(include=['object', 'bool', 'category'])
+
+    def calculate_rng_value(self, row):
+        fin_sum = 100
+        rng1 = (row['rng1'] - (int(row['rng2']) & 0xff)) + (int(row['rng2']) // fin_sum) + row['rng3']
+        random_range = rng1 - (rng1 // fin_sum) * fin_sum
+        random_range = int(random_range)
+        random_sum = (random_range >> 31 ^ random_range) - (random_range >> 31)
+        return random_sum
+
+    def add_rng_values(self):
+        self.data['rng_value'] = self.data.apply(self.calculate_rng_value, axis=1)
+        return self.data
