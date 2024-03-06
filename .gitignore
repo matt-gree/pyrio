@@ -9,3 +9,5 @@ tbd/
 __init__.py
 *.parquet
 dme/
+*.sqlite
+*.db
