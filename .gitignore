@@ -11,3 +11,4 @@ __init__.py
 dme/
 *.sqlite
 *.db
+.DS_Store
