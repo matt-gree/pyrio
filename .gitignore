@@ -6,7 +6,6 @@ data/
 tbd/
 *.ipynb
 .idea/
-__init__.py
 *.parquet
 dme/
 *.sqlite
