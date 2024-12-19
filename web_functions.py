@@ -1,5 +1,5 @@
 import json
-from api_manager import include_rio_key, APIManager
+from .api_manager import include_rio_key, APIManager
 
 with open('rio_key.json', "r") as config_file:
     global RIO_KEY
