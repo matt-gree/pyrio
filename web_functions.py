@@ -467,6 +467,38 @@ def check_for_member_in_user_group(api_manager: APIManager, username, group_name
     return api_manager.send_request(ENDPOINT, method='GET', data=data)
 
 
+@include_rio_key(RIO_KEY)
+def remove_user_from_user_group(api_manager: APIManager, username, group_name, data=None):
+    
+    ENDPOINT = '/user_group/remove_user'
+
+    if data is None:
+        data = {}
+
+    data['username'] = username
+    data['group_name'] = group_name
+
+    if debug_mode:
+        print(data)
+
+    return api_manager.send_request(ENDPOINT, method='POST', data=data)
+
+@include_rio_key(RIO_KEY)
+def check_members_of_user_groups(api_manager: APIManager, group_name, data=None):
+    
+    ENDPOINT = '/user_group/members'
+
+    if data is None:
+        data = {}
+
+    data['group_name'] = group_name
+
+    if debug_mode:
+        print(data)
+
+    return api_manager.send_request(ENDPOINT, method='GET', data=data)
+
+
 if __name__ == '__main__':
     sample_inputs = {
         'community_name_closed': 'Netplay Superstars',
