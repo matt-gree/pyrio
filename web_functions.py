@@ -483,20 +483,51 @@ def remove_user_from_user_group(api_manager: APIManager, username, group_name, d
 
     return api_manager.send_request(ENDPOINT, method='POST', data=data)
 
-@include_rio_key(RIO_KEY)
-def check_members_of_user_groups(api_manager: APIManager, group_name, data=None):
+
+def check_members_of_user_groups(api_manager: APIManager, group_name):
     
     ENDPOINT = '/user_group/members'
 
-    if data is None:
-        data = {}
-
+    data = {}
     data['group_name'] = group_name
 
     if debug_mode:
         print(data)
 
     return api_manager.send_request(ENDPOINT, method='GET', data=data)
+
+# Games
+def games_endpoint(api_manager: APIManager, tag=None, exclude_tag=None, username=None, vs_username=None, exclude_username=None, captain=None, vs_captain=None, stadium=None, limit_games=None):
+
+    ENDPOINT = '/games'
+    
+    data = {}
+
+    if tag:
+        data['tag'] = tag
+    if exclude_tag:
+        data['exclude_tag'] = tag
+    if username:
+        data['username'] = username
+    if vs_username:
+        data['vs_username'] = vs_username
+    if exclude_username:
+        data['exclude_username'] = exclude_username
+    if captain:
+        data['captain'] = captain
+    if vs_captain:
+        data['vs_captain'] = vs_captain
+    if stadium:
+        data['stadium'] = stadium
+    if limit_games:
+        data['limit_games'] = limit_games
+
+    if debug_mode:
+        print(data)
+
+    return api_manager.send_request(ENDPOINT, method='GET', data=data)
+
+
 
 
 if __name__ == '__main__':
