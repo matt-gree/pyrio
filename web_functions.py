@@ -8,6 +8,7 @@ if os.path.exists('rio_key.json'):
         RIO_KEY = json.load(config_file)['rio_key']
 else:
     print("WARNING: 'rio_key.json' file does not exist.")
+    RIO_KEY = ''
 
 debug_mode = True
 
