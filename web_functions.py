@@ -1,9 +1,13 @@
+import os
 import json
 from .api_manager import include_rio_key, APIManager
 
-with open('rio_key.json', "r") as config_file:
-    global RIO_KEY
-    RIO_KEY = json.load(config_file)['rio_key']
+if os.path.exists('rio_key.json'):
+    with open('rio_key.json', "r") as config_file:
+        global RIO_KEY
+        RIO_KEY = json.load(config_file)['rio_key']
+else:
+    print("WARNING: 'rio_key.json' file does not exist.")
 
 debug_mode = True
 
