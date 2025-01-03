@@ -1,4 +1,4 @@
-from lookup import LookupDicts
+from .lookup import LookupDicts
 
 '''
 Intended to parse "decoded" files which would be present on a user's computer
