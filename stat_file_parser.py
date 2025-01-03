@@ -37,6 +37,31 @@ Roster args:
 # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
 '''
 
+class ErrorChecker:
+    @staticmethod
+    def check_team_num(teamNum: int):
+        """Checks if the team number is valid (either 0 or 1)."""
+        if teamNum != 0 and teamNum != 1:
+            raise Exception(
+                f'Invalid team arg {teamNum}. Function only accepts team args of 0 (home team) or 1 (away team).')
+
+    @staticmethod
+    def check_roster_num(rosterNum: int):
+        """Checks if the roster number is valid (between -1 and 8). Allows -1."""
+        if rosterNum < -1 or rosterNum > 8:
+            raise Exception(f'Invalid roster arg {rosterNum}. Function only accepts roster args of 0 to 8.')
+
+    @staticmethod
+    def check_roster_num_no_neg(rosterNum: int):
+        """Checks if the roster number is valid (between 0 and 8). Does not allow -1."""
+        if rosterNum < 0 or rosterNum > 8:
+            raise Exception(f'Invalid roster arg {rosterNum}. Function only accepts roster args of 0 to 8.')
+
+    @staticmethod
+    def check_base_num(baseNum: int):
+        """Checks if the base number is valid (between 1 and 3) or -1."""
+        if (baseNum < 1 or baseNum > 3) and (baseNum != -1):
+            raise Exception(f'Invalid base arg {baseNum}. Function only accepts base args of 1 to 3 or -1.')
 
 # create stat obj
 class StatObj:
@@ -67,7 +92,7 @@ class StatObj:
         # For Project Rio versions 1.9.2 and later
         # teamNum: 0 == away team, 1 == home team
 
-        self.__errorCheck_teamNum(teamNum)
+        ErrorChecker.check_team_num(teamNum)
 
 
         VERSION_LIST_HOME_AWAY_FLIPPED = ["Pre 0.1.7", "0.1.7a", "0.1.8", "0.1.9", "1.9.1"]
@@ -142,8 +167,8 @@ class StatObj:
         return isStarred
 
     def getTeamString(self, teamNum: int, rosterNum: int):
-        self.__errorCheck_teamNum(teamNum)
-        self.__errorCheck_rosterNum(rosterNum)
+        ErrorChecker.check_team_num(teamNum)
+        ErrorChecker.check_roster_num(rosterNum)
 
         VERSION_LIST_OLD_TEAM_STRUCTURE = ["Pre 0.1.7", "0.1.7a", "0.1.8", "0.1.9", "1.9.1", "1.9.2", "1.9.3", "1.9.4"]
         if self.version() in VERSION_LIST_OLD_TEAM_STRUCTURE:
@@ -158,8 +183,8 @@ class StatObj:
         # if no roster spot is provided, returns a list of characters on a given team
         # teamNum: 0 == home team, 1 == away team
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
-        self.__errorCheck_teamNum(teamNum)
-        self.__errorCheck_rosterNum(rosterNum)
+        ErrorChecker.check_team_num(teamNum)
+        ErrorChecker.check_roster_num(rosterNum)
         if rosterNum == -1:
             charList = []
             for x in range(0, 9):
@@ -173,7 +198,7 @@ class StatObj:
         # if no arg, returns if any character on the team is starred
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
         teamNum = self.teamNumVersionCorrection(teamNum)
-        self.__errorCheck_rosterNum(rosterNum)
+        ErrorChecker.check_roster_num(rosterNum)
         if rosterNum == -1:
             for x in range(0, 9):
                 if self.statJson["Character Game Stats"][self.getTeamString(teamNum, x)]["Superstar"] == 1:
@@ -198,7 +223,7 @@ class StatObj:
         # if no roster provided, returns a list of all character's offensive stats
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
         teamNum = self.teamNumVersionCorrection(teamNum)
-        self.__errorCheck_rosterNum(rosterNum)
+        ErrorChecker.check_roster_num(rosterNum)
         if rosterNum == -1:
             oStatList = []
             for x in range(0, 9):
@@ -212,7 +237,7 @@ class StatObj:
         # if no roster provided, returns a list of all character's defensive stats
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
         teamNum = self.teamNumVersionCorrection(teamNum)
-        self.__errorCheck_rosterNum(rosterNum)
+        ErrorChecker.check_roster_num(rosterNum)
         if rosterNum == -1:
             dStatList = []
             for x in range(0, 9):
@@ -225,14 +250,14 @@ class StatObj:
         # returns fielding handedness of character
         # rosterNum: 0 -> 8 for each of the 9 roster spots
         teamNum = self.teamNumVersionCorrection(teamNum)
-        self.__errorCheck_rosterNum2(rosterNum)
+        ErrorChecker.check_roster_num_no_neg(rosterNum)
         return self.statJson["Character Game Stats"][self.getTeamString(teamNum, rosterNum)]["Fielding Hand"]
 
     def battingHand(self, teamNum: int, rosterNum: int):
         # returns batting handedness of character
         # rosterNum: 0 -> 8 for each of the 9 roster spots
         teamNum = self.teamNumVersionCorrection(teamNum)
-        self.__errorCheck_rosterNum2(rosterNum)
+        ErrorChecker.check_roster_num_no_neg(rosterNum)
         return self.statJson["Character Game Stats"][self.getTeamString(teamNum, rosterNum)]["Batting Hand"]
 
     # defensive stats
@@ -358,7 +383,7 @@ class StatObj:
         # returns if a character was a pitcher
         # rosterNum: 0 -> 8 for each of the 9 roster spots
         teamNum = self.teamNumVersionCorrection(teamNum)
-        self.__errorCheck_rosterNum2(rosterNum)
+        ErrorChecker.check_roster_num_no_neg(rosterNum)
         if self.defensiveStats(teamNum, rosterNum)["Was Pitcher"] == 1:
             return True
         else:
@@ -427,14 +452,14 @@ class StatObj:
         # returns a dict which tracks how many pitches a character was at a position for
         # rosterNum: 0 -> 8 for each of the 9 roster spots
         teamNum = self.teamNumVersionCorrection(teamNum)
-        self.__errorCheck_rosterNum2(rosterNum)
+        ErrorChecker.check_roster_num_no_neg(rosterNum)
         return self.defensiveStats(teamNum, rosterNum)["Pitches Per Position"][0]
 
     def outsPerPosition(self, teamNum: int, rosterNum: int):
         # returns a dict which tracks how many outs a character was at a position for
         # rosterNum: 0 -> 8 for each of the 9 roster spots
         teamNum = self.teamNumVersionCorrection(teamNum)
-        self.__errorCheck_rosterNum2(rosterNum)
+        ErrorChecker.check_roster_num_no_neg(rosterNum)
         return self.defensiveStats(teamNum, rosterNum)["Outs Per Position"][0]
 
     # offensive stats
@@ -674,28 +699,6 @@ class StatObj:
 
     def final_event(self):
         return len(self.events())-1
-
-    # manual exception handling stuff
-    def __errorCheck_teamNum(self, teamNum: int):
-        # tells if the teamNum is invalid
-        if teamNum != 0 and teamNum != 1:
-            raise Exception(
-                f'Invalid team arg {teamNum}. Function only accepts team args of 0 (home team) or 1 (away team).')
-
-    def __errorCheck_rosterNum(self, rosterNum: int):
-        # tells if rosterNum is invalid. allows -1 arg
-        if rosterNum < -1 or rosterNum > 8:
-            raise Exception(f'Invalid roster arg {rosterNum}. Function only accepts roster args of 0 to 8.')
-
-    def __errorCheck_rosterNum2(self, rosterNum: int):
-        # tells if rosterNum is invalid. does not allow -1 arg
-        if rosterNum < 0 or rosterNum > 8:
-            raise Exception(f'Invalid roster arg {rosterNum}. Function only accepts roster args of 0 to 8.')
-        
-    def __errorCheck_baseNum(self, baseNum: int):
-        # tells if baseNum is invalid
-        if (baseNum < 1 or baseNum > 3) and (baseNum != -1):
-            raise Exception(f'Invalid roster arg {baseNum}. Function only accepts roster args of 0 to 8.')
         
 
 class EventObj():
@@ -718,7 +721,7 @@ class EventObj():
         return self.eventDict["Half Inning"]
     
     def score(self, teamNum: int):
-        self.rioStat.__errorCheck_teamNum(teamNum)
+        ErrorChecker.check_team_num(teamNum)
         if teamNum == 0:
             return self.eventDict['Away Score']
         else:
@@ -740,7 +743,7 @@ class EventObj():
         return self.eventDict['Star Chance']
     
     def team_stars(self, teamNum: int):
-        self.rioStat.__errorCheck_teamNum(teamNum)
+        ErrorChecker.check_team_num(teamNum)
         if teamNum == 0:
             return self.eventDict['Away Stars']
         else:
@@ -760,8 +763,10 @@ class EventObj():
     
     def pitcher(self):
         return self.rioStat.characterName(self.pitching_team(), self.eventDict['Pitcher Roster Loc'])
+        return self.rioStat.characterName(self.pitching_team(), self.eventDict['Pitcher Roster Loc'])
     
     def batter(self):
+        return self.rioStat.characterName(self.batting_team(), self.eventDict['Batter Roster Loc'])
         return self.rioStat.characterName(self.batting_team(), self.eventDict['Batter Roster Loc'])
     
     def catcher(self):
@@ -785,7 +790,7 @@ class EventObj():
         checks if a runner is on the supplied base number
         if -1 is provided, then all bases will be checked
         """
-        self.rioStat.__errorCheck_baseNum(baseNum)
+        ErrorChecker.check_base_num(baseNum)
         if baseNum == -1:
             for i in range(1,4):
                 if self.bool_runner_on_base(i) == 1:
@@ -796,7 +801,7 @@ class EventObj():
         return 1 if self.eventDict.get(runner_str) else 0
     
     def runner_dict(self, baseNum: int):
-        self.rioStat.__errorCheck_baseNum(baseNum)
+        ErrorChecker.check_base_num(baseNum)
         runner_str = f'Runner {baseNum}B'
         return self.eventDict.get(runner_str, {})
     
@@ -805,7 +810,7 @@ class EventObj():
         Checks if a runner is stealing from the supplied base number.
         If -1 is provided, then all bases will be checked.
         """
-        self.rioStat.__errorCheck_baseNum(base_num)
+        ErrorChecker.check_base_num(base_num)
         
         if base_num == -1:  # Check all bases for a steal
             for i in range(1, 4):
