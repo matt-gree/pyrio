@@ -698,8 +698,9 @@ class StatObj:
             raise Exception(f'Invalid roster arg {baseNum}. Function only accepts roster args of 0 to 8.')
         
 
-class EventObj(StatObj):
+class EventObj():
     def __init__(self, rioStat: StatObj, eventNum: int):
+        self.rioStat = rioStat
         self.all_events = rioStat.events()
         if abs(eventNum) > len(self.all_events):
             raise Exception(f'Invalid event num: Event {eventNum} does not exist in game')
@@ -717,7 +718,7 @@ class EventObj(StatObj):
         return self.eventDict["Half Inning"]
     
     def score(self, teamNum: int):
-        self.__errorCheck_teamNum(teamNum)
+        self.rioStat.__errorCheck_teamNum(teamNum)
         if teamNum == 0:
             return self.eventDict['Away Score']
         else:
@@ -739,7 +740,7 @@ class EventObj(StatObj):
         return self.eventDict['Star Chance']
     
     def team_stars(self, teamNum: int):
-        self.__errorCheck_teamNum(teamNum)
+        self.rioStat.__errorCheck_teamNum(teamNum)
         if teamNum == 0:
             return self.eventDict['Away Stars']
         else:
@@ -758,13 +759,13 @@ class EventObj(StatObj):
         return abs(self.half_inning() - 1)
     
     def pitcher(self):
-        return self.characterName(self.pitching_team(), self.eventDict['Pitcher Roster Loc'])
+        return self.rioStat.characterName(self.pitching_team(), self.eventDict['Pitcher Roster Loc'])
     
     def batter(self):
-        return self.characterName(self.batting_team(), self.eventDict['Batter Roster Loc'])
+        return self.rioStat.characterName(self.batting_team(), self.eventDict['Batter Roster Loc'])
     
     def catcher(self):
-        return self.characterName(self.batting_team(), self.eventDict['Catcher Roster Loc'])
+        return self.rioStat.characterName(self.batting_team(), self.eventDict['Catcher Roster Loc'])
     
     def rbi(self):
         # returns the rbi from a specified event
@@ -784,7 +785,7 @@ class EventObj(StatObj):
         checks if a runner is on the supplied base number
         if -1 is provided, then all bases will be checked
         """
-        self.__errorCheck_baseNum(baseNum)
+        self.rioStat.__errorCheck_baseNum(baseNum)
         if baseNum == -1:
             for i in range(1,4):
                 if self.bool_runner_on_base(i) == 1:
@@ -795,7 +796,7 @@ class EventObj(StatObj):
         return 1 if self.eventDict.get(runner_str) else 0
     
     def runner_dict(self, baseNum: int):
-        self.__errorCheck_baseNum(baseNum)
+        self.rioStat.__errorCheck_baseNum(baseNum)
         runner_str = f'Runner {baseNum}B'
         return self.eventDict.get(runner_str, {})
     
@@ -804,7 +805,7 @@ class EventObj(StatObj):
         Checks if a runner is stealing from the supplied base number.
         If -1 is provided, then all bases will be checked.
         """
-        self.__errorCheck_baseNum(base_num)
+        self.rioStat.__errorCheck_baseNum(base_num)
         
         if base_num == -1:  # Check all bases for a steal
             for i in range(1, 4):
