@@ -708,6 +708,30 @@ class EventObj():
         if abs(eventNum) > len(self.all_events):
             raise Exception(f'Invalid event num: Event {eventNum} does not exist in game')
         self.eventDict = self.all_events[eventNum]
+
+    def safe_int(value):
+        """
+        Tries to safely convert a str to an integer.
+        
+        Args:
+        - value: The value to be converted to an integer.
+
+        Returns:
+        - The integer value if the conversion is successful.
+        - None if the value cannot be converted to an integer.
+        """
+        if value is None:
+            return None
+        if isinstance(value, int):
+            return value  # Return if it's already an integer
+        elif isinstance(value, str):
+            try:
+                return int(value)  # Try converting a string to an integer
+            except ValueError:
+                raise ValueError(f"Value '{value}' is not a valid integer.")
+        
+        # If it's neither a string nor an integer, raise an exception
+        raise ValueError(f"{value}' cannot be converted to an integer.")
         
     def event_num(self):
         return self.eventDict['Event Num']
@@ -931,25 +955,25 @@ class EventObj():
         """
         Returns None if no contact in event
         """
-        return self.contact_dict().get('Frame of Swing Upon Contact')
+        return self.safe_int(self.contact_dict().get('Frame of Swing Upon Contact'))
 
     def ball_power(self):
         """
         Returns None if no contact in event
         """
-        return self.contact_dict().get('Ball Power')
+        return self.safe_int(self.contact_dict().get('Ball Power'))
 
     def vert_angle(self):
         """
         Returns None if no contact in event.
         """
-        return self.contact_dict().get('Vert Angle')
+        return self.safe_int(self.contact_dict().get('Vert Angle'))
 
     def horiz_angle(self):
         """
         Returns None if no contact in event.
         """
-        return self.contact_dict().get('Horiz Angle')
+        return self.safe_int(self.contact_dict().get('Horiz Angle'))
 
     def contact_absolute(self):
         """
@@ -968,9 +992,9 @@ class EventObj():
         Returns None if no contact in event.
         Returns a vector (rng1, rng2, rng3) of RNG components.
         """
-        rng1 = self.contact_dict().get('RNG1')
-        rng2 = self.contact_dict().get('RNG2')
-        rng3 = self.contact_dict().get('RNG3')
+        rng1 = self.safe_int(self.contact_dict().get('RNG1'))
+        rng2 = self.safe_int(self.contact_dict().get('RNG2'))
+        rng3 = self.safe_int(self.contact_dict().get('RNG3'))
         return (rng1, rng2, rng3)
 
     def ball_velocity(self):
@@ -1012,7 +1036,7 @@ class EventObj():
         """
         Returns None if no contact in event.
         """
-        return self.contact_dict().get('Ball Hang Time')
+        return self.safe_int(self.contact_dict().get('Ball Hang Time'))
 
     def contact_result_primary(self):
         """
@@ -1068,7 +1092,7 @@ class EventObj():
         """
         return self.first_fielder_dict().get('Fielder Manual Selected')
 
-    def first_fielder_position(self):
+    def first_fielder_location(self):
         """
         Returns None if no first fielder in event.
         Returns a vector (x, y, z) of fielder position components.
