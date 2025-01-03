@@ -115,15 +115,21 @@ class LookupDicts():
     }
 
     INPUT_DIRECTION = {
-        0: "None",
+        0: "",
         1: "Left",
         2: "Right",
+        3: "Left+Right",
         4: "Down",
-        5: "Down and Left",
-        6: "Down and Right",
+        5: "Left+Down",
+        6: "Right+Down",
+        7: "Left+Right+Down",
         8: "Up",
-        9: "Up and Left",
-        10: "Up and Right"
+        9: "Left+Up",
+        10: "Right+Up",
+        11: "Left+Right+Up",
+        13: "Left+Down+Up",
+        14: "Right+Down+Up",
+        15: "Left+Right+Down+Up"
     }
 
     PITCH_TYPE = {
@@ -225,7 +231,7 @@ class LookupDicts():
         12: "Error - Chem",
         13: "Bunt",
         14: "SacFly",
-        15: "Ground Ball Double Play",
+        15: "Ground ball double Play",
         16: "Foul catch",
     }
 
@@ -233,20 +239,20 @@ class LookupDicts():
         0: "None",
         1: "Strikeout",
         2: "Walk (BB)",
-        3: "Walk HBP",
+        3: "Walk (HBP)",
         4: "Out",
-        5: "Caught (Anything Else)",
-        6: "Caught (Line Drive)",
+        5: "Caught",
+        6: "Caught line-drive",
         7: "Single",
         8: "Double",
         9: "Triple",
         10: "HR",
-        11: "Error Input",
-        12: "Error Chem",
+        11: "Error - Input",
+        12: "Error - Chem",
         13: "Bunt",
-        14: "Sac Fly",
-        15: "Ground Ball Double Play",
-        16: "Foul Catch"
+        14: "SacFly",
+        15: "Ground ball double Play",
+        16: "Foul catch"
     }
 
     MANUAL_SELECT = {
