@@ -700,12 +700,10 @@ class StatObj:
 
 class EventObj(StatObj):
     def __init__(self, rioStat: StatObj, eventNum: int):
-        self.__errorCheck_eventNum(eventNum)
-        self.eventDict = rioStat.events()[eventNum]
-
-    def __errorCheck_eventNum(self, eventNum):
-        if abs(eventNum) > len(self.eventDict):
+        self.all_events = rioStat.events()
+        if abs(eventNum) > len(self.all_events):
             raise Exception(f'Invalid event num: Event {eventNum} does not exist in game')
+        self.eventDict = self.all_events[eventNum]
         
     def event_num(self):
         return self.eventDict['Event Num']
