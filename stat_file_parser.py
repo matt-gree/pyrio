@@ -709,7 +709,7 @@ class EventObj():
             raise Exception(f'Invalid event num: Event {eventNum} does not exist in game')
         self.eventDict = self.all_events[eventNum]
 
-    def safe_int(value):
+    def safe_int(self, value):
         """
         Tries to safely convert a str to an integer.
         
