@@ -763,10 +763,8 @@ class EventObj():
     
     def pitcher(self):
         return self.rioStat.characterName(self.pitching_team(), self.eventDict['Pitcher Roster Loc'])
-        return self.rioStat.characterName(self.pitching_team(), self.eventDict['Pitcher Roster Loc'])
-    
+        
     def batter(self):
-        return self.rioStat.characterName(self.batting_team(), self.eventDict['Batter Roster Loc'])
         return self.rioStat.characterName(self.batting_team(), self.eventDict['Batter Roster Loc'])
     
     def catcher(self):
