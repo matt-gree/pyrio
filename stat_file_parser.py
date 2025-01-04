@@ -1107,6 +1107,68 @@ class EventObj():
         Returns None if no first fielder in event.
         """
         return self.first_fielder_dict().get('Fielder Bobble')
+    
+
+class HudObj:
+    def __init__(self, hud_json: dict):
+        self.hud_json = hud_json
+        self.event_number = self.hud_json['Event Num']
+
+    def event_integer(self):
+        return int(str(self.event_number)[:-1])
+
+    def player(self, teamNum: int):
+        ErrorChecker.check_team_num(teamNum)
+        if teamNum == 0:
+            return self.hud_json['Away Player']
+        elif teamNum == 1:
+            return self.hud_json['Home Player']
+    
+    def inning(self):
+        return self.hud_json['Inning']
+    
+    def half_inning(self):
+        return self.hud_json['Half Inning']
+    
+    def inning_float(self):
+        return float(self.hud_json['Inning'] + 0.5*self.hud_json['Half Inning'])
+    
+    def team_roster_str_list(self, teamNum: int):
+        ErrorChecker.check_team_num(teamNum)
+        team_string = "Away" if teamNum == 0 else "Home"
+        team_roster_str_list = []
+        for i in range (9):
+             team_roster_str_list.append(f'{team_string} Roster {i}')
+        
+        return team_roster_str_list
+
+    def roster(self, teamNum: int):
+        roster_dict = {}
+        for player in self.team_roster_str_list(teamNum):
+            player_index = int(player[-1])
+            roster_dict[player_index] = {}
+            roster_dict[player_index]['captain'] = self.hud_json[player]['Captain']
+            roster_dict[player_index]['char_id'] = self.hud_json[player]['CharID']
+
+        return roster_dict
+    
+    def inning_end(self):
+        if self.hud_json['Outs'] + self.hud_json['Num Outs During Play'] == 3:
+            return True
+        return False
+    
+    def event_result(self):
+        if str(self.hud_json['Event Num'])[-1] == 'b':
+            return self.hud_json['Result of AB']
+        
+        return 'In Play'
+    
+    def captain_index(self, teamNum: int):
+        ErrorChecker.check_team_num(teamNum)
+        for player in self.team_roster_str_list(teamNum):
+            if self.hud_json[player]['Captain'] == 1:
+                return int(player[-1])
+        raise Exception(f'No captain on teamNum {teamNum}')
 
     
 '''
