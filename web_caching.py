@@ -3,7 +3,7 @@ import json
 import pickle
 from datetime import datetime, timedelta
 
-from .web_functions import list_tags, list_users, list_game_modes
+from .web_functions import list_tags, list_users, list_game_modes, community_tags
 from .api_manager import APIManager
 import pandas as pd
 

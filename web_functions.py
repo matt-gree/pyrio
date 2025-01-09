@@ -176,26 +176,42 @@ def community_key(api_manager: APIManager, community_name_closed, key_action, da
 
 
 @include_rio_key(RIO_KEY)
-def community_update(api_manager: APIManager, community_name_closed, community_name_free, comm_desc, comm_type, private, global_link, active_tag_set_limit, data=None):
-
-    ENDPOINT = "/community/key"
+def community_update(
+    api_manager: APIManager,
+    community_id: str,
+    community_name_free: str = None,
+    comm_desc: str = None,
+    comm_type: str = None,
+    private: bool = None,
+    global_link: bool = None,
+    active_tag_set_limit: int = None,
+    data: dict = None
+):
+    ENDPOINT = "/community/update"
 
     if data is None:
         data = {}
 
-    data.update({
-        "community_name": community_name_closed,
-        'name': community_name_free,
-        'desc': comm_desc,
-        'type': comm_type, # Official or Unofficial
-        'link': global_link, # True or False
-        'private': private, # True or False
-        'active_tag_set_limit': active_tag_set_limit # Int
-    })
+    # Required field
+    data["community_id"] = community_id
+
+    # Add optional fields only if they are not None
+    if community_name_free is not None:
+        data["name"] = community_name_free
+    if comm_desc is not None:
+        data["desc"] = comm_desc
+    if comm_type is not None:
+        data["type"] = comm_type  # Official or Unofficial
+    if global_link is not None:
+        data["link"] = global_link  # True or False
+    if private is not None:
+        data["private"] = private  # True or False
+    if active_tag_set_limit is not None:
+        data["active_tag_set_limit"] = active_tag_set_limit  # Int
 
     if debug_mode:
         print(data)
-    
+
     return api_manager.send_request(ENDPOINT, method="POST", data=data)
 
 
