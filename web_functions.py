@@ -12,6 +12,15 @@ else:
 
 debug_mode = True
 
+def debug_print(data):
+    if debug_mode:
+        # Mask the RIO key if it is in data
+        masked_data = data.copy()  # Create a copy to avoid modifying the original
+        if 'RIO_KEY' in masked_data:
+            masked_data['RIO_KEY'] = '****'  # Mask the key with asterisks or whatever you prefer
+        
+        print(masked_data)
+
 ### example of including the decorator. I'd also like to think that you could streamline the params part too but I didn't have anything come to mind right now
 @include_rio_key(RIO_KEY)
 def create_community(api_manager: APIManager, community_name_free, private, global_link, comm_desc, comm_type="Unofficial", data=None):
@@ -31,8 +40,7 @@ def create_community(api_manager: APIManager, community_name_free, private, glob
         "desc": comm_desc,
     })
 
-    if debug_mode:
-        print(data)
+    debug_print(data)
 
     ### calls api manager and sends the request
     return api_manager.send_request(ENDPOINT, method="POST", data=data)
@@ -124,8 +132,7 @@ def community_manage(api_manager: APIManager, community_name_closed, user_list, 
         'user_list': user_list
     })
 
-    if debug_mode:
-        print(data)
+    debug_print(data)
     
     return api_manager.send_request(ENDPOINT, method="POST", data=data)
 
@@ -143,8 +150,7 @@ def community_sponsor(api_manager: APIManager, community_name_closed, action, da
         'action': action # Get, Remove or Add
     })
 
-    if debug_mode:
-        print(data)
+    debug_print(data)
 
     '''
     Example Outputs
@@ -174,8 +180,7 @@ def community_key(api_manager: APIManager, community_name_closed, key_action, da
         'action': key_action # generate, revoke, generate_all
     })
 
-    if debug_mode:
-        print(data)
+    debug_print(data)
     
     return api_manager.send_request(ENDPOINT, method="POST", data=data)
 
@@ -214,8 +219,7 @@ def community_update(
     if active_tag_set_limit is not None:
         data["active_tag_set_limit"] = active_tag_set_limit  # Int
 
-    if debug_mode:
-        print(data)
+    debug_print(data)
 
     return api_manager.send_request(ENDPOINT, method="POST", data=data)
 
@@ -241,8 +245,7 @@ def create_tag(api_manager: APIManager, tag_name_free, tag_desc, community_name_
             'gecko_code': gecko_code,
         })
 
-    if debug_mode:
-        print(data)
+    debug_print(data)
     
     return api_manager.send_request(ENDPOINT, method="POST", data=data)
 
@@ -269,8 +272,7 @@ def update_tag(api_manager: APIManager, tag_id, tag_name_free=None, tag_desc=Non
         if gecko_code_desc is not None:
             data['gecko_code_desc'] = gecko_code_desc
 
-    if debug_mode:
-        print(data)
+    debug_print(data)
 
     return api_manager.send_request(ENDPOINT, method="POST", data=data)
 
@@ -316,8 +318,7 @@ def create_game_mode(api_manager: APIManager, game_mode_name_free, game_mode_des
     if game_mode_to_mirror_tags_from:
         data['tag_set_id'] = game_mode_to_mirror_tags_from
 
-    if debug_mode:
-        print(data)
+    debug_print(data)
 
     return api_manager.send_request(ENDPOINT, method="POST", data=data)
 
@@ -334,8 +335,7 @@ def delete_game_mode(api_manager: APIManager, game_mode_name_closed, data=None):
         'name': game_mode_name_closed,
     })
 
-    if debug_mode:
-        print(data)
+    debug_print(data)
 
     return api_manager.send_request(ENDPOINT, method="POST", data=data)
 
@@ -393,8 +393,7 @@ def update_game_mode(api_manager: APIManager, tag_set_id, game_mode_name_free=No
     if remove_tag_ids is not None:
         data['remove_tag_ids'] = remove_tag_ids
 
-    if debug_mode:
-        print(data)
+    debug_print(data)
 
     return api_manager.send_request(ENDPOINT, method='POST', data=data)
 
@@ -448,8 +447,7 @@ def manual_game_submit(api_manager: APIManager, winner_username, winner_score, l
     if game_id_hex:
         data.update({'game_id_hex': game_id_hex})
 
-    if debug_mode:
-        print(data)
+    debug_print(data)
 
     return api_manager.send_request(ENDPOINT, method='POST', data=data)
 
@@ -465,8 +463,7 @@ def add_user_to_user_group(api_manager: APIManager, username, group_name, data=N
     data['username'] =  username
     data['group_name'] = group_name
 
-    if debug_mode:
-        print(data)
+    debug_print(data)
 
     return api_manager.send_request(ENDPOINT, method='POST', data=data)
 
@@ -482,8 +479,7 @@ def check_for_member_in_user_group(api_manager: APIManager, username, group_name
     data['username'] = username
     data['group_name'] = group_name
 
-    if debug_mode:
-        print(data)
+    debug_print(data)
 
     return api_manager.send_request(ENDPOINT, method='GET', data=data)
 
@@ -499,8 +495,7 @@ def remove_user_from_user_group(api_manager: APIManager, username, group_name, d
     data['username'] = username
     data['group_name'] = group_name
 
-    if debug_mode:
-        print(data)
+    debug_print(data)
 
     return api_manager.send_request(ENDPOINT, method='POST', data=data)
 
@@ -512,8 +507,7 @@ def check_members_of_user_groups(api_manager: APIManager, group_name):
     data = {}
     data['group_name'] = group_name
 
-    if debug_mode:
-        print(data)
+    debug_print(data)
 
     return api_manager.send_request(ENDPOINT, method='GET', data=data)
 
@@ -543,8 +537,7 @@ def games_endpoint(api_manager: APIManager, tag=None, exclude_tag=None, username
     if limit_games:
         data['limit_games'] = limit_games
 
-    if debug_mode:
-        print(data)
+    debug_print(data)
 
     return api_manager.send_request(ENDPOINT, method='GET', data=data)
 
