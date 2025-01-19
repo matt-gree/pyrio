@@ -16,8 +16,8 @@ def debug_print(data):
     if debug_mode:
         # Mask the RIO key if it is in data
         masked_data = data.copy()  # Create a copy to avoid modifying the original
-        if 'RIO_KEY' in masked_data:
-            masked_data['RIO_KEY'] = '****'  # Mask the key with asterisks or whatever you prefer
+        if 'rio_key' in masked_data:
+            masked_data['rio_key'] = '****'  # Mask the key with asterisks or whatever you prefer
         
         print(masked_data)
 
@@ -379,11 +379,11 @@ def update_game_mode(api_manager: APIManager, tag_set_id, game_mode_name_free=No
 
     # Add arguments to data dict if they are not None
     if game_mode_name_free is not None:
-        data['game_mode_name_free'] = game_mode_name_free
+        data['name'] = game_mode_name_free
     if game_mode_desc is not None:
-        data['game_mode_desc'] = game_mode_desc
+        data['desc'] = game_mode_desc
     if game_mode_type is not None:
-        data['game_mode_type'] = game_mode_type
+        data['type'] = game_mode_type
     if start_date is not None:
         data['start_date'] = start_date
     if end_date is not None:

@@ -43,6 +43,10 @@ class APIManager:
             ### found this, apparently it's just a streamlined way of handling "if status == 200 etc etc etc"
             response.raise_for_status()
 
+            # Check if the response is successful
+            if response.status_code == 200:
+                print(f"Success: {method} request to {endpoint} completed successfully.")
+
             # need to handle different response types? I think most are json but perhaps not
             return response.json()
         
