@@ -542,6 +542,11 @@ def games_endpoint(api_manager: APIManager, tag=None, exclude_tag=None, username
     return api_manager.send_request(ENDPOINT, method='GET', data=data)
 
 
+def live_games_endpoint(api_manager: APIManager):
+
+    ENDPOINT = '/populate_db/ongoing_game/'        
+
+    return api_manager.send_request(ENDPOINT, method='GET')
 
 
 if __name__ == '__main__':
