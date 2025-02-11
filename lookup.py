@@ -27,6 +27,8 @@
 (argument of 0 returns Mario; argument of "Mario" returns 0)."""
 # should try to standardize the string version of these names if possible to match with dataframe(s)
 
+import pandas as pd
+
 class LookupDicts():
     CHAR_NAME = {
         0: "Mario",
@@ -292,9 +294,16 @@ class Lookup:
             return single_lookup(search_term)
 
     def lookup(self, dictionary: LookupDicts, search_term, auto_print=False):
-        result = self._lookup(dictionary, search_term)
+        if isinstance(search_term, pd.Series):
+            result = search_term.apply(lambda x: self._lookup(dictionary, x))
+        elif isinstance(search_term, pd.DataFrame):
+            result = search_term.map(lambda x: self._lookup(dictionary, x))
+        else:
+            result = self._lookup(dictionary, search_term)
+        
         if auto_print:
             print(result)
+        
         return result
 
     def translate_values(self, dictionary: LookupDicts, values):
