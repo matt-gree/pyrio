@@ -1,12 +1,15 @@
 import csv
 from .lookup import Lookup, LookupDicts, CAPTAINS
+import os
+
 
 charNameDict = {}
 char_name_list = []
 
 char_lookup = Lookup().lookup
 
-with open('CharNames.csv', 'r') as file:
+file_path = os.path.join(os.path.dirname(__file__), 'CharNames.csv')
+with open(file_path, 'r') as file:
     reader = csv.reader(file)
     for row in reader:
         char_name_list.append(row)
