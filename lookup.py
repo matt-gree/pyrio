@@ -27,6 +27,21 @@
 (argument of 0 returns Mario; argument of "Mario" returns 0)."""
 # should try to standardize the string version of these names if possible to match with dataframe(s)
 
+CAPTAINS = [
+    'Mario',
+    'Luigi',
+    'DK',
+    'Diddy',
+    'Peach',
+    'Daisy',
+    'Yoshi',
+    'Bowser',
+    'Wario',
+    'Waluigi',
+    'Birdo',
+    'Bowser Jr'
+]
+
 import pandas as pd
 
 class LookupDicts():
