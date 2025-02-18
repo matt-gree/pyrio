@@ -120,7 +120,7 @@ In_Game_Team_Names = {
 }
 
 
-def Team_Name(roster, captain):
+def team_name(roster, captain):
     if '' in roster:
         return ''
     
