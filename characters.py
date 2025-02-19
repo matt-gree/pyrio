@@ -20,7 +20,10 @@ for i, sublist in enumerate(char_name_list):
         charNameDict[name] = i
 
 def userInputToCharacter(userInput):
-    if userInput.lower() not in charNameDict.keys():
+    print(charNameDict.keys())
+    userInput = userInput.replace(' ', '').lower()
+    print(userInput)
+    if userInput not in charNameDict.keys():
         raise Exception(f'{userInput} is an invalid character name')
     return char_lookup(LookupDicts.CHAR_NAME, charNameDict[userInput.lower()])
 
