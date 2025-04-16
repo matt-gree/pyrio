@@ -541,6 +541,25 @@ def games_endpoint(api_manager: APIManager, tag=None, exclude_tag=None, username
 
     return api_manager.send_request(ENDPOINT, method='GET', data=data)
 
+def stats_endpoint(api_manager: APIManager, params: dict):
+
+    ENDPOINT = '/stats'
+
+    print(params)
+
+    valid_params = {'tag', 'exclude_tag', 'username', 'vs_username', 'exclude_username',
+                    'captain', 'vs_captain', 'exclude_captain', 'stadium', 'limit_games',
+                    'games', 'char_id', 'by_user', 'by_swing', 'by_char', 'exclude_nonfair',
+                    'exclude_batting', 'exclude_pitching', 'exclude_fielding', 'exclude_misc'}
+    
+    invalid_params = set(params.keys()) - valid_params
+
+    if invalid_params:
+        raise ValueError(f"Invalid parameter(s): {', '.join(invalid_params)}")
+
+    debug_print(params)
+
+    return api_manager.send_request(ENDPOINT, method='GET', data=params)
 
 def live_games_endpoint(api_manager: APIManager):
 
