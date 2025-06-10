@@ -1133,6 +1133,54 @@ class HudObj:
     def inning_float(self):
         return float(self.hud_json['Inning'] + 0.5*self.hud_json['Half Inning'])
     
+    def score(self, teamNum: int):
+        ErrorChecker.check_team_num(teamNum)
+        team_string = "Away" if teamNum == 0 else "Home"
+        
+        return self.hud_json[f'{team_string} Score']
+    
+    def balls(self):
+        return self.hud_json['Balls']
+    
+    def strikes(self):
+        return self.hud_json['Strikes']
+    
+    def outs(self):
+        return self.hud_json['Outs']
+    
+    def star_chance(self):
+        return self.hud_json['Star Chance']
+    
+    def team_stars(self, teamNum: int):
+        ErrorChecker.check_team_num(teamNum)
+        team_string = "Away" if teamNum == 0 else "Home"
+        
+        return self.hud_json[f'{team_string} Stars']
+    
+    def pitcher_stamina(self):
+        return self.hud_json['Pitcher Stamina']
+    
+    def chem_on_base(self):
+        return self.hud_json['Chemistry Links on Base']
+    
+    def outs_during_play(self):
+        return self.hud_json['Num Outs During Play']
+    
+    def pitcher_roster_location(self):
+        return self.hud_json['Pitcher Roster Loc']
+    
+    def batter_roster_location(self):
+        return self.hud_json['Batter Roster Loc']
+    
+    def runner_on_first(self):
+        return bool(self.hud_json.get('Runner 1B'))
+    
+    def runner_on_second(self):
+        return bool(self.hud_json.get('Runner 2B'))
+    
+    def runner_on_third(self):
+        return bool(self.hud_json.get('Runner 3B'))
+
     def team_roster_str_list(self, teamNum: int):
         ErrorChecker.check_team_num(teamNum)
         team_string = "Away" if teamNum == 0 else "Home"
