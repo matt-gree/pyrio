@@ -119,6 +119,13 @@ In_Game_Team_Names = {
                     {'Name': 'Jr Rookies', 'Characters':['Diddy', 'Dixie', 'Baby Mario', 'Baby Luigi']},]
 }
 
+In_Game_Team_Names_List = []
+
+for teams in In_Game_Team_Names.values():
+    for entry in teams:
+        name = entry.get("Name")
+        if name:
+            In_Game_Team_Names_List.append(name)
 
 def team_name(roster, captain):
     if '' in roster:
