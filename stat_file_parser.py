@@ -33,7 +33,7 @@ Roster args:
 # For Project Rio versions pre 1.9.2
 # teamNum: 0 == home team, 1 == away team
 # For Project Rio versions 1.9.2 and later
-# teamNum: 0 == home team, 1 == away team
+# teamNum: 0 == away team, 1 == away home
 # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
 '''
 
