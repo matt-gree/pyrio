@@ -1,5 +1,6 @@
 import csv
 from .lookup import Lookup, LookupDicts, CAPTAINS
+import sys
 import os
 
 
@@ -8,8 +9,17 @@ char_name_list = []
 
 char_lookup = Lookup().lookup
 
-file_path = os.path.join(os.path.dirname(__file__), 'CharNames.csv')
-with open(file_path, 'r') as file:
+def resource_path(relative_path):
+    """ Get absolute path to resource, works for dev and for PyInstaller bundle """
+    if hasattr(sys, '_MEIPASS'):
+        # Running in PyInstaller bundle
+        return os.path.join(sys._MEIPASS, relative_path)
+    else:
+        # Running in normal Python environment
+        return os.path.join(os.path.abspath("."), relative_path)
+
+csv_path = resource_path(os.path.join("pyrio", "CharNames.csv"))
+with open(csv_path, "r") as file:
     reader = csv.reader(file)
     for row in reader:
         char_name_list.append(row)
