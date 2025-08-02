@@ -349,6 +349,7 @@ def list_game_modes(api_manager: APIManager, active=False, community_ids=None, d
         data = {}
 
     if active:
+        active = 't'
         data['Active'] = active
 
     if community_ids:
