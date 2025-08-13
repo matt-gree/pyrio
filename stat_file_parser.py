@@ -115,9 +115,30 @@ class StatObj:
         teamNum = self.teamNumVersionCorrection(teamNum)
 
         if teamNum == 0:
-            return self.statJson["Home Score"]
-        elif teamNum == 1:
             return self.statJson["Away Score"]
+        elif teamNum == 1:
+            return self.statJson["Home Score"]
+
+
+    def winningTeam(self):
+        # returns team number for team that won the game
+        if self.score(0) > self.score(1):
+            return 0
+        elif self.score(1) > self.score(0):
+            return 1
+        else:
+            raise Exception("No winning team - tie")
+
+
+    def losingTeam(self):
+        # returns team number for team that lost the game
+        if self.score(0) < self.score(1):
+            return 0
+        elif self.score(1) < self.score(0):
+            return 1
+        else:
+            raise Exception("No losing team - tie")
+
 
     def inningsSelected(self):
         # returns how many innings were selected for the game
@@ -694,12 +715,77 @@ class StatObj:
         teamNum = self.teamNumVersionCorrection(teamNum)
         return self.obp(teamNum, rosterNum) + self.slg(teamNum, rosterNum)
     
+    def losingPitcher(self):
+        # returns the roster location of the losing pitcher
+        # The losing pitcher is who was on the mound when the other team gained the lead
+        return self.events()[self.final_lead_change_event()]['Pitcher Roster Loc']
+    
+    def winningPitcher(self):
+        # returns the roster location of the winning pitcher
+        # The winning pitcher is who was pitching for the winning team in the half-inning
+        # prior to that team taking the lead for the last time.
+        lead_change_event = self.final_lead_change_event()
+
+        lead_change_inning = self.events()[lead_change_event]['Inning']
+        lead_change_halfInning = self.events()[lead_change_event]['Half Inning']
+
+        current_event = lead_change_event
+        current_halfInning = lead_change_halfInning
+    
+        # find the adjacent half inning to when the lead was taken to get the winning pitcher
+        while current_halfInning == lead_change_halfInning:
+            # if lead was taken by the away team in the 1st and never given up, then
+            # the starting pitcher for the away team is the winning pitcher.
+            # Therefore, count the events upwards.
+            if lead_change_inning == 1 and lead_change_halfInning == 1:
+                current_event += 1
+            # otherwise, find the latest pitcher in the prior half inning
+            # so count events backwards.
+            else:
+                current_event -= 1
+
+            current_halfInning = self.events()[current_event]['Half Inning']
+        
+        return self.events()[current_event]['Pitcher Roster Loc']
+    
     def events(self):
         return self.statJson['Events']
 
     def final_event(self):
         return len(self.events())-1
+    
+    def final_lead_change_event(self):
+        # returns the event where the lead changed for the final time
+        event = self.final_event()
+
+        w_team_int = self.winningTeam()
+        l_team_int = self.losingTeam()
+
+        if w_team_int == 1:
+            w_team = "Home"
+            l_team = "Away"
+        else:
+            w_team = "Away"
+            l_team = "Home"
         
+        w_score = self.score(w_team_int)
+        l_score = self.score(l_team_int)
+
+        # walk-off check - home team won and score in final event was tied or losing
+        if w_team_int == 1 and self.events()[event]['Home Score'] <= self.events()[event]['Away Score']:
+            return event
+        
+        #check when winner's score was last tied or less than loser's score
+        while w_score > l_score:
+            event -= 1
+            if event < 0:
+                raise Exception("Couldn't find last lead change")
+            
+            w_score = self.events()[event][f'{w_team} Score']
+            l_score = self.events()[event][f'{l_team} Score']
+        
+        return event
+    
 
 class EventObj():
     def __init__(self, rioStat: StatObj, eventNum: int):
