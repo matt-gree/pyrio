@@ -115,9 +115,9 @@ class StatObj:
         teamNum = self.teamNumVersionCorrection(teamNum)
 
         if teamNum == 0:
-            return self.statJson["Home Score"]
-        elif teamNum == 1:
             return self.statJson["Away Score"]
+        elif teamNum == 1:
+            return self.statJson["Home Score"]
 
 
     def winningTeam(self):
