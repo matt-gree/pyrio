@@ -119,6 +119,27 @@ class StatObj:
         elif teamNum == 1:
             return self.statJson["Away Score"]
 
+
+    def winningTeam(self):
+        # returns team number for team that won the game
+        if self.score(0) > self.score(1):
+            return 0
+        elif self.score(1) > self.score(0):
+            return 1
+        else:
+            raise Exception("No winning team - tie")
+
+
+    def losingTeam(self):
+        # returns team number for team that lost the game
+        if self.score(0) < self.score(1):
+            return 0
+        elif self.score(1) < self.score(0):
+            return 1
+        else:
+            raise Exception("No losing team - tie")
+
+
     def inningsSelected(self):
         # returns how many innings were selected for the game
         return self.statJson["Innings Selected"]
