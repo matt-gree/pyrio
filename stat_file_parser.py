@@ -720,7 +720,38 @@ class StatObj:
 
     def final_event(self):
         return len(self.events())-1
+    
+    def final_lead_change_event(self):
+        # returns the event where the lead changed for the final time
+        event = self.final_event()
+
+        w_team_int = self.winningTeam()
+
+        if w_team_int == 1:
+            w_team = "Home"
+            l_team = "Away"
+        else:
+            w_team = "Away"
+            l_team = "Home"
         
+        w_score = self.score(w_team)
+        l_score = self.score(l_team)
+
+        # walk-off check - home team won and score in final event was tied or losing
+        if w_team == 1 and self.events[event]['Home Score'] <= self.events[event]['Away Score']:
+            return event
+        
+        #check when winner's score was last tied or less than loser's score
+        while w_score > l_score:
+            event -= 1
+            if event < 0:
+                raise Exception("Couldn't find last lead change")
+            
+            w_score = self.events[event][f'{w_team} Score']
+            l_score = self.events[event][f'{l_team} Score']
+        
+        return event
+    
 
 class EventObj():
     def __init__(self, rioStat: StatObj, eventNum: int):
