@@ -726,6 +726,8 @@ class EventSearch():
 
         self._rbi_dict: dict[int, set[int]] = {i: set() for i in range(5)}
         self._inning_dict: dict[int, set[int]] = {i: set() for i in range(1, self.rioStat.inningsPlayed()+1)}
+        self._away_score_dict: dict[int, set[int]] = {i: set() for i in range(1, self.rioStat.score(0)+1)}
+        self._home_score_dict: dict[int, set[int]] = {i: set() for i in range(1, self.rioStat.score(1)+1)}
         self._balls_dict: dict[int, set[int]] = {i: set() for i in range(4)}
         self._strikes_dict: dict[int, set[int]] = {i: set() for i in range(5)}
         self._outs_in_inning_dict: dict[int, set[int]] = {i: set() for i in range(3)}
@@ -748,6 +750,9 @@ class EventSearch():
         self._wall_jump: set[int] = set()
         self._manual_character_selection: set[int] = set()
         self._first_pitch_of_AB: set[int] = set()
+        self._home_team_winning: set[int] = set()
+        self._away_team_winning: set[int] = set()
+        self._game_tied: set[int] = set()
 
         self.character_action_dict: dict[str, dict[str, set[int]]] = {}
         for characterDict in self.rioStat.characterGameStats().values():
@@ -772,6 +777,16 @@ class EventSearch():
             self.character_action_dict[batter]['AtBat'].add(eventNum)
             self.character_action_dict[pitcher]['Pitching'].add(eventNum)
             
+            self._away_score[currentEvent.score(0)].add(eventNum)
+            self._home_score[currentEvent.score(1)].add(eventNum)
+
+            if currentEvent.score(0) > currentEvent.score(1):
+                self._away_team_winning.add(eventNum)
+            elif currentEvent.score(0) < currentEvent.score(1):
+                self._home_team_winning.add(eventNum)
+            else:
+                self._game_tied.add(eventNum)
+
             self._outs_in_inning_dict[currentEvent.outs()].add(eventNum)
             self._chem_on_base_dict[currentEvent.chem_links_on_base()].add(eventNum)
             self._strikes_dict[currentEvent.strikes()].add(eventNum)
@@ -1086,6 +1101,29 @@ class EventSearch():
         # negative inputs return all events after the specified inning
         return self.listInputHandling(inningNumList, self._inning_dict)
     
+    def awayTeamWinningEvents(self):
+        return self._away_team_winning
+    
+    def homeTeamWinningEvents(self):
+        return self._home_team_winning
+    
+    def gameTiedEvents(self):
+        return self._game_tied
+    
+    def awayScoreEvents(self, awayScore):
+        # returns a set of events that occurered with the away score
+        # negative inputs return all events with an away score greater than or equal to the input
+        # inputting a list or set will return the all events that match the numbers in the list
+        awayScoreList = awayScore if isinstance(awayScore, (list, set)) else [awayScore]
+        return self.listInputHandling(awayScoreList, self._home_score_dict)
+    
+    def homeScoreEvents(self, homeScore):
+        # returns a set of events that occurered with the home score
+        # negative inputs return all events with a home score greater than or equal to the input
+        # inputting a list or set will return the all events that match the numbers in the list
+        homeScoreList = homeScore if isinstance(homeScore, (list, set)) else [homeScore]
+        return self.listInputHandling(homeScoreList, self._home_score_dict)
+    
     def ballEvents(self, ballNum):
         # returns a set of events that occurered with the number of balls in the count
         # negative inputs return all events with a ball count greater than or equal to the input
@@ -1332,6 +1370,7 @@ class EventSearch():
     
     def firstPitchOfABEvents(self):
         return self._first_pitch_of_AB
+    
 
         
 
