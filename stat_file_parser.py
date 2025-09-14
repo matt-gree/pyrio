@@ -85,7 +85,15 @@ class StatObj:
 
     def stadium(self):
         # returns the stadium that was played on
-        return self.statJson["StadiumID"]
+        old_stadium_names = {
+            "Bowser's Castle": "Bowser Castle",
+            "Wario's Palace": "Wario Palace",
+            "Yoshi's Island": "Yoshi Park",
+            "Peach's Garden": "Peach Garden",
+            "DK's Jungle":  "DK Jungle"
+        }
+        
+        return old_stadium_names.get(self.statJson["StadiumID"], self.statJson["StadiumID"])
     
     def teamNumVersionCorrection(self, teamNum: int):
         # For Project Rio versions pre 1.9.2
@@ -1411,8 +1419,14 @@ class EventObj():
     def pitching_team(self):
         return abs(self.half_inning() - 1)
     
+    def pitcher_roster_loc(self):
+        return self.eventDict['Pitcher Roster Loc']
+    
     def pitcher(self):
         return self.rioStat.characterName(self.pitching_team(), self.eventDict['Pitcher Roster Loc'])
+    
+    def batter_roster_loc(self):
+        return self.eventDict['Batter Roster Loc']
         
     def batter(self):
         return self.rioStat.characterName(self.batting_team(), self.eventDict['Batter Roster Loc'])
