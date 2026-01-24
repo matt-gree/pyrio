@@ -762,6 +762,7 @@ class EventSearch():
         self._steal: set[int] = set()
         self._star_pitch: set[int] = set()
         self._bobble: set[int] = set()
+        self._fireball_burn: set[int] = set()
         self._five_star_dinger: set[int] = set()
         self._sliding_catch: set[int] = set()
         self._wall_jump: set[int] = set()
@@ -896,6 +897,9 @@ class EventSearch():
             if currentEvent.first_fielder_bobble() != 'None':
                 self._bobble.add(eventNum)
 
+            if currentEvent.first_fielder_bobble() == 'Fireball':
+                self._fireball_burn.add(eventNum)
+
             if currentEvent.first_fielder_action() == 'Sliding':
                 self._sliding_catch.add(eventNum)
 
@@ -1019,6 +1023,10 @@ class EventSearch():
         # Bobble types: "None" "Slide/stun lock" "Fumble", "Bobble", 
         # "Fireball", "Garlic knockout" "None"
         return self._bobble
+    
+    def fireballBurnEvents(self):
+        # returns a set of events where a fireball burn bobble occurs
+        return self._fireball_burn
     
     def fiveStarDingerEvents(self):
         # returns a set of events where a five star dinger occurs
