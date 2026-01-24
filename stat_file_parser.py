@@ -61,8 +61,8 @@ class ErrorChecker:
     @staticmethod
     def check_base_num(baseNum: int):
         """Checks if the base number is valid (between 1 and 3) or -1."""
-        if (baseNum < 1 or baseNum > 3) and (baseNum != -1):
-            raise Exception(f'Invalid base arg {baseNum}. Function only accepts base args of 1 to 3 or -1.')
+        if (baseNum < -1 or baseNum > 3):
+            raise Exception(f'Invalid base arg {baseNum}. Function only accepts base args of -1 to 3')
 
 # create stat obj
 class StatObj:
@@ -127,6 +127,15 @@ class StatObj:
             return self.statJson["Away Score"]
         elif teamNum == 1:
             return self.statJson["Home Score"]
+        
+    def winning_team(self):
+        # returns the team number of the winning team
+        if self.score(0) > self.score(1):
+            return 0
+        elif self.score(1) > self.score(0):
+            return 1
+        else:
+            return -1  # tie game
 
     def inningsSelected(self):
         # returns how many innings were selected for the game
@@ -138,7 +147,7 @@ class StatObj:
 
     def isMercy(self):
         # returns if the game ended in a mercy or not
-        if self.inningsTotal() - self.inningsPlayed() >= 1 and not self.wasQuit():
+        if self.inningsSelected() - self.inningsPlayed() >= 1 and abs(self.score(0) - self.score(1)) > 10:
             return True
         else:
             return False
@@ -186,6 +195,14 @@ class StatObj:
         # Newer Version Format
         teamStr = "Away" if teamNum == 0 else "Home"
         return f"{teamStr} Roster {rosterNum}"
+    
+    def getRosterDict(self, teamNum: int):
+        # returns a dict of rosterNum: characterName for the given team
+        teamNum = self.teamNumVersionCorrection(teamNum)
+        rosterDict = {}
+        for x in range(0, 9):
+            rosterDict[x] = self.statJson["Character Game Stats"][self.getTeamString(teamNum, x)]["CharID"]
+        return rosterDict
 
     def characterName(self, teamNum: int, rosterNum: int = -1):
         # returns name of specified character
@@ -726,8 +743,8 @@ class EventSearch():
 
         self._rbi_dict: dict[int, set[int]] = {i: set() for i in range(5)}
         self._inning_dict: dict[int, set[int]] = {i: set() for i in range(1, self.rioStat.inningsPlayed()+1)}
-        self._away_score_dict: dict[int, set[int]] = {i: set() for i in range(1, self.rioStat.score(0)+1)}
-        self._home_score_dict: dict[int, set[int]] = {i: set() for i in range(1, self.rioStat.score(1)+1)}
+        self._away_score_dict: dict[int, set[int]] = {i: set() for i in range(0, self.rioStat.score(0)+1)}
+        self._home_score_dict: dict[int, set[int]] = {i: set() for i in range(0, self.rioStat.score(1)+1)}
         self._balls_dict: dict[int, set[int]] = {i: set() for i in range(4)}
         self._strikes_dict: dict[int, set[int]] = {i: set() for i in range(5)}
         self._outs_in_inning_dict: dict[int, set[int]] = {i: set() for i in range(3)}
@@ -750,9 +767,11 @@ class EventSearch():
         self._wall_jump: set[int] = set()
         self._manual_character_selection: set[int] = set()
         self._first_pitch_of_AB: set[int] = set()
+        self._last_pitch_of_AB: set[int] = set()
         self._home_team_winning: set[int] = set()
         self._away_team_winning: set[int] = set()
         self._game_tied: set[int] = set()
+        self._lead_changed: set[int] = set()
 
         self.character_action_dict: dict[str, dict[str, set[int]]] = {}
         for characterDict in self.rioStat.characterGameStats().values():
@@ -777,8 +796,8 @@ class EventSearch():
             self.character_action_dict[batter]['AtBat'].add(eventNum)
             self.character_action_dict[pitcher]['Pitching'].add(eventNum)
             
-            self._away_score[currentEvent.score(0)].add(eventNum)
-            self._home_score[currentEvent.score(1)].add(eventNum)
+            self._away_score_dict[currentEvent.score(0)].add(eventNum)
+            self._home_score_dict[currentEvent.score(1)].add(eventNum)
 
             if currentEvent.score(0) > currentEvent.score(1):
                 self._away_team_winning.add(eventNum)
@@ -786,6 +805,9 @@ class EventSearch():
                 self._home_team_winning.add(eventNum)
             else:
                 self._game_tied.add(eventNum)
+
+            if (currentEvent.score(batting_team) + currentEvent.rbi() > currentEvent.score(fielding_team)) and (currentEvent.score(batting_team) <= currentEvent.score(fielding_team)):
+                self._lead_changed.add(eventNum)
 
             self._outs_in_inning_dict[currentEvent.outs()].add(eventNum)
             self._chem_on_base_dict[currentEvent.chem_links_on_base()].add(eventNum)
@@ -816,6 +838,9 @@ class EventSearch():
 
             if currentEvent.balls() == 0 and currentEvent.strikes() == 0:
                 self._first_pitch_of_AB.add(eventNum)
+
+            if currentEvent.result_of_AB() != 'None':
+                self._last_pitch_of_AB.add(eventNum)
            
             try:
                 self._pitch_type_dict[currentEvent.pitch_type()].add(eventNum)
@@ -1371,6 +1396,12 @@ class EventSearch():
     def firstPitchOfABEvents(self):
         return self._first_pitch_of_AB
     
+    def lastPitchOfABEvents(self):
+        return self._last_pitch_of_AB
+    
+    def leadChangedEvents(self):
+        return self._lead_changed
+    
 
         
 
@@ -1506,7 +1537,10 @@ class EventObj():
     
     def runner_dict(self, baseNum: int):
         ErrorChecker.check_base_num(baseNum)
-        runner_str = f'Runner {baseNum}B'
+        if baseNum == 0:
+            runner_str = 'Runner Batter'
+        else:
+            runner_str = f'Runner {baseNum}B'
         return self.eventDict.get(runner_str, {})
     
     def bool_steal(self, base_num: int) -> int:
@@ -1737,6 +1771,12 @@ class EventObj():
         Returns an empty dict if no first fielder in event
         """
         return self.contact_dict().get('First Fielder', {})
+    
+    def first_fielder_roster_loc(self):
+        """
+        Returns None if no first fielder in event.
+        """
+        return self.first_fielder_dict().get('Fielder Roster Location')
 
     def first_fielder_position(self):
         """
