@@ -203,7 +203,7 @@ def _load_character_attributes():
     if _CHAR_ATTRS is not None:
         return
 
-    data_path = Path(__file__).parent / "data" / "character_attributes.csv"
+    data_path = Path(__file__).parent / "character_attributes.csv"
 
     attrs = {}
     with open(data_path, newline="") as f:
