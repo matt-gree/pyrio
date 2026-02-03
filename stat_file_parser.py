@@ -71,6 +71,10 @@ class StatObj:
     def gameID(self):
         # returns it in int form
         return int(self.statJson["GameID"].replace(',', ''), 16)
+    
+    def gameMode(self):
+        # returns the game mode that was played
+        return self.statJson["TagSetID"]
 
     # should look to convert to unix or some other standard date fmt
     def startDate(self):
