@@ -28,6 +28,7 @@
 # should try to standardize the string version of these names if possible to match with dataframe(s)
 
 # DO NOT IMPORT PANDAS HERE. WILL CAUSE OBS SCRIPTS TO FAIL
+import pandas as pd
 
 CAPTAINS = [
     'Mario',
@@ -280,6 +281,7 @@ class LookupDicts():
     }
 
 # todo - more complete error handling
+
 class Lookup:
     def __init__(self):
         pass
@@ -302,22 +304,23 @@ class Lookup:
             else:
                 return f"Invalid ID or Name: {original_term}"
 
-        if isinstance(search_term, list):
-
+        if isinstance(search_term, pd.Series):
+            return search_term.apply(single_lookup)
+        elif isinstance(search_term, pd.DataFrame):
+            return search_term.applymap(single_lookup)
+        elif isinstance(search_term, list):
             return [single_lookup(term) for term in search_term]
         else:
             return single_lookup(search_term)
 
-    def lookup(self, dictionary: LookupDicts, search_term, auto_print=False):
+    def lookup(self, dictionary, search_term, auto_print=False):
         result = self._lookup(dictionary, search_term)
         if auto_print:
             print(result)
-        
         return result
 
-    def translate_values(self, dictionary: LookupDicts, values):
-        translated = [self._lookup(dictionary, value) for value in values]
-        return translated
+    def translate_values(self, dictionary, values):
+        return self._lookup(dictionary, values)
 
     def create_translated_columns(self, df):
         column_to_dict_map = {
@@ -325,7 +328,6 @@ class Lookup:
             'pitcher_char_id': LookupDicts.CHAR_NAME,
             'fielder_char_id': LookupDicts.CHAR_NAME,
             'batting_hand': LookupDicts.HAND_BOOL,
-            # not sure about this one
             'fielder_jump': LookupDicts.FIELDER_ACTIONS,
             'fielder_position': LookupDicts.POSITION,
             'fielding_hand': LookupDicts.HAND_BOOL,
@@ -339,9 +341,8 @@ class Lookup:
 
         for column, dict_name in column_to_dict_map.items():
             if column in df.columns:
-                translated_values = self.translate_values(dict_name, df[column])
-                df[f'{column}_str'] = translated_values
-                df[f'{column}_str'] = df[f'{column}_str'].astype('category')
+                translated_values = self.lookup(dict_name, df[column])
+                df[f'{column}_str'] = translated_values.astype('category')
 
         return df
 
