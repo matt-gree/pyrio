@@ -61,6 +61,9 @@ def pitch_rows_from_statobj(sf, include_character_attributes=False):
         pitchingCharacterNoVariant = strip_variant(pitchingCharacter)
         battingCharacterNoVariant = strip_variant(battingCharacter)
 
+        pitcherStarred = sf.isStarred(pitcherIndex, ev["Pitcher Roster Loc"])
+        batterStarred = sf.isStarred(batterIndex, ev["Batter Roster Loc"])
+
         inning = ev["Inning"]
         halfInning = ev["Half Inning"]
 
@@ -114,6 +117,8 @@ def pitch_rows_from_statobj(sf, include_character_attributes=False):
             battingCharacter,
             pitchingCharacterNoVariant,
             battingCharacterNoVariant,
+            pitcherStarred,
+            batterStarred,
             inning,
             halfInning,
             pitchingScore,
@@ -144,8 +149,15 @@ def pitch_rows_from_statobj(sf, include_character_attributes=False):
 
         # Optional: append character attributes
         if include_character_attributes:
-            pitcher_attrs = _CHAR_ATTRS.get(pitchingCharacter)
-            batter_attrs = _CHAR_ATTRS.get(battingCharacter)
+            if pitcherStarred == 0:
+                pitcher_attrs = _CHAR_ATTRS_STOFF.get(pitchingCharacter)
+            else:
+                pitcher_attrs = _CHAR_ATTRS_STON.get(pitchingCharacter)
+
+            if batterStarred == 0:
+                batter_attrs = _CHAR_ATTRS_STOFF.get(battingCharacter)
+            else:
+                batter_attrs = _CHAR_ATTRS_STON.get(battingCharacter)
 
             for attrs in (pitcher_attrs, batter_attrs):
                 if attrs:
@@ -165,6 +177,8 @@ BASE_HEADER = [
     'battingCharacter',
     'pitchingCharacterNoVariant',
     'battingCharacterNoVariant',
+    'pitcherStarred',
+    'batterStarred',
     'inning',
     'halfInning',
     'pitchingScore',
@@ -194,27 +208,41 @@ BASE_HEADER = [
 ]
 
 # for option to load character attributes data if the user would like to append it to the pitch data rows.
-_CHAR_ATTRS = None
+_CHAR_ATTRS_STOFF = None
+_CHAR_ATTRS_STON = None
 _CHAR_ATTR_COLUMNS = None
 
 def _load_character_attributes():
-    global _CHAR_ATTRS, _CHAR_ATTR_COLUMNS
+    global _CHAR_ATTRS_STOFF, _CHAR_ATTRS_STON, _CHAR_ATTR_COLUMNS
 
-    if _CHAR_ATTRS is not None:
+    if _CHAR_ATTRS_STOFF is not None and _CHAR_ATTRS_STON is not None:
         return
 
-    data_path = Path(__file__).parent / "character_attributes.csv"
+    data_path = Path(__file__).parent / "character_attributes_stoff.csv"
 
-    attrs = {}
+    attrs_stoff = {}
     with open(data_path, newline="") as f:
         reader = csv.DictReader(f)
         _CHAR_ATTR_COLUMNS = reader.fieldnames[1:]  
 
         for row in reader:
             name = row["Character"]
-            attrs[name] = row
+            attrs_stoff[name] = row
 
-    _CHAR_ATTRS = attrs
+    _CHAR_ATTRS_STOFF = attrs_stoff
+
+    data_path = Path(__file__).parent / "character_attributes_ston.csv"
+
+    attrs_ston = {}
+    with open(data_path, newline="") as f:
+        reader = csv.DictReader(f)
+        _CHAR_ATTR_COLUMNS = reader.fieldnames[1:]  
+
+        for row in reader:
+            name = row["Character"]
+            attrs_ston[name] = row
+
+    _CHAR_ATTRS_STON = attrs_ston
 
 def make_header(include_char_attrs=False):
     header = BASE_HEADER.copy()
