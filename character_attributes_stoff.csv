@@ -1,0 +1,55 @@
+Character,Character Class,Captain?,Ability 1,Ability 2,Weight,Star Pitch (Captain w/o Item),Curve Ball Speed,Fast Ball Speed,Curve,Cursed Ball,Curve Control,Fielding Arm,Throwing Power,Speed,Batting Stance,Star Swing (Captain w/o Item),Slap Hit Power,Charge Hit Power,Bunting,Horizontal Hit Trajectory,Vertical Hit Trajectory,Slap Contact Size Multiplier,Charge Contact Size Multiplier,CSS Sort,Char Id Sort,Extra,Horizontal Range Near,Horizontal Range Far,Trimmed Bat
+Mario,Balance,Yes,Wall Jump,Sliding Catch,2,Fireball (Fastball),130,168,53,60,50,Right,60,50,Right,Fireball (Pop Fly),50,64,35,Mid,Mid,65,35,1,1,,-0.65,0.55,0
+Luigi,Balance,Yes,Wall Jump,Super Jump,2,Green Fireball (Fastball),125,165,56,55,50,Right,50,60,Left,Green Fireball (Grounder),48,59,40,Mid,Mid,70,40,2,2,,-0.65,0.65,0
+Donkey Kong,Power,Yes,Clamber,Laser Beam,4,Banana Ball (Breaking Ball),130,165,35,70,50,Right,70,40,Left,Banana Ball (Pop Fly),60,80,20,Pull,High,30,15,9,3,,-0.55,0.65,1
+Diddy Kong,Speed,Yes,Super Catch,Clamber,1,Boomerang Ball (Breaking Ball),115,155,80,45,50,Right,60,70,Left,Boomerang Ball (Grounder),45,30,20,Mid,Low,45,15,8,4,,-0.55,0.55,0
+Peach,Technique,Yes,Quick Throw,Super Catch,2,Heart Ball (Change-Up),125,165,70,50,90,Right,40,50,Right,Heart Ball (Grounder),46,45,45,Push,Low,80,45,5,5,,-0.75,0.5,0
+Daisy,Balance,Yes,Quick Throw,Sliding Catch,2,Flower Ball (Change-Up),120,160,60,55,55,Right,40,40,Left,Flower Ball (Pop Fly),49,60,55,Mid,Mid,70,40,3,6,,-0.65,0.6,0
+Yoshi,Speed,Yes,Tongue Catch,Clamber,2,Egg Ball (Change-Up),120,155,51,50,50,Right,40,90,Left,Egg Ball (Grounder),50,45,25,Mid,Mid,50,30,7,7,,-0.65,0.65,0
+Baby Mario,Speed,,Wall Jump,,0,Breaking Ball,115,150,50,50,50,Right,30,70,Right,Grounder,44,30,25,Mid,Low,50,25,39,8,,-0.75,0.55,0
+Baby Luigi,Speed,,Wall Jump,,0,Breaking Ball,115,150,50,40,50,Right,30,80,Left,Grounder,42,20,25,Mid,Low,45,25,40,9,,-0.65,0.55,0
+Bowser,Power,Yes,Body Check,Laser Beam,4,Killer Ball (Fastball),120,175,35,90,50,Right,70,10,Left,Killer Ball (Pop Fly),60,95,20,Pull,High,40,15,10,10,Wall Splat,-0.55,1.45,0
+Wario,Power,Yes,Sliding Catch,Body Check,3,Phony Ball (Fastball),125,165,30,80,50,Right,60,30,Right,Phony Ball (Pop Fly),55,80,25,Mid,Mid,50,25,11,11,Wall Splat,-0.55,0.75,0
+Waluigi,Technique,Yes,Laser Beam,Super Jump,3,Liar Ball (Breaking Ball),110,169,70,50,60,Left,40,40,Left,Liar Ball (Line Drive),50,1,45,Push,Low,90,40,6,12,,-0.55,0.85,0
+Koopa Troopa (Green),Balance,,Sliding Catch,,0,Breaking Ball,120,160,50,50,50,Right,50,40,Left,Grounder,40,50,30,Mid,Mid,70,30,24,13,,-0.5,0.55,0
+Toad (Red),Balance,,Body Check,,0,Fastball,115,155,50,50,50,Right,50,60,Right,Pop Fly,45,70,25,Mid,Mid,50,30,13,14,,-0.95,0.55,0
+Boo,Technique,,Super Jump,,0,Breaking Ball,120,160,90,50,60,Left,40,40,Left,Grounder,40,30,50,Mid,Mid,85,45,27,15,Curved Hits,-0.45,0.85,0
+Toadette,Speed,,Wall Jump,Sliding Catch,0,Breaking Ball,115,150,50,50,50,Right,40,90,Right,Grounder,44,20,25,Mid,Low,50,30,41,16,,-0.65,0.5,0
+Shy Guy (Red),Balance,,Sliding Catch,,1,Change-Up,120,160,50,50,50,Left,40,40,Left,Pop Fly,46,55,25,Mid,Mid,50,30,18,17,,-0.55,0.65,0
+Birdo,Balance,Yes,Suction,Body Check,3,Weird Ball (Fastball),125,165,40,60,50,Right,60,40,Right,Weird Ball (Pop Fly),55,67,20,Mid,Mid,45,30,4,18,Wall Splat,-0.55,0.55,0
+Monty Mole,Speed,,Ball Dash,,1,Change-Up,120,155,50,50,50,Right,30,60,Left,Grounder,45,30,20,Mid,Low,40,30,42,19,Wall Splat,-0.55,0.85,0
+Bowser Jr.,Power,Yes,Body Check,Wall Jump,2,Killer Jr. Ball (Fastball),125,166,40,50,50,Left,50,40,Right,Killer Jr. Ball (Pop Fly),55,75,30,Mid,High,35,20,12,20,,-0.65,0.65,0
+Koopa Paratroopa (Red),Technique,,Super Jump,,1,Breaking Ball,115,155,60,50,50,Right,60,60,Left,Grounder,48,35,20,Mid,Low,55,30,29,21,,-0.55,0.65,0
+Pianta (Blue),Power,,Laser Beam,,3,Change-Up,125,160,30,50,50,Right,80,20,Right,Grounder,51,65,20,Pull,Low,35,15,48,22,Wall Splat,-0.45,0.85,0
+Pianta (Red),Power,,Laser Beam,,3,Fastball,125,160,30,50,50,Right,80,10,Right,Pop Fly,51,70,20,Pull,Low,35,15,49,23,Wall Splat,-0.45,0.85,0
+Pianta (Yellow),Power,,Laser Beam,,3,Breaking Ball,125,165,40,50,50,Right,80,10,Right,Grounder,51,65,20,Pull,Low,35,15,50,24,Wall Splat,-0.45,0.85,0
+Noki (Blue),Speed,,Sliding Catch,,1,Change-Up,115,155,50,50,50,Right,60,70,Left,Grounder,43,30,20,Mid,Low,40,15,44,25,,-0.65,0.65,0
+Noki (Red),Speed,,Sliding Catch,,1,Fastball,115,155,50,50,50,Right,60,60,Left,Pop Fly,45,40,20,Mid,Low,40,15,45,26,,-0.65,0.65,0
+Noki (Green),Speed,,Sliding Catch,,1,Breaking Ball,115,155,60,50,50,Right,60,60,Left,Line Drive,43,30,25,Mid,Low,45,13,46,27,,-0.65,0.65,0
+Hammer Bro,Power,,Body Check,,3,Fastball,125,165,40,50,50,Right,60,30,Right,Pop Fly,10,85,15,Pull,High,30,20,52,28,Wall Splat,-0.65,0.65,1
+Toadsworth,Technique,,Super Catch,,0,Change-Up,120,155,50,50,50,Right,30,40,Right,Line Drive,45,40,45,Mid,Mid,85,40,28,29,Wall Splat,-0.65,0.55,1
+Toad (Blue),Balance,,Body Check,,0,Change-Up,115,155,50,50,50,Right,50,70,Right,Grounder,40,60,25,Mid,Mid,50,30,14,30,,-0.45,0.45,0
+Toad (Yellow),Balance,,Body Check,,0,Breaking Ball,120,160,55,50,50,Right,50,60,Right,Grounder,40,60,25,Mid,Mid,50,30,15,31,,-0.45,0.45,0
+Toad (Green),Balance,,Body Check,,0,Change-Up,115,155,50,50,50,Right,50,60,Right,Grounder,45,65,35,Mid,Mid,55,35,16,32,,-0.45,0.45,0
+Toad (Purple),Balance,,Body Check,,0,Fastball,115,155,50,50,50,Right,60,50,Right,Pop Fly,45,70,25,Mid,Mid,50,30,17,33,,-0.45,0.45,0
+Magikoopa (Blue),Technique,,Magical Catch,,2,Breaking Ball,120,150,50,50,40,Right,40,20,Left,Line Drive,48,40,40,Push,Low,65,35,31,34,,-0.6,0.7,0
+Magikoopa (Red),Technique,,Magical Catch,,2,Breaking Ball,120,155,50,50,40,Right,40,10,Left,Line Drive,50,45,40,Push,Low,65,35,32,35,,-0.6,0.7,0
+Magikoopa (Green),Technique,,Magical Catch,,2,Breaking Ball,120,150,60,50,50,Right,40,10,Left,Line Drive,48,40,40,Push,Low,65,35,33,36,,-0.6,0.7,0
+Magikoopa (Yellow),Technique,,Magical Catch,,2,Breaking Ball,120,150,70,50,50,Right,40,10,Left,Line Drive,40,30,40,Push,Low,65,35,34,37,,-0.6,0.7,0
+King Boo,Power,,Super Jump,,4,Fastball,125,165,60,50,50,Right,70,30,Right,Pop Fly,55,75,20,Mid,Mid,50,15,47,38,"Curved Hits, Wall Splat",-0.65,0.65,0
+Petey Piranha,Power,,Body Check,,4,Change-Up,130,170,30,50,50,Left,100,10,Left,Pop Fly,60,95,10,Pull,High,30,10,51,39,Wall Splat,-0.65,0.65,0
+Dixie Kong,Technique,,Clamber,,1,Breaking Ball,115,155,70,50,50,Right,70,60,Left,Grounder,42,25,30,Push,Low,60,25,26,40,,-0.65,0.55,0
+Goomba,Balance,,Ball Dash,,0,Fastball,115,155,50,50,50,Right,30,50,Right,Grounder,45,40,80,Mid,Mid,40,15,23,41,,-0.55,0.55,0
+Paragoomba,Speed,,Super Jump,,1,Breaking Ball,115,154,50,50,50,Right,60,70,Right,Grounder,45,30,80,Mid,Low,70,30,43,42,,-0.55,0.55,0
+Koopa Troopa (Red),Balance,,Sliding Catch,,0,Fastball,120,165,50,50,50,Right,50,30,Left,Pop Fly,40,60,30,Mid,Mid,30,15,25,43,,-0.5,0.55,0
+Koopa Paratroopa (Green),Technique,,Super Jump,,1,Breaking Ball,115,155,60,50,50,Right,60,60,Left,Line Drive,40,30,20,Mid,Low,60,35,30,44,,-0.55,0.65,0
+Shy Guy (Blue),Balance,,Sliding Catch,,1,Change-Up,120,160,50,50,50,Left,40,50,Left,Grounder,42,50,25,Mid,Mid,50,30,19,45,,-0.55,0.65,0
+Shy Guy (Yellow),Balance,,Sliding Catch,,1,Breaking Ball,130,165,55,50,50,Left,40,40,Left,Grounder,42,50,25,Mid,Mid,50,30,20,46,,-0.55,0.65,0
+Shy Guy (Green),Balance,,Sliding Catch,,1,Change-Up,125,160,60,50,60,Left,40,40,Left,Grounder,42,50,25,Mid,Mid,50,30,21,47,,-0.55,0.65,0
+Shy Guy (Black),Balance,,Sliding Catch,,1,Fastball,120,160,50,50,50,Left,50,40,Left,Pop Fly,42,50,25,Mid,Mid,50,30,22,48,,-0.55,0.65,0
+Dry Bones (Gray),Technique,,Sliding Catch,,1,Breaking Ball,120,150,50,90,50,Left,50,40,Left,Grounder,40,55,30,Mid,Mid,65,25,35,49,Wall Splat,-0.75,0.55,0
+Dry Bones (Green),Technique,,Sliding Catch,,1,Breaking Ball,120,150,50,90,50,Left,50,30,Left,Line Drive,40,55,30,Mid,Mid,70,25,36,50,Wall Splat,-0.75,0.55,0
+Dry Bones (Red),Technique,,Sliding Catch,,1,Fastball,125,155,50,90,50,Left,50,30,Left,Pop Fly,44,60,30,Mid,Mid,65,25,37,51,Wall Splat,-0.75,0.55,0
+Dry Bones (Blue),Technique,,Sliding Catch,,1,Change-Up,120,150,50,90,50,Left,60,30,Left,Grounder,40,55,30,Mid,Mid,65,25,38,52,Wall Splat,-0.75,0.55,0
+Fire Bro,Power,,Body Check,,3,Fastball,125,165,40,50,50,Right,60,20,Right,Grounder,5,90,15,Pull,Low,30,20,53,53,Wall Splat,-0.65,0.65,1
+Boomerang Bro,Power,,Body Check,,3,Breaking Ball,125,165,40,50,50,Right,60,30,Right,Line Drive,20,80,15,Mid,Mid,30,20,54,54,"Wall Splat, Curved Hits",-0.65,0.65,1
