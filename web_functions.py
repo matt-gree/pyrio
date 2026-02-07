@@ -553,7 +553,7 @@ def stats_endpoint(api_manager: APIManager, params: dict):
                     'games', 'char_id', 'by_user', 'by_swing', 'by_char', 'exclude_nonfair',
                     'exclude_batting', 'exclude_pitching', 'exclude_fielding', 'exclude_misc'}
     
-    invalid_params = set(params.keys()) - valid_params
+    invalid_params = set(params) - valid_params
 
     if invalid_params:
         raise ValueError(f"Invalid parameter(s): {', '.join(invalid_params)}")

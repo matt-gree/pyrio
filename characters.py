@@ -31,15 +31,12 @@ for i, sublist in enumerate(char_name_list):
 
 def userInputToCharacter(userInput):
     userInput = userInput.replace(' ', '').lower()
-    if userInput not in charNameDict.keys():
-        raise Exception(f'{userInput} is an invalid character name')
+    if userInput not in charNameDict:
+        raise ValueError(f'{userInput} is an invalid character name')
     return char_lookup(LookupDicts.CHAR_NAME, charNameDict[userInput.lower()])
 
 def is_captain(character):
-    if userInputToCharacter(character) in CAPTAINS:
-        return True
-    
-    return False
+    return userInputToCharacter(character) in CAPTAINS
 
 if __name__ == '__main__':
     print(userInputToCharacter('luigi'))

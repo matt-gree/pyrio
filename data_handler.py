@@ -81,7 +81,7 @@ class WebHandler:
     def _generate_csv_filename(self, endpoint, parameters):
         # Generate a CSV filename based on the endpoint and parameters
         f_name = endpoint.replace("/", "")
-        for key in parameters.keys():
+        for key in parameters:
             f_name += f"-{key}"
         return f_name
 

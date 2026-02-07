@@ -43,26 +43,26 @@ class ErrorChecker:
     def check_team_num(teamNum: int):
         """Checks if the team number is valid (either 0 or 1)."""
         if teamNum != 0 and teamNum != 1:
-            raise Exception(
+            raise ValueError(
                 f'Invalid team arg {teamNum}. Function only accepts team args of 0 (home team) or 1 (away team).')
 
     @staticmethod
     def check_roster_num(rosterNum: int):
         """Checks if the roster number is valid (between -1 and 8). Allows -1."""
         if rosterNum < -1 or rosterNum > 8:
-            raise Exception(f'Invalid roster arg {rosterNum}. Function only accepts roster args of 0 to 8.')
+            raise ValueError(f'Invalid roster arg {rosterNum}. Function only accepts roster args of 0 to 8.')
 
     @staticmethod
     def check_roster_num_no_neg(rosterNum: int):
         """Checks if the roster number is valid (between 0 and 8). Does not allow -1."""
         if rosterNum < 0 or rosterNum > 8:
-            raise Exception(f'Invalid roster arg {rosterNum}. Function only accepts roster args of 0 to 8.')
+            raise ValueError(f'Invalid roster arg {rosterNum}. Function only accepts roster args of 0 to 8.')
 
     @staticmethod
     def check_base_num(baseNum: int):
         """Checks if the base number is valid (between 1 and 3) or -1."""
         if (baseNum < -1 or baseNum > 3):
-            raise Exception(f'Invalid base arg {baseNum}. Function only accepts base args of -1 to 3')
+            raise ValueError(f'Invalid base arg {baseNum}. Function only accepts base args of -1 to 3')
 
 # create stat obj
 class StatObj:
@@ -125,7 +125,7 @@ class StatObj:
 
         if teamNum == 0:
             return self.statJson["Away Score"]
-        elif teamNum == 1:
+        else:
             return self.statJson["Home Score"]
         
     def winning_team(self):
@@ -147,17 +147,11 @@ class StatObj:
 
     def isMercy(self):
         # returns if the game ended in a mercy or not
-        if self.inningsSelected() - self.inningsPlayed() >= 1 and abs(self.score(0) - self.score(1)) > 10:
-            return True
-        else:
-            return False
+        return self.inningsSelected() - self.inningsPlayed() >= 1 and abs(self.score(0) - self.score(1)) > 10
 
     def wasQuit(self):
-        # returns if the same was quit out early
-        if self.statJson["Quitter Team"] == "":
-            return False
-        else:
-            return True
+        # returns if the game was quit out early
+        return self.statJson["Quitter Team"] != ""
 
     def quitter(self):
         # returns the name of the quitter if the game was quit. empty string if no quitter
@@ -229,11 +223,9 @@ class StatObj:
             for x in range(0, 9):
                 if self.statJson["Character Game Stats"][self.getTeamString(teamNum, x)]["Superstar"] == 1:
                     return True
+            return False
         else:
-            if self.statJson["Character Game Stats"][self.getTeamString(teamNum, rosterNum)]["Superstar"] == 1:
-                return True
-            else:
-                return False
+            return self.statJson["Character Game Stats"][self.getTeamString(teamNum, rosterNum)]["Superstar"] == 1
 
     def captain(self, teamNum: int):
         # returns name of character who is the captain
@@ -410,10 +402,7 @@ class StatObj:
         # rosterNum: 0 -> 8 for each of the 9 roster spots
         teamNum = self.teamNumVersionCorrection(teamNum)
         ErrorChecker.check_roster_num_no_neg(rosterNum)
-        if self.defensiveStats(teamNum, rosterNum)["Was Pitcher"] == 1:
-            return True
-        else:
-            return False
+        return self.defensiveStats(teamNum, rosterNum)["Was Pitcher"] == 1
 
     def strikeoutsPitched(self, teamNum: int, rosterNum: int = -1):
         # returns how many strikeouts a character pitched
@@ -845,15 +834,15 @@ class EventSearch():
            
             try:
                 self._pitch_type_dict[currentEvent.pitch_type()].add(eventNum)
-            except:
+            except KeyError:
                 if self.debug_mode:
                     print(f'{self.rioStat.gameID()}, {eventNum}: Pitch Type: {currentEvent.pitch_type()}')
 
             try:
                 self._charge_type_dict[currentEvent.charge_type()].add(eventNum)
-            except:
+            except KeyError:
                 if self.debug_mode:
-                    print(f'{self.rioStat.gameID()}, {eventNum}: Charge Type: {currentEvent.pitch_type()}')
+                    print(f'{self.rioStat.gameID()}, {eventNum}: Charge Type: {currentEvent.charge_type()}')
 
             self._pitch_in_strikezone_dict[currentEvent.in_strikezone()].add(eventNum)
             self._swing_type_dict[currentEvent.type_of_swing()].add(eventNum)
@@ -914,16 +903,16 @@ class EventSearch():
     def __errorCheck_fielder_pos(self, fielderPos):
         # tells if fielderPos is valid
         if fielderPos.upper() not in LookupDicts.POSITION.values():
-            raise Exception(f"Invalid fielder position {fielderPos}. Function accepts {LookupDicts.POSITION.values()}")
+            raise ValueError(f"Invalid fielder position {fielderPos}. Function accepts {LookupDicts.POSITION.values()}")
 
     def __errorCheck_baseNum(self, baseNum: int):
         # tells if baseNum is valid representing 1st, 2nd and 3rd base
         if abs(baseNum) not in [0,1,2,3]:
-            raise Exception(f'Invalid base num {baseNum}. Function only accepts base numbers of -3 to 3.')
+            raise ValueError(f'Invalid base num {baseNum}. Function only accepts base numbers of -3 to 3.')
 
     def __errorCheck_halfInningNum(self, halfInningNum: int):
         if halfInningNum not in [0,1]:
-            raise Exception(f'Invalid Half Inning num {halfInningNum}. Function only accepts base numbers of 0 or 1.')
+            raise ValueError(f'Invalid Half Inning num {halfInningNum}. Function only accepts base numbers of 0 or 1.')
 
     def noneResultEvents(self):
         # returns a set of events who's result is none
@@ -1044,8 +1033,8 @@ class EventSearch():
     def firstFielderPositionEvents(self, location_abbreviation):
         # returns a set of events where the first fielder on the ball
         # is the one provided in the function argument
-        if location_abbreviation not in self._first_fielder_position_dict.keys():
-            raise Exception(f'Invalid roster arg {location_abbreviation}. Function only location abbreviations {self._first_fielder_position_dict.keys()}')
+        if location_abbreviation not in self._first_fielder_position_dict:
+            raise ValueError(f'Invalid roster arg {location_abbreviation}. Function only accepts location abbreviations {list(self._first_fielder_position_dict)}')
         return self._first_fielder_position_dict[location_abbreviation]
     
     def manualCharacterSelectionEvents(self):
@@ -1071,7 +1060,7 @@ class EventSearch():
             self.__errorCheck_baseNum(num)
         
         if len(baseNums) > 3:
-            raise Exception('Too many baseNums provided. runnerOnBaseEvents accepts at most 3 bases')
+            raise ValueError('Too many baseNums provided. runnerOnBaseEvents accepts at most 3 bases')
 
         if baseNums == [0]:
             return self._runners_on_base_dict['None']
@@ -1090,7 +1079,7 @@ class EventSearch():
                 optional_bases.append(abs(i))
 
         if required_bases and (0 in optional_bases):
-            raise Exception(f'The argument 0 may only be provided alongside optional arguments or itself')
+            raise ValueError(f'The argument 0 may only be provided alongside optional arguments or itself')
 
         if required_bases:
             print('required_bases')
@@ -1114,7 +1103,7 @@ class EventSearch():
         # Used with class variables that have integer keys
         result = set()
         for i in inputList:
-            if abs(i) not in class_variable.keys():
+            if abs(i) not in class_variable:
                 continue
             if i >= 0:
                 result = result.union(class_variable[i])
@@ -1123,7 +1112,7 @@ class EventSearch():
                     for j in range(0, abs(i)):
                         result = result.union(class_variable[j])
                 else:
-                    for j in range(abs(i), max(class_variable.keys())+1):
+                    for j in range(abs(i), max(class_variable)+1):
                         result = result.union(class_variable[j])
                      
         return result
@@ -1247,7 +1236,7 @@ class EventSearch():
             elif pitch.lower() == 'changeup':
                 result = result.union(self.changeUpPitchTypeEvents())
             else:
-                raise Exception(f'{pitch} is not a valid pitch type. Curve, Charge, Slider, Perfect, and ChangeUp are accepted.')
+                raise ValueError(f'{pitch} is not a valid pitch type. Curve, Charge, Slider, Perfect, and ChangeUp are accepted.')
         
         return result
 
@@ -1285,7 +1274,7 @@ class EventSearch():
             elif swing.lower() == 'bunt':
                 result = result.union(self.buntSwingTypeEvents())
             else:
-                raise Exception(f'{swing} is not a valid swing type. None, Slap, Charge, Star, and Bunt are accepted.')
+                raise ValueError(f'{swing} is not a valid swing type. None, Slap, Charge, Star, and Bunt are accepted.')
         
         return result
     
@@ -1296,6 +1285,7 @@ class EventSearch():
             return self._contact_type_dict['Nice - Left']
         if side == 'r':
             return self._contact_type_dict['Nice - Right']
+        raise ValueError(f"Invalid side '{side}'. Must be 'b', 'l', or 'r'.")
         
     def perfectContactTypeEvents(self):
          return self._contact_type_dict['Perfect']
@@ -1307,6 +1297,7 @@ class EventSearch():
             return self._contact_type_dict['Sour - Left']
         if side == 'r':
             return self._contact_type_dict['Sour - Right']
+        raise ValueError(f"Invalid side '{side}'. Must be 'b', 'l', or 'r'.")
 
     def contactTypeEvents(self, contactType):
         contactTypeList = contactType if isinstance(contactType, (list, set)) else [contactType]
@@ -1320,7 +1311,7 @@ class EventSearch():
             elif contact.lower() == 'perfect':
                 result = result.union(self.perfectContactTypeEvents())
             else:
-                raise Exception(f'{contact} is not a valid contact type. Sour, Nice, and Perfect are accepted.')
+                raise ValueError(f'{contact} is not a valid contact type. Sour, Nice, and Perfect are accepted.')
         
         return result
 
@@ -1338,23 +1329,23 @@ class EventSearch():
         # returns a set of events where the input character was at bat
         # returns an empty set if the character was not in the game
         # rather than raising an error
-        if char_id not in self.character_action_dict.keys():
+        if char_id not in self.character_action_dict:
             return set()
         return self.character_action_dict[char_id]['AtBat']
-    
+
     def characterPitchingEvents(self, char_id):
         # returns a set of events where the input character was pitching
         # returns an empty set if the character was not in the game
         # rather than raising an error
-        if char_id not in self.character_action_dict.keys():
+        if char_id not in self.character_action_dict:
             return set()
         return self.character_action_dict[char_id]['Pitching']
-    
+
     def characterFieldingEvents(self, char_id):
         # returns a set of events where the input character is the first fielder
         # returns an empty set if the character was not in the game
         # rather than raising an error
-        if char_id not in self.character_action_dict.keys():
+        if char_id not in self.character_action_dict:
             return set()
         return self.character_action_dict[char_id]['Fielding']
     
@@ -1418,7 +1409,7 @@ class EventObj():
         self.rioStat = rioStat
         self.all_events = rioStat.events()
         if abs(eventNum) > len(self.all_events):
-            raise Exception(f'Invalid event num: Event {eventNum} does not exist in game')
+            raise IndexError(f'Invalid event num: Event {eventNum} does not exist in game')
         self.eventDict = self.all_events[eventNum]
 
     def safe_int(self, value):
@@ -1526,7 +1517,7 @@ class EventObj():
         return self.eventDict['Result of AB']
     
     def runners(self):
-        return set(self.eventDict.keys()).intersection(['Runner 1B', 'Runner 2B', 'Runner 3B'])
+        return set(self.eventDict).intersection(['Runner 1B', 'Runner 2B', 'Runner 3B'])
     
     def bool_runner_on_base(self, baseNum: int):
         """
@@ -1931,9 +1922,7 @@ class HudObj:
         return roster_dict
     
     def inning_end(self):
-        if self.hud_json['Outs'] + self.hud_json['Num Outs During Play'] == 3:
-            return True
-        return False
+        return self.hud_json['Outs'] + self.hud_json['Num Outs During Play'] == 3
     
     def event_result(self):
         if str(self.hud_json['Event Num'])[-1] == 'b':
@@ -1946,7 +1935,7 @@ class HudObj:
         for player in self.team_roster_str_list(teamNum):
             if self.hud_json[player]['Captain'] == 1:
                 return int(player[-1])
-        raise Exception(f'No captain on teamNum {teamNum}')
+        raise ValueError(f'No captain on teamNum {teamNum}')
 
     
 '''
