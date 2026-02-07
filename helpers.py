@@ -14,7 +14,7 @@ fielder_starting_positions = {
     8: [34, 0, 60]
 }
 
-def calc_fielder_distance_speed(df):
+def calc_fielder_distance_speed(df: pd.DataFrame) -> pd.DataFrame:
     # Create columns for the differences initialized with NaN
     df['x_diff'] = np.nan
     df['y_diff'] = np.nan
@@ -65,7 +65,7 @@ def calc_fielder_distance_speed(df):
     return df
 
 
-def calc_fielder_distance_speed_from_ball(df):
+def calc_fielder_distance_speed_from_ball(df: pd.DataFrame) -> pd.DataFrame:
     # Create columns for the differences initialized with NaN
     df['x_diff_ball'] = np.nan
     df['y_diff_ball'] = np.nan
@@ -152,7 +152,7 @@ def calc_fielder_distance_speed_from_ball(df):
 #
 #     return df
 
-def calc_ball_fielder_diff(df):
+def calc_ball_fielder_diff(df: pd.DataFrame) -> pd.DataFrame:
     # Calculate the differences between ball and fielder positions
     df['x_fielder_ball_diff'] = df['ball_x_landing_pos'] - df['fielder_x_pos']
     df['y_fielder_ball_diff'] = df['ball_y_landing_pos'] - df['fielder_y_pos']

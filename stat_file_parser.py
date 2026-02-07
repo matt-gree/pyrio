@@ -1,5 +1,7 @@
+from __future__ import annotations
 from .lookup import LookupDicts
 from datetime import datetime
+from typing import Optional, Union
 
 '''
 Intended to parse "decoded" files which would be present on a user's computer
@@ -40,26 +42,26 @@ Roster args:
 
 class ErrorChecker:
     @staticmethod
-    def check_team_num(teamNum: int):
+    def check_team_num(teamNum: int) -> None:
         """Checks if the team number is valid (either 0 or 1)."""
         if teamNum != 0 and teamNum != 1:
             raise ValueError(
                 f'Invalid team arg {teamNum}. Function only accepts team args of 0 (home team) or 1 (away team).')
 
     @staticmethod
-    def check_roster_num(rosterNum: int):
+    def check_roster_num(rosterNum: int) -> None:
         """Checks if the roster number is valid (between -1 and 8). Allows -1."""
         if rosterNum < -1 or rosterNum > 8:
             raise ValueError(f'Invalid roster arg {rosterNum}. Function only accepts roster args of 0 to 8.')
 
     @staticmethod
-    def check_roster_num_no_neg(rosterNum: int):
+    def check_roster_num_no_neg(rosterNum: int) -> None:
         """Checks if the roster number is valid (between 0 and 8). Does not allow -1."""
         if rosterNum < 0 or rosterNum > 8:
             raise ValueError(f'Invalid roster arg {rosterNum}. Function only accepts roster args of 0 to 8.')
 
     @staticmethod
-    def check_base_num(baseNum: int):
+    def check_base_num(baseNum: int) -> None:
         """Checks if the base number is valid (between 1 and 3) or -1."""
         if (baseNum < -1 or baseNum > 3):
             raise ValueError(f'Invalid base arg {baseNum}. Function only accepts base args of -1 to 3')
@@ -69,21 +71,21 @@ class StatObj:
     def __init__(self, statJson: dict):
         self.statJson = statJson
 
-    def gameID(self):
+    def gameID(self) -> int:
         # returns it in int form
         return int(self.statJson["GameID"].replace(',', ''), 16)
 
     # should look to convert to unix or some other standard date fmt
-    def startDate(self):
+    def startDate(self) -> datetime:
         return datetime.strptime(self.statJson["Date - Start"], "%a %b %d %H:%M:%S %Y")
-    
-    def endDate(self):
+
+    def endDate(self) -> datetime:
         return datetime.strptime(self.statJson["Date - End"], "%a %b %d %H:%M:%S %Y")
 
-    def version(self):
+    def version(self) -> str:
         return self.statJson.get('Version', 'Pre 0.1.7')
 
-    def stadium(self):
+    def stadium(self) -> str:
         # returns the stadium that was played on
         old_stadium_names = {
             "Bowser's Castle": "Bowser Castle",
@@ -95,7 +97,7 @@ class StatObj:
         
         return old_stadium_names.get(self.statJson["StadiumID"], self.statJson["StadiumID"])
     
-    def teamNumVersionCorrection(self, teamNum: int):
+    def teamNumVersionCorrection(self, teamNum: int) -> int:
         # For Project Rio versions pre 1.9.2
         # teamNum: 0 == home team, 1 == away team
         # For Project Rio versions 1.9.2 and later
@@ -112,7 +114,7 @@ class StatObj:
         return teamNum
 
 
-    def player(self, teamNum: int):
+    def player(self, teamNum: int) -> str:
         teamNum = self.teamNumVersionCorrection(teamNum)
         if teamNum == 0:
             return self.statJson["Away Player"]
@@ -120,7 +122,7 @@ class StatObj:
             return self.statJson["Home Player"]
 
 
-    def score(self, teamNum: int):
+    def score(self, teamNum: int) -> int:
         teamNum = self.teamNumVersionCorrection(teamNum)
 
         if teamNum == 0:
@@ -128,7 +130,7 @@ class StatObj:
         else:
             return self.statJson["Home Score"]
         
-    def winning_team(self):
+    def winning_team(self) -> int:
         # returns the team number of the winning team
         if self.score(0) > self.score(1):
             return 0
@@ -137,39 +139,39 @@ class StatObj:
         else:
             return -1  # tie game
 
-    def inningsSelected(self):
+    def inningsSelected(self) -> int:
         # returns how many innings were selected for the game
         return self.statJson["Innings Selected"]
 
-    def inningsPlayed(self):
+    def inningsPlayed(self) -> int:
         # returns how many innings were played in the game
         return self.statJson["Innings Played"]
 
-    def isMercy(self):
+    def isMercy(self) -> bool:
         # returns if the game ended in a mercy or not
         return self.inningsSelected() - self.inningsPlayed() >= 1 and abs(self.score(0) - self.score(1)) > 10
 
-    def wasQuit(self):
+    def wasQuit(self) -> bool:
         # returns if the game was quit out early
         return self.statJson["Quitter Team"] != ""
 
-    def quitter(self):
+    def quitter(self) -> str:
         # returns the name of the quitter if the game was quit. empty string if no quitter
         return self.statJson["Quitter Team"]
 
-    def ping(self):
+    def ping(self) -> int:
         # returns average ping of the game
         return self.statJson["Average Ping"]
 
-    def lagspikes(self):
+    def lagspikes(self) -> int:
         # returns number of lag spikes in a game
         return self.statJson["Lag Spikes"]
 
-    def characterGameStats(self):
+    def characterGameStats(self) -> dict:
         # returns the full dict of character game stats as shown in the stat file
         return self.statJson["Character Game Stats"]
 
-    def isSuperstarGame(self):
+    def isSuperstarGame(self) -> bool:
         # returns if the game has any superstar characters in it
         isStarred = False
         charStats = self.characterGameStats()
@@ -178,7 +180,7 @@ class StatObj:
                 isStarred = True
         return isStarred
 
-    def getTeamString(self, teamNum: int, rosterNum: int):
+    def getTeamString(self, teamNum: int, rosterNum: int) -> str:
         ErrorChecker.check_team_num(teamNum)
         ErrorChecker.check_roster_num(rosterNum)
 
@@ -190,7 +192,7 @@ class StatObj:
         teamStr = "Away" if teamNum == 0 else "Home"
         return f"{teamStr} Roster {rosterNum}"
     
-    def getRosterDict(self, teamNum: int):
+    def getRosterDict(self, teamNum: int) -> dict[int, str]:
         # returns a dict of rosterNum: characterName for the given team
         teamNum = self.teamNumVersionCorrection(teamNum)
         rosterDict = {}
@@ -198,7 +200,7 @@ class StatObj:
             rosterDict[x] = self.statJson["Character Game Stats"][self.getTeamString(teamNum, x)]["CharID"]
         return rosterDict
 
-    def characterName(self, teamNum: int, rosterNum: int = -1):
+    def characterName(self, teamNum: int, rosterNum: int = -1) -> Union[str, list[str]]:
         # returns name of specified character
         # if no roster spot is provided, returns a list of characters on a given team
         # teamNum: 0 == home team, 1 == away team
@@ -213,7 +215,7 @@ class StatObj:
         else:
             return self.statJson["Character Game Stats"][self.getTeamString(teamNum, rosterNum)]["CharID"]
 
-    def isStarred(self, teamNum: int, rosterNum: int = -1):
+    def isStarred(self, teamNum: int, rosterNum: int = -1) -> bool:
         # returns if a character is starred
         # if no arg, returns if any character on the team is starred
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
@@ -227,7 +229,7 @@ class StatObj:
         else:
             return self.statJson["Character Game Stats"][self.getTeamString(teamNum, rosterNum)]["Superstar"] == 1
 
-    def captain(self, teamNum: int):
+    def captain(self, teamNum: int) -> str:
         # returns name of character who is the captain
         teamNum = self.teamNumVersionCorrection(teamNum)
         captain = ""
@@ -236,7 +238,7 @@ class StatObj:
                 captain = character["CharID"]
         return captain
 
-    def offensiveStats(self, teamNum: int, rosterNum: int = -1):
+    def offensiveStats(self, teamNum: int, rosterNum: int = -1) -> Union[dict, list[dict]]:
         # grabs offensive stats of a character as seen in the stat json
         # if no roster provided, returns a list of all character's offensive stats
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
@@ -250,7 +252,7 @@ class StatObj:
         else:
             return self.statJson["Character Game Stats"][self.getTeamString(teamNum, rosterNum)]["Offensive Stats"]
 
-    def defensiveStats(self, teamNum: int, rosterNum: int = -1):
+    def defensiveStats(self, teamNum: int, rosterNum: int = -1) -> Union[dict, list[dict]]:
         # grabs defensive stats of a character as seen in the stat json
         # if no roster provided, returns a list of all character's defensive stats
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
@@ -264,14 +266,14 @@ class StatObj:
         else:
             return self.statJson["Character Game Stats"][self.getTeamString(teamNum, rosterNum)]["Defensive Stats"]
 
-    def fieldingHand(self, teamNum: int, rosterNum: int):
+    def fieldingHand(self, teamNum: int, rosterNum: int) -> int:
         # returns fielding handedness of character
         # rosterNum: 0 -> 8 for each of the 9 roster spots
         teamNum = self.teamNumVersionCorrection(teamNum)
         ErrorChecker.check_roster_num_no_neg(rosterNum)
         return self.statJson["Character Game Stats"][self.getTeamString(teamNum, rosterNum)]["Fielding Hand"]
 
-    def battingHand(self, teamNum: int, rosterNum: int):
+    def battingHand(self, teamNum: int, rosterNum: int) -> int:
         # returns batting handedness of character
         # rosterNum: 0 -> 8 for each of the 9 roster spots
         teamNum = self.teamNumVersionCorrection(teamNum)
@@ -279,14 +281,14 @@ class StatObj:
         return self.statJson["Character Game Stats"][self.getTeamString(teamNum, rosterNum)]["Batting Hand"]
 
     # defensive stats
-    def era(self, teamNum: int, rosterNum: int = -1):
+    def era(self, teamNum: int, rosterNum: int = -1) -> float:
         # tells the era of a character
         # if no character given, returns era of that team
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
         teamNum = self.teamNumVersionCorrection(teamNum)
         return 9 * float(self.runsAllowed(teamNum, rosterNum)) / self.inningsPitched(teamNum, rosterNum)
 
-    def battersFaced(self, teamNum: int, rosterNum: int = -1):
+    def battersFaced(self, teamNum: int, rosterNum: int = -1) -> int:
         # tells how many batters were faced by character
         # if no character given, returns batters faced by that team
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
@@ -299,7 +301,7 @@ class StatObj:
         else:
             return self.defensiveStats(teamNum, rosterNum)["Batters Faced"]
 
-    def runsAllowed(self, teamNum: int, rosterNum: int = -1):
+    def runsAllowed(self, teamNum: int, rosterNum: int = -1) -> int:
         # tells how many runs a character allowed when pitching
         # if no character given, returns runs allowed by that team
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
@@ -312,14 +314,14 @@ class StatObj:
         else:
             return self.defensiveStats(teamNum, rosterNum)["Runs Allowed"]
 
-    def battersWalked(self, teamNum: int, rosterNum: int = -1):
+    def battersWalked(self, teamNum: int, rosterNum: int = -1) -> int:
         # tells how many walks a character allowed when pitching
         # if no character given, returns walks by that team
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
         teamNum = self.teamNumVersionCorrection(teamNum)
         return self.battersWalkedBallFour(teamNum, rosterNum) + self.battersHitByPitch(teamNum, rosterNum)
 
-    def battersWalkedBallFour(self, teamNum: int, rosterNum: int = -1):
+    def battersWalkedBallFour(self, teamNum: int, rosterNum: int = -1) -> int:
         # returns how many times a character has walked a batter via 4 balls
         # if no character given, returns how many times the team walked via 4 balls
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
@@ -332,7 +334,7 @@ class StatObj:
         else:
             return self.defensiveStats(teamNum, rosterNum)["Batters Walked"]
 
-    def battersHitByPitch(self, teamNum: int, rosterNum: int = -1):
+    def battersHitByPitch(self, teamNum: int, rosterNum: int = -1) -> int:
         # returns how many times a character walked a batter by hitting them by a pitch
         # if no character given, returns walked via HBP for the team
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
@@ -345,7 +347,7 @@ class StatObj:
         else:
             return self.defensiveStats(teamNum, rosterNum)["Batters Hit"]
 
-    def hitsAllowed(self, teamNum: int, rosterNum: int = -1):
+    def hitsAllowed(self, teamNum: int, rosterNum: int = -1) -> int:
         # returns how many hits a character allowed as pitcher
         # if no character given, returns how many hits a team allowed
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
@@ -358,7 +360,7 @@ class StatObj:
         else:
             return self.defensiveStats(teamNum, rosterNum)["Hits Allowed"]
 
-    def homerunsAllowed(self, teamNum: int, rosterNum: int = -1):
+    def homerunsAllowed(self, teamNum: int, rosterNum: int = -1) -> int:
         # returns how many homeruns a character allowed as pitcher
         # if no character given, returns how many homeruns a team allowed
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
@@ -371,7 +373,7 @@ class StatObj:
         else:
             return self.defensiveStats(teamNum, rosterNum)["HRs Allowed"]
 
-    def pitchesThrown(self, teamNum: int, rosterNum: int = -1):
+    def pitchesThrown(self, teamNum: int, rosterNum: int = -1) -> int:
         # returns how many pitches a character threw
         # if no character given, returns how many pitches a team threw
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
@@ -384,7 +386,7 @@ class StatObj:
         else:
             return self.defensiveStats(teamNum, rosterNum)["Pitches Thrown"]
 
-    def stamina(self, teamNum: int, rosterNum: int = -1):
+    def stamina(self, teamNum: int, rosterNum: int = -1) -> int:
         # returns final pitching stamina of a pitcher
         # if no character given, returns total stamina of a team
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
@@ -397,14 +399,14 @@ class StatObj:
         else:
             return self.defensiveStats(teamNum, rosterNum)["Stamina"]
         
-    def wasPitcher(self, teamNum: int, rosterNum: int):
+    def wasPitcher(self, teamNum: int, rosterNum: int) -> bool:
         # returns if a character was a pitcher
         # rosterNum: 0 -> 8 for each of the 9 roster spots
         teamNum = self.teamNumVersionCorrection(teamNum)
         ErrorChecker.check_roster_num_no_neg(rosterNum)
         return self.defensiveStats(teamNum, rosterNum)["Was Pitcher"] == 1
 
-    def strikeoutsPitched(self, teamNum: int, rosterNum: int = -1):
+    def strikeoutsPitched(self, teamNum: int, rosterNum: int = -1) -> int:
         # returns how many strikeouts a character pitched
         # if no character given, returns how mnany strikeouts a team pitched
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
@@ -417,7 +419,7 @@ class StatObj:
         else:
             return self.defensiveStats(teamNum, rosterNum)["Strikeouts"]
 
-    def starPitchesThrown(self, teamNum: int, rosterNum: int = -1):
+    def starPitchesThrown(self, teamNum: int, rosterNum: int = -1) -> int:
         # returns how many star pitches a character threw
         # if no character given, returns how many star pitches a team threw
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
@@ -430,7 +432,7 @@ class StatObj:
         else:
             return self.defensiveStats(teamNum, rosterNum)["Star Pitches Thrown"]
 
-    def bigPlays(self, teamNum: int, rosterNum: int = -1):
+    def bigPlays(self, teamNum: int, rosterNum: int = -1) -> int:
         # returns how many big plays a character had
         # if no character given, returns how many big plays a team had
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
@@ -443,7 +445,7 @@ class StatObj:
         else:
             return self.defensiveStats(teamNum, rosterNum)["Big Plays"]
 
-    def outsPitched(self, teamNum: int, rosterNum: int = -1):
+    def outsPitched(self, teamNum: int, rosterNum: int = -1) -> int:
         # returns how many outs a character was pitching for
         # if no character given, returns how many outs a team pitched for
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
@@ -456,21 +458,21 @@ class StatObj:
         else:
             return self.defensiveStats(teamNum, rosterNum)["Outs Pitched"]
 
-    def inningsPitched(self, teamNum: int, rosterNum: int = -1):
+    def inningsPitched(self, teamNum: int, rosterNum: int = -1) -> float:
         # returns how many innings a character was pitching for
         # if no character given, returns how many innings a team pitched for
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
         teamNum = self.teamNumVersionCorrection(teamNum)
         return float(self.outsPitched(teamNum, rosterNum)) / 3
 
-    def pitchesPerPosition(self, teamNum: int, rosterNum: int):
+    def pitchesPerPosition(self, teamNum: int, rosterNum: int) -> dict:
         # returns a dict which tracks how many pitches a character was at a position for
         # rosterNum: 0 -> 8 for each of the 9 roster spots
         teamNum = self.teamNumVersionCorrection(teamNum)
         ErrorChecker.check_roster_num_no_neg(rosterNum)
         return self.defensiveStats(teamNum, rosterNum)["Pitches Per Position"][0]
 
-    def outsPerPosition(self, teamNum: int, rosterNum: int):
+    def outsPerPosition(self, teamNum: int, rosterNum: int) -> dict:
         # returns a dict which tracks how many outs a character was at a position for
         # rosterNum: 0 -> 8 for each of the 9 roster spots
         teamNum = self.teamNumVersionCorrection(teamNum)
@@ -479,7 +481,7 @@ class StatObj:
 
     # offensive stats
 
-    def atBats(self, teamNum: int, rosterNum: int = -1):
+    def atBats(self, teamNum: int, rosterNum: int = -1) -> int:
         # returns how many at bats a character had
         # if no character given, returns how many at bats a team had
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
@@ -492,7 +494,7 @@ class StatObj:
         else:
             return self.offensiveStats(teamNum, rosterNum)["At Bats"]
 
-    def hits(self, teamNum: int, rosterNum: int = -1):
+    def hits(self, teamNum: int, rosterNum: int = -1) -> int:
         # returns how many hits a character had
         # if no character given, returns how many hits a team had
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
@@ -505,7 +507,7 @@ class StatObj:
         else:
             return self.offensiveStats(teamNum, rosterNum)["Hits"]
 
-    def singles(self, teamNum: int, rosterNum: int = -1):
+    def singles(self, teamNum: int, rosterNum: int = -1) -> int:
         # returns how many singles a character had
         # if no character given, returns how many singles a team had
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
@@ -518,7 +520,7 @@ class StatObj:
         else:
             return self.offensiveStats(teamNum, rosterNum)["Singles"]
 
-    def doubles(self, teamNum: int, rosterNum: int = -1):
+    def doubles(self, teamNum: int, rosterNum: int = -1) -> int:
         # returns how many doubles a character had
         # if no character given, returns how many doubles a team had
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
@@ -531,7 +533,7 @@ class StatObj:
         else:
             return self.offensiveStats(teamNum, rosterNum)["Doubles"]
 
-    def triples(self, teamNum: int, rosterNum: int = -1):
+    def triples(self, teamNum: int, rosterNum: int = -1) -> int:
         # returns how many triples a character had
         # if no character given, returns how many triples a teams had
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
@@ -544,7 +546,7 @@ class StatObj:
         else:
             return self.offensiveStats(teamNum, rosterNum)["Triples"]
 
-    def homeruns(self, teamNum: int, rosterNum: int = -1):
+    def homeruns(self, teamNum: int, rosterNum: int = -1) -> int:
         # returns how many homeruns a character had
         # if no character given, returns how many homeruns a team had
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
@@ -557,7 +559,7 @@ class StatObj:
         else:
             return self.offensiveStats(teamNum, rosterNum)["Homeruns"]
 
-    def buntsLanded(self, teamNum: int, rosterNum: int = -1):
+    def buntsLanded(self, teamNum: int, rosterNum: int = -1) -> int:
         # returns how many successful bunts a character had
         # if no character given, returns how many successful bunts a team had
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
@@ -570,7 +572,7 @@ class StatObj:
         else:
             return self.offensiveStats(teamNum, rosterNum)["Successful Bunts"]
 
-    def sacFlys(self, teamNum: int, rosterNum: int = -1):
+    def sacFlys(self, teamNum: int, rosterNum: int = -1) -> int:
         # returns how many sac flys a character had
         # if no character given, returns how many sac flys a team had
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
@@ -583,7 +585,7 @@ class StatObj:
         else:
             return self.offensiveStats(teamNum, rosterNum)["Sac Flys"]
 
-    def strikeouts(self, teamNum: int, rosterNum: int = -1):
+    def strikeouts(self, teamNum: int, rosterNum: int = -1) -> int:
         # returns how many times a character struck out when batting
         # if no character given, returns how many times a team struck out when batting
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
@@ -596,14 +598,14 @@ class StatObj:
         else:
             return self.offensiveStats(teamNum, rosterNum)["Strikeouts"]
 
-    def walks(self, teamNum: int, rosterNum: int):
+    def walks(self, teamNum: int, rosterNum: int) -> int:
         # returns how many times a character was walked when batting
         # if no character given, returns how many times a team was walked when batting
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
         teamNum = self.teamNumVersionCorrection(teamNum)
         return self.walksBallFour(teamNum, rosterNum) + self.walksHitByPitch(teamNum, rosterNum)
 
-    def walksBallFour(self, teamNum: int, rosterNum: int = -1):
+    def walksBallFour(self, teamNum: int, rosterNum: int = -1) -> int:
         # returns how many times a character was walked via 4 balls when batting
         # if no character given, returns how many times a team was walked via 4 balls when batting
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
@@ -616,7 +618,7 @@ class StatObj:
         else:
             return self.offensiveStats(teamNum, rosterNum)["Walks (4 Balls)"]
 
-    def walksHitByPitch(self, teamNum: int, rosterNum: int = -1):
+    def walksHitByPitch(self, teamNum: int, rosterNum: int = -1) -> int:
         # returns how many times a character was walked via hit by pitch when batting
         # if no character given, returns how many times a team was walked via hit by pitch when batting
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
@@ -629,7 +631,7 @@ class StatObj:
         else:
             return self.offensiveStats(teamNum, rosterNum)["Walks (Hit)"]
 
-    def rbi(self, teamNum: int, rosterNum: int = -1):
+    def rbi(self, teamNum: int, rosterNum: int = -1) -> int:
         # returns how many RBI's a character had
         # if no character given, returns how many RBI's a team had
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
@@ -642,7 +644,7 @@ class StatObj:
         else:
             return self.offensiveStats(teamNum, rosterNum)["RBI"]
 
-    def basesStolen(self, teamNum: int, rosterNum: int = -1):
+    def basesStolen(self, teamNum: int, rosterNum: int = -1) -> int:
         # returns how many times a character successfully stole a base
         # if no character given, returns how many times a team successfully stole a base
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
@@ -655,7 +657,7 @@ class StatObj:
         else:
             return self.offensiveStats(teamNum, rosterNum)["Bases Stolen"]
 
-    def starHitsUsed(self, teamNum: int, rosterNum: int = -1):
+    def starHitsUsed(self, teamNum: int, rosterNum: int = -1) -> int:
         # returns how many star hits a character used
         # if no character given, returns how many star hits a team used
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
@@ -670,7 +672,7 @@ class StatObj:
 
     # complicated stats
 
-    def battingAvg(self, teamNum: int, rosterNum: int = -1):
+    def battingAvg(self, teamNum: int, rosterNum: int = -1) -> float:
         # returns the batting average of a character
         # if no character given, returns the batting average of a team
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
@@ -679,7 +681,7 @@ class StatObj:
         nHits = self.hits(teamNum, rosterNum)
         return float(nHits) / float(nAtBats)
 
-    def obp(self, teamNum: int, rosterNum: int = -1):
+    def obp(self, teamNum: int, rosterNum: int = -1) -> float:
         # returns the on base percentage of a character
         # if no character given, returns the on base percentage of a team
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
@@ -689,7 +691,7 @@ class StatObj:
         nWalks = self.walks(teamNum, rosterNum)
         return float(nHits + nWalks) / float(nAtBats)
 
-    def slg(self, teamNum: int, rosterNum: int = -1):
+    def slg(self, teamNum: int, rosterNum: int = -1) -> float:
         # returns the SLG of a character
         # if no character given, returns the SLG of a team
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
@@ -702,17 +704,17 @@ class StatObj:
         nWalks = self.walks(teamNum, rosterNum)
         return float(nSingles + nDoubles * 2 + nTriples * 3 + nHomeruns * 4) / float(nAtBats - nWalks)
 
-    def ops(self, teamNum: int, rosterNum: int = -1):
+    def ops(self, teamNum: int, rosterNum: int = -1) -> float:
         # returns the OPS of a character
         # if no character given, returns the OPS of a team
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
         teamNum = self.teamNumVersionCorrection(teamNum)
         return self.obp(teamNum, rosterNum) + self.slg(teamNum, rosterNum)
     
-    def events(self):
+    def events(self) -> list[dict]:
         return self.statJson['Events']
 
-    def final_event(self):
+    def final_event(self) -> int:
         return len(self.events())-1
     
 
@@ -900,29 +902,29 @@ class EventSearch():
             if currentEvent.first_fielder_maunual_selected() != 'No Selected Char':
                 self._manual_character_selection.add(eventNum)
     
-    def __errorCheck_fielder_pos(self, fielderPos):
+    def __errorCheck_fielder_pos(self, fielderPos) -> None:
         # tells if fielderPos is valid
         if fielderPos.upper() not in LookupDicts.POSITION.values():
             raise ValueError(f"Invalid fielder position {fielderPos}. Function accepts {LookupDicts.POSITION.values()}")
 
-    def __errorCheck_baseNum(self, baseNum: int):
+    def __errorCheck_baseNum(self, baseNum: int) -> None:
         # tells if baseNum is valid representing 1st, 2nd and 3rd base
         if abs(baseNum) not in [0,1,2,3]:
             raise ValueError(f'Invalid base num {baseNum}. Function only accepts base numbers of -3 to 3.')
 
-    def __errorCheck_halfInningNum(self, halfInningNum: int):
+    def __errorCheck_halfInningNum(self, halfInningNum: int) -> None:
         if halfInningNum not in [0,1]:
             raise ValueError(f'Invalid Half Inning num {halfInningNum}. Function only accepts base numbers of 0 or 1.')
 
-    def noneResultEvents(self):
+    def noneResultEvents(self) -> set[int]:
         # returns a set of events who's result is none
         return self._result_of_AB_dict['None']
     
-    def strikeoutResultEvents(self):
+    def strikeoutResultEvents(self) -> set[int]:
         # returns a set of events where the result is a strikeout
         return self._result_of_AB_dict['Strikeout']
     
-    def walkResultEvents(self, include_hbp=True, include_bb=True):
+    def walkResultEvents(self, include_hbp=True, include_bb=True) -> set[int]:
         # returns a set of events where the batter recorded a type of hit
         # can be used to reutrn just walks or just hbp
         # defaults to returning both
@@ -935,19 +937,19 @@ class EventSearch():
         else:
             return set()
         
-    def outResultEvents(self):
+    def outResultEvents(self) -> set[int]:
         # returns a set of events where the result is out
         return self._result_of_AB_dict['Out']
 
-    def caughtResultEvents(self):
+    def caughtResultEvents(self) -> set[int]:
         # returns a set of events where the result is caught
         return self._result_of_AB_dict['Caught']
     
-    def caughtLineDriveResultsEvents(self):
+    def caughtLineDriveResultsEvents(self) -> set[int]:
         # returns a set of events where the result is caught line drive
         return self._result_of_AB_dict['Caught line-drive']
 
-    def hitResultEvents(self, numberOfBases=0):
+    def hitResultEvents(self, numberOfBases=0) -> set[int]:
         # returns a set of events where the batter recorded a type of hit
         # can return singles, doubles, triples, HRs or all hits
         # returns all hits if numberOfBases is not 1-4
@@ -962,31 +964,31 @@ class EventSearch():
         else:
             return self._result_of_AB_dict['Single'] | self._result_of_AB_dict['Double'] | self._result_of_AB_dict['Triple'] | self._result_of_AB_dict['HR']
 
-    def inputErrorResultEvents(self):
+    def inputErrorResultEvents(self) -> set[int]:
         # returns a set of events where the result is a input error
         return self._result_of_AB_dict['Error - Input']
     
-    def chemErrorResultEvents(self):
+    def chemErrorResultEvents(self) -> set[int]:
         # returns a set of events where the result is a chem error
         return self._result_of_AB_dict['Error - Chem']
 
-    def buntResultEvents(self):
+    def buntResultEvents(self) -> set[int]:
         #returns a set of events of successful bunts
         return self._result_of_AB_dict['Bunt']
     
-    def sacFlyResultEvents(self):
+    def sacFlyResultEvents(self) -> set[int]:
         #returns a set of events of sac flys
         return self._result_of_AB_dict['SacFly']
     
-    def groundBallDoublePlayResultEvents(self):
+    def groundBallDoublePlayResultEvents(self) -> set[int]:
         # returns a set of events where the result is a ground ball double play
         return self._result_of_AB_dict['Ground ball double Play']
     
-    def foulCatchResultEvents(self):
+    def foulCatchResultEvents(self) -> set[int]:
         # returns a set of events where the result is a foul catch
         return self._result_of_AB_dict['Foul catch']
     
-    def allOutResultEvents(self):
+    def allOutResultEvents(self) -> set[int]:
         # returns a set of events where the result is any type of out
         return set().union(
             self.strikeoutResultEvents(),
@@ -998,50 +1000,50 @@ class EventSearch():
             self.foulCatchResultEvents()
         )
 
-    def stealEvents(self):
+    def stealEvents(self) -> set[int]:
         # returns a set of events where an steal happened
         # types of steals: None, Ready, Normal, Perfect
         return self._steal
     
-    def starPitchEvents(self):
+    def starPitchEvents(self) -> set[int]:
         # returns a set of events where a star pitch is used
         return self._star_pitch
     
-    def bobbleEvents(self):
+    def bobbleEvents(self) -> set[int]:
         # returns a set of events where any kind of bobble occurs
         # Bobble types: "None" "Slide/stun lock" "Fumble", "Bobble", 
         # "Fireball", "Garlic knockout" "None"
         return self._bobble
     
-    def fireballBurnEvents(self):
+    def fireballBurnEvents(self) -> set[int]:
         # returns a set of events where a fireball burn bobble occurs
         return self._fireball_burn
     
-    def fiveStarDingerEvents(self):
+    def fiveStarDingerEvents(self) -> set[int]:
         # returns a set of events where a five star dinger occurs
         return self._five_star_dinger
     
-    def slidingCatchEvents(self):
+    def slidingCatchEvents(self) -> set[int]:
         # returns a set of events where the fielder made a sliding catch
         # not to be confused with the character ability sliding catch
         return self._sliding_catch
     
-    def wallJumpEvents(self):
+    def wallJumpEvents(self) -> set[int]:
         # returns a set of events where the fielder made a wall jump
         return self._wall_jump
     
-    def firstFielderPositionEvents(self, location_abbreviation):
+    def firstFielderPositionEvents(self, location_abbreviation) -> set[int]:
         # returns a set of events where the first fielder on the ball
         # is the one provided in the function argument
         if location_abbreviation not in self._first_fielder_position_dict:
             raise ValueError(f'Invalid roster arg {location_abbreviation}. Function only accepts location abbreviations {list(self._first_fielder_position_dict)}')
         return self._first_fielder_position_dict[location_abbreviation]
     
-    def manualCharacterSelectionEvents(self):
+    def manualCharacterSelectionEvents(self) -> set[int]:
         # returns a set of events where a fielder was manually selected
         return self._manual_character_selection
     
-    def runnerOnBaseEvents(self, baseNums: list):
+    def runnerOnBaseEvents(self, baseNums: list) -> set[int]:
         # returns a set of events where runners were on the specified bases
         # the input baseNums is a list of three numbers -3 to 3
         # the numbers indicate what base the runner is to appear on
@@ -1099,7 +1101,7 @@ class EventSearch():
 
         return result
 
-    def listInputHandling(self, inputList, class_variable, to_zero=False):
+    def listInputHandling(self, inputList, class_variable, to_zero=False) -> set[int]:
         # Used with class variables that have integer keys
         result = set()
         for i in inputList:
@@ -1117,57 +1119,57 @@ class EventSearch():
                      
         return result
 
-    def inningEvents(self, inningNum):
+    def inningEvents(self, inningNum) -> set[int]:
         inningNumList = inningNum if isinstance(inningNum, (list, set)) else [inningNum]
         # returns a set of events that occurered in the inning input
         # negative inputs return all events after the specified inning
         return self.listInputHandling(inningNumList, self._inning_dict)
     
-    def awayTeamWinningEvents(self):
+    def awayTeamWinningEvents(self) -> set[int]:
         return self._away_team_winning
     
-    def homeTeamWinningEvents(self):
+    def homeTeamWinningEvents(self) -> set[int]:
         return self._home_team_winning
     
-    def gameTiedEvents(self):
+    def gameTiedEvents(self) -> set[int]:
         return self._game_tied
     
-    def awayScoreEvents(self, awayScore):
+    def awayScoreEvents(self, awayScore) -> set[int]:
         # returns a set of events that occurered with the away score
         # negative inputs return all events with an away score greater than or equal to the input
         # inputting a list or set will return the all events that match the numbers in the list
         awayScoreList = awayScore if isinstance(awayScore, (list, set)) else [awayScore]
         return self.listInputHandling(awayScoreList, self._home_score_dict)
     
-    def homeScoreEvents(self, homeScore):
+    def homeScoreEvents(self, homeScore) -> set[int]:
         # returns a set of events that occurered with the home score
         # negative inputs return all events with a home score greater than or equal to the input
         # inputting a list or set will return the all events that match the numbers in the list
         homeScoreList = homeScore if isinstance(homeScore, (list, set)) else [homeScore]
         return self.listInputHandling(homeScoreList, self._home_score_dict)
     
-    def ballEvents(self, ballNum):
+    def ballEvents(self, ballNum) -> set[int]:
         # returns a set of events that occurered with the number of balls in the count
         # negative inputs return all events with a ball count greater than or equal to the input
         # inputting a list or set will return the all events that match the numbers in the list
         ballNumList = ballNum if isinstance(ballNum, (list, set)) else [ballNum]
         return self.listInputHandling(ballNumList, self._balls_dict)
     
-    def strikeEvents(self, strikeNum):
+    def strikeEvents(self, strikeNum) -> set[int]:
         # returns a set of events that occurered with the number of strikes in the count
         # negative inputs return all events with a strike count greater than or equal to the input
         # inputting a list or set will return the all events that match the numbers in the list
         strikeNumList = strikeNum if isinstance(strikeNum, (list, set)) else [strikeNum]
         return self.listInputHandling(strikeNumList, self._strikes_dict)
 
-    def chemOnBaseEvents(self, chemNum):
+    def chemOnBaseEvents(self, chemNum) -> set[int]:
         # returns a set of events that occurered with the number of chem on base
         # negative inputs return all events with a chem count greater than or equal to the input
         # inputting a list or set will return the all events that match the numbers in the list
         chemNumList = chemNum if isinstance(chemNum, (list, set)) else [chemNum]
         return self.listInputHandling(chemNumList, self._chem_on_base_dict)
         
-    def rbiEvents(self, rbiNum):
+    def rbiEvents(self, rbiNum) -> set[int]:
         # returns a set of events that occurered with the number of chem on base
         # negative inputs return all events with a chem count greater than or equal to the input
         # inputting a list or set will return the all events that match the numbers in the list
@@ -1175,11 +1177,11 @@ class EventSearch():
         return self.listInputHandling(rbiNumList, self._rbi_dict)
         
 
-    def halfInningEvents(self, halfInningNum: int):
+    def halfInningEvents(self, halfInningNum: int) -> set[int]:
           self.__errorCheck_halfInningNum(halfInningNum)
           return self._half_inning_dict[halfInningNum]
     
-    def outsInInningEvents(self, outsNum: int):
+    def outsInInningEvents(self, outsNum: int) -> set[int]:
         self.__errorCheck_halfInningNum(outsNum)
         if outsNum >= 0:
             return self._outs_in_inning_dict[outsNum]
@@ -1189,38 +1191,38 @@ class EventSearch():
                 result = result.union(self._outs_in_inning_dict[i])
             return result
         
-    def pitcherStaminaEvents(self, stamina):
+    def pitcherStaminaEvents(self, stamina) -> set[int]:
         # returns a set of events that occurered with the number of pitcher stamina
         # negative inputs return all events with a stamina LESS THAN or equal to the input
         # inputting a list or set will return the all events that match the numbers in the list
         staminaList = stamina if isinstance(stamina, (list, set)) else [stamina]
         return self.listInputHandling(staminaList, 'Pitcher Stamina', to_zero=True)
 
-    def starChanceEvents(self, isStarChance=True):
+    def starChanceEvents(self, isStarChance=True) -> set[int]:
         if isStarChance:
             return self._star_chance_dict[1]
         return self._star_chance_dict[0]
 
-    def numOutsDuringPlayEvents(self, numOuts):
+    def numOutsDuringPlayEvents(self, numOuts) -> set[int]:
          numOutsList = numOuts if isinstance(numOuts, (list, set)) else [numOuts]
          return self.listInputHandling(numOutsList, self._outs_during_event_dict)
 
-    def curvePitchTypeEvents(self):
+    def curvePitchTypeEvents(self) -> set[int]:
         return self._pitch_type_dict['Curve']
     
-    def chargePitchTypeEvents(self):
+    def chargePitchTypeEvents(self) -> set[int]:
         return self._pitch_type_dict['Charge']
 
-    def sliderPitchTypeEvents(self):
+    def sliderPitchTypeEvents(self) -> set[int]:
         return self._charge_type_dict['Slider']
 
-    def perfectChargePitchTypeEvents(self):
+    def perfectChargePitchTypeEvents(self) -> set[int]:
         return self._charge_type_dict['Perfect']
 
-    def changeUpPitchTypeEvents(self):
+    def changeUpPitchTypeEvents(self) -> set[int]:
         return self._pitch_type_dict['ChangeUp']
     
-    def pitchTypeEvents(self, pitchType):
+    def pitchTypeEvents(self, pitchType) -> set[int]:
         pitchTypeList = pitchType if isinstance(pitchType, (list, set)) else [pitchType]
         
         result = set()
@@ -1240,25 +1242,25 @@ class EventSearch():
         
         return result
 
-    def inStrikezoneEvents(self):
+    def inStrikezoneEvents(self) -> set[int]:
         return self._pitch_in_strikezone_dict[1]
 
-    def noneSwingTypeEvents(self):
+    def noneSwingTypeEvents(self) -> set[int]:
         return self._swing_type_dict['None']
 
-    def slapSwingTypeEvents(self):
+    def slapSwingTypeEvents(self) -> set[int]:
         return self._swing_type_dict['Slap']
 
-    def chargeSwingTypeEvents(self):
+    def chargeSwingTypeEvents(self) -> set[int]:
         return self._swing_type_dict['Charge']
 
-    def starSwingTypeEvents(self):
+    def starSwingTypeEvents(self) -> set[int]:
         return self._swing_type_dict['Star']
 
-    def buntSwingTypeEvents(self):
+    def buntSwingTypeEvents(self) -> set[int]:
         return self._swing_type_dict['Bunt']
     
-    def swingTypeEvents(self, swingType):
+    def swingTypeEvents(self, swingType) -> set[int]:
         swingTypeList = swingType if isinstance(swingType, (list, set)) else [swingType]
         
         result = set()
@@ -1278,7 +1280,7 @@ class EventSearch():
         
         return result
     
-    def niceContactTypeEvents(self, side='b'):
+    def niceContactTypeEvents(self, side='b') -> set[int]:
         if side == 'b':
             return self._contact_type_dict['Nice - Left'] | self._contact_type_dict['Nice - Right']
         if side == 'l':
@@ -1287,10 +1289,10 @@ class EventSearch():
             return self._contact_type_dict['Nice - Right']
         raise ValueError(f"Invalid side '{side}'. Must be 'b', 'l', or 'r'.")
         
-    def perfectContactTypeEvents(self):
+    def perfectContactTypeEvents(self) -> set[int]:
          return self._contact_type_dict['Perfect']
 
-    def sourContactTypeEvents(self, side='b'):
+    def sourContactTypeEvents(self, side='b') -> set[int]:
         if side == 'b':
             return self._contact_type_dict['Sour - Left'] | self._contact_type_dict['Sour - Right']
         if side == 'l':
@@ -1299,7 +1301,7 @@ class EventSearch():
             return self._contact_type_dict['Sour - Right']
         raise ValueError(f"Invalid side '{side}'. Must be 'b', 'l', or 'r'.")
 
-    def contactTypeEvents(self, contactType):
+    def contactTypeEvents(self, contactType) -> set[int]:
         contactTypeList = contactType if isinstance(contactType, (list, set)) else [contactType]
         
         result = set()
@@ -1315,17 +1317,17 @@ class EventSearch():
         
         return result
 
-    def inputDirectionEvents(self, input_directions):
+    def inputDirectionEvents(self, input_directions) -> set[int]:
         return self._input_direction_dict[input_directions]
 
-    def contactFrameEvents(self, contactFrame):
+    def contactFrameEvents(self, contactFrame) -> set[int]:
         # returns a set of contacts that occurered on the specified frame
         # negative inputs return all events with a strike count greater than or equal to the input
         # inputting a list or set will return the all events that match the numbers in the list
         contactFrameList = contactFrame if isinstance(contactFrame, (list, set)) else [contactFrame]
         return self.listInputHandling(contactFrameList, self._contact_frame_dict)
 
-    def characterAtBatEvents(self, char_id):
+    def characterAtBatEvents(self, char_id) -> set[int]:
         # returns a set of events where the input character was at bat
         # returns an empty set if the character was not in the game
         # rather than raising an error
@@ -1333,7 +1335,7 @@ class EventSearch():
             return set()
         return self.character_action_dict[char_id]['AtBat']
 
-    def characterPitchingEvents(self, char_id):
+    def characterPitchingEvents(self, char_id) -> set[int]:
         # returns a set of events where the input character was pitching
         # returns an empty set if the character was not in the game
         # rather than raising an error
@@ -1341,7 +1343,7 @@ class EventSearch():
             return set()
         return self.character_action_dict[char_id]['Pitching']
 
-    def characterFieldingEvents(self, char_id):
+    def characterFieldingEvents(self, char_id) -> set[int]:
         # returns a set of events where the input character is the first fielder
         # returns an empty set if the character was not in the game
         # rather than raising an error
@@ -1349,20 +1351,20 @@ class EventSearch():
             return set()
         return self.character_action_dict[char_id]['Fielding']
     
-    def positionFieldingEvents(self, fielderPos):
+    def positionFieldingEvents(self, fielderPos) -> set[int]:
         # returns a set of events where the input fielding pos is the first fielder
         # raises an error when the imput fielding pos is not valid
         self.__errorCheck_fielder_pos(fielderPos)
         return self._first_fielder_position_dict[fielderPos.upper()]
     
-    def walkoffEvents(self):
+    def walkoffEvents(self) -> set[int]:
         final_event = EventObj(self.rioStat, self.rioStat.final_event())
         # returns a set of events of game walkoffs
         if final_event.rbi() != 0:
             return set([self.rioStat.final_event()])
         return set()
     
-    def playerBattingEvents(self, playerBatting):
+    def playerBattingEvents(self, playerBatting) -> set[int]:
         if playerBatting.lower() == self.rioStat.player(0).lower():
             return self.halfInningEvents(0)
         elif playerBatting.lower() == self.rioStat.player(1).lower():
@@ -1370,7 +1372,7 @@ class EventSearch():
         else:
             return set()
         
-    def playerPitchingEvents(self, playerPitching):
+    def playerPitchingEvents(self, playerPitching) -> set[int]:
         if playerPitching.lower() == self.rioStat.player(0).lower():
             return self.halfInningEvents(1)
         elif playerPitching.lower() == self.rioStat.player(1).lower():
@@ -1378,27 +1380,27 @@ class EventSearch():
         else:
             return set()
         
-    def ballPositionStrikezoneEvents(self, minimimum_ball_pos):
+    def ballPositionStrikezoneEvents(self, minimimum_ball_pos) -> set[int]:
         result = set()
         for key in self._ball_position_strikezone:
             if abs(key) >= abs(minimimum_ball_pos):
                 result = result.union(set(self._ball_position_strikezone[key]))
         return result
     
-    def ballContactPositionEvents(self, minimimum_ball_pos):
+    def ballContactPositionEvents(self, minimimum_ball_pos) -> set[int]:
         result = set()
         for key in self._x_ball_contact_pos:
             if abs(key) >= abs(minimimum_ball_pos):
                 result = result.union(set(self._x_ball_contact_pos[key]))
         return result
     
-    def firstPitchOfABEvents(self):
+    def firstPitchOfABEvents(self) -> set[int]:
         return self._first_pitch_of_AB
     
-    def lastPitchOfABEvents(self):
+    def lastPitchOfABEvents(self) -> set[int]:
         return self._last_pitch_of_AB
     
-    def leadChangedEvents(self):
+    def leadChangedEvents(self) -> set[int]:
         return self._lead_changed
     
 
@@ -1412,7 +1414,7 @@ class EventObj():
             raise IndexError(f'Invalid event num: Event {eventNum} does not exist in game')
         self.eventDict = self.all_events[eventNum]
 
-    def safe_int(self, value):
+    def safe_int(self, value) -> Optional[int]:
         """
         Tries to safely convert a str to an integer.
         
@@ -1436,90 +1438,90 @@ class EventObj():
         # If it's neither a string nor an integer, raise an exception
         raise ValueError(f"{value}' cannot be converted to an integer.")
         
-    def event_num(self):
+    def event_num(self) -> int:
         return self.eventDict['Event Num']
 
-    def inning(self):
+    def inning(self) -> int:
         # returns the ininng from a specified event
         return self.eventDict["Inning"]
     
-    def half_inning(self):
+    def half_inning(self) -> int:
         # returns the half ininng from a specified event
         return self.eventDict["Half Inning"]
     
-    def score(self, teamNum: int):
+    def score(self, teamNum: int) -> int:
         ErrorChecker.check_team_num(teamNum)
         if teamNum == 0:
             return self.eventDict['Away Score']
         else:
             return self.eventDict['Home Score']
         
-    def balls(self):
+    def balls(self) -> int:
         # returns the ininng from a specified event
         return self.eventDict["Balls"]
     
-    def strikes(self):
+    def strikes(self) -> int:
         # returns the strikes from a specified event
         return self.eventDict["Strikes"]
     
-    def outs(self):
+    def outs(self) -> int:
         # returns the ininng from a specified event
         return self.eventDict["Outs"]
     
-    def star_chance(self):
+    def star_chance(self) -> int:
         return self.eventDict['Star Chance']
     
-    def team_stars(self, teamNum: int):
+    def team_stars(self, teamNum: int) -> int:
         ErrorChecker.check_team_num(teamNum)
         if teamNum == 0:
             return self.eventDict['Away Stars']
         else:
             return self.eventDict['Home Stars']
         
-    def pitcher_stamina(self):
+    def pitcher_stamina(self) -> int:
         return self.eventDict['Pitcher Stamina']
     
-    def chem_links_on_base(self):
+    def chem_links_on_base(self) -> int:
         return self.eventDict["Chemistry Links on Base"]
     
-    def batting_team(self):
+    def batting_team(self) -> int:
         return self.half_inning()
     
-    def pitching_team(self):
+    def pitching_team(self) -> int:
         return abs(self.half_inning() - 1)
     
-    def pitcher_roster_loc(self):
+    def pitcher_roster_loc(self) -> int:
         return self.eventDict['Pitcher Roster Loc']
     
-    def pitcher(self):
+    def pitcher(self) -> str:
         return self.rioStat.characterName(self.pitching_team(), self.eventDict['Pitcher Roster Loc'])
     
-    def batter_roster_loc(self):
+    def batter_roster_loc(self) -> int:
         return self.eventDict['Batter Roster Loc']
         
-    def batter(self):
+    def batter(self) -> str:
         return self.rioStat.characterName(self.batting_team(), self.eventDict['Batter Roster Loc'])
     
-    def batter_hand(self):
+    def batter_hand(self) -> int:
         return self.rioStat.battingHand(self.batting_team(), self.eventDict['Batter Roster Loc'])
     
-    def catcher(self):
+    def catcher(self) -> str:
         return self.rioStat.characterName(self.batting_team(), self.eventDict['Catcher Roster Loc'])
     
-    def rbi(self):
+    def rbi(self) -> int:
         # returns the rbi from a specified event
         return self.eventDict['RBI']
     
-    def num_outs_during_play(self):
+    def num_outs_during_play(self) -> int:
         return self.eventDict['Num Outs During Play']
     
-    def result_of_AB(self):
+    def result_of_AB(self) -> str:
         return self.eventDict['Result of AB']
     
-    def runners(self):
+    def runners(self) -> set[str]:
         return set(self.eventDict).intersection(['Runner 1B', 'Runner 2B', 'Runner 3B'])
     
-    def bool_runner_on_base(self, baseNum: int):
+    def bool_runner_on_base(self, baseNum: int) -> int:
         """
         checks if a runner is on the supplied base number
         if -1 is provided, then all bases will be checked
@@ -1534,7 +1536,7 @@ class EventObj():
         runner_str = f'Runner {baseNum}B'
         return 1 if self.eventDict.get(runner_str) else 0
     
-    def runner_dict(self, baseNum: int):
+    def runner_dict(self, baseNum: int) -> dict:
         ErrorChecker.check_base_num(baseNum)
         if baseNum == 0:
             runner_str = 'Runner Batter'
@@ -1558,151 +1560,151 @@ class EventObj():
         runner_data = self.runner_dict(base_num)
         return 1 if runner_data and runner_data.get('Steal') != 'None' else 0
     
-    def pitch_dict(self):
+    def pitch_dict(self) -> dict:
         """
         Returns an empty dict if no pitch in event
         """
         return self.eventDict.get('Pitch', {})
     
-    def pitch_type(self):
+    def pitch_type(self) -> Optional[str]:
         """
         Returns None if no pitch in event
         """
         return self.pitch_dict().get('Pitch Type')
     
-    def charge_type(self):
+    def charge_type(self) -> Optional[str]:
         """
         Returns None if no pitch in event
         """
         return self.pitch_dict().get('Charge Type')
     
-    def star_pitch(self):
+    def star_pitch(self) -> Optional[int]:
         """
         Returns None if no pitch in event
         """
         return self.pitch_dict().get('Star Pitch')
     
-    def pitch_speed(self):
+    def pitch_speed(self) -> Optional[int]:
         """
         Returns None if no pitch in event
         """
         return self.pitch_dict().get('Pitch Speed')
     
-    def ball_position_strikezone(self):
+    def ball_position_strikezone(self) -> Optional[float]:
         """
         Returns None if no pitch in event
         """
         return self.pitch_dict().get('Ball Position - Strikezone')
     
-    def in_strikezone(self):
+    def in_strikezone(self) -> Optional[int]:
         """
         Returns None if no pitch in event
         """
         return self.pitch_dict().get('In Strikezone')
     
-    def bat_contact_position_x(self):
+    def bat_contact_position_x(self) -> Optional[float]:
         """
         Returns None if no pitch in event
         """
         return self.pitch_dict().get('Bat Contact Pos - X')
     
-    def bat_contact_position_z(self):
+    def bat_contact_position_z(self) -> Optional[float]:
         """
         Returns None if no pitch in event
         """
         return self.pitch_dict().get('Bat Contact Pos - Z')
     
-    def dickball(self):
+    def dickball(self) -> Optional[int]:
         """
         Returns None if no pitch in event
         """
         return self.pitch_dict().get('DB')
     
-    def type_of_swing(self):
+    def type_of_swing(self) -> Optional[str]:
         """
         Returns None if no pitch in event
         """
         return self.pitch_dict().get('Type of Swing')
 
-    def contact_dict(self):
+    def contact_dict(self) -> dict:
         """
         Returns an empty dict if no contact in event
         """
         return self.pitch_dict().get('Contact', {})
 
-    def type_of_contact(self):
+    def type_of_contact(self) -> Optional[str]:
         """
         Returns None if no contact in event
         """
         return self.contact_dict().get('Type of Contact')
 
-    def charge_power_up(self):
+    def charge_power_up(self) -> Optional[int]:
         """
         Returns None if no contact in event
         """
         return self.contact_dict().get('Charge Power Up')
 
-    def charge_power_down(self):
+    def charge_power_down(self) -> Optional[int]:
         """
         Returns None if no contact in event
         """
         return self.contact_dict().get('Charge Power Down')
 
-    def five_star_swing(self):
+    def five_star_swing(self) -> Optional[int]:
         """
         Returns None if no contact in event
         """
         return self.contact_dict().get('Star Swing Five-Star')
 
-    def input_direction_push_or_pull(self):
+    def input_direction_push_or_pull(self) -> Optional[str]:
         """
         Returns None if no contact in event
         """
         return self.contact_dict().get('Input Direction - Push/Pull')
 
-    def stick_input_direction(self):
+    def stick_input_direction(self) -> Optional[str]:
         """
         Returns None if no contact in event
         """
         return self.contact_dict().get('Input Direction - Stick')
 
-    def contact_frame(self):
+    def contact_frame(self) -> Optional[int]:
         """
         Returns None if no contact in event
         """
         return self.safe_int(self.contact_dict().get('Frame of Swing Upon Contact'))
 
-    def ball_power(self):
+    def ball_power(self) -> Optional[int]:
         """
         Returns None if no contact in event
         """
         return self.safe_int(self.contact_dict().get('Ball Power'))
 
-    def vert_angle(self):
+    def vert_angle(self) -> Optional[int]:
         """
         Returns None if no contact in event.
         """
         return self.safe_int(self.contact_dict().get('Vert Angle'))
 
-    def horiz_angle(self):
+    def horiz_angle(self) -> Optional[int]:
         """
         Returns None if no contact in event.
         """
         return self.safe_int(self.contact_dict().get('Horiz Angle'))
 
-    def contact_absolute(self):
+    def contact_absolute(self) -> Optional[float]:
         """
         Returns None if no contact in event.
         """
         return self.contact_dict().get('Contact Absolute')
 
-    def contact_quality(self):
+    def contact_quality(self) -> Optional[float]:
         """
         Returns None if no contact in event.
         """
         return self.contact_dict().get('Contact Quality')
 
-    def rng(self):
+    def rng(self) -> tuple[Optional[int], Optional[int], Optional[int]]:
         """
         Returns None if no contact in event.
         Returns a vector (rng1, rng2, rng3) of RNG components.
@@ -1712,7 +1714,7 @@ class EventObj():
         rng3 = self.safe_int(self.contact_dict().get('RNG3'))
         return (rng1, rng2, rng3)
 
-    def ball_velocity(self):
+    def ball_velocity(self) -> tuple:
         """
         Returns None if no contact in event.
         Returns a vector (x, y, z) of ball velocity components.
@@ -1722,7 +1724,7 @@ class EventObj():
         z = self.contact_dict().get('Ball Velocity - Z')
         return (x, y, z)
 
-    def ball_contact_position(self):
+    def ball_contact_position(self) -> tuple:
         """
         Returns None if no contact in event.
         Returns a vector (x, z) of ball contact position components.
@@ -1731,7 +1733,7 @@ class EventObj():
         z = self.contact_dict().get('Ball Contact Pos - Z')
         return (x, z)
 
-    def ball_landing_position(self):
+    def ball_landing_position(self) -> tuple:
         """
         Returns None if no contact in event.
         Returns a vector (x, y, z) of ball landing position components.
@@ -1741,79 +1743,79 @@ class EventObj():
         z = self.contact_dict().get('Ball Landing Position - Z')
         return (x, y, z)
 
-    def ball_max_height(self):
+    def ball_max_height(self) -> Optional[float]:
         """
         Returns None if no contact in event.
         """
         return self.contact_dict().get('Ball Max Height')
 
-    def ball_hang_time(self):
+    def ball_hang_time(self) -> Optional[int]:
         """
         Returns None if no contact in event.
         """
         return self.safe_int(self.contact_dict().get('Ball Hang Time'))
 
-    def contact_result_primary(self):
+    def contact_result_primary(self) -> Optional[str]:
         """
         Returns None if no contact in event.
         """
         return self.contact_dict().get('Contact Result - Primary')
 
-    def contact_result_secondary(self):
+    def contact_result_secondary(self) -> Optional[str]:
         """
         Returns None if no contact in event.
         """
         return self.contact_dict().get('Contact Result - Secondary')
 
-    def first_fielder_dict(self):
+    def first_fielder_dict(self) -> dict:
         """
         Returns an empty dict if no first fielder in event
         """
         return self.contact_dict().get('First Fielder', {})
     
-    def first_fielder_roster_loc(self):
+    def first_fielder_roster_loc(self) -> Optional[int]:
         """
         Returns None if no first fielder in event.
         """
         return self.first_fielder_dict().get('Fielder Roster Location')
 
-    def first_fielder_position(self):
+    def first_fielder_position(self) -> Optional[str]:
         """
         Returns None if no first fielder in event.
         """
         return self.first_fielder_dict().get('Fielder Position')
 
-    def first_fielder_character(self):
+    def first_fielder_character(self) -> Optional[str]:
         """
         Returns None if no first fielder in event.
         """
         return self.first_fielder_dict().get('Fielder Character')
 
-    def first_fielder_action(self):
+    def first_fielder_action(self) -> Optional[str]:
         """
         Returns None if no first fielder in event.
         """
         return self.first_fielder_dict().get('Fielder Action')
 
-    def first_fielder_jump(self):
+    def first_fielder_jump(self) -> Optional[str]:
         """
         Returns None if no first fielder in event.
         """
         return self.first_fielder_dict().get('Fielder Jump')
 
-    def fielder_swap(self):
+    def fielder_swap(self) -> Optional[str]:
         """
         Returns None if no first fielder in event.
         """
         return self.first_fielder_dict().get('Fielder Swap')
 
-    def first_fielder_maunual_selected(self):
+    def first_fielder_maunual_selected(self) -> Optional[str]:
         """
         Returns None if no first fielder in event.
         """
         return self.first_fielder_dict().get('Fielder Manual Selected')
 
-    def first_fielder_location(self):
+    def first_fielder_location(self) -> tuple:
         """
         Returns None if no first fielder in event.
         Returns a vector (x, y, z) of fielder position components.
@@ -1823,7 +1825,7 @@ class EventObj():
         z = self.first_fielder_dict().get('Fielder Position - Z')
         return (x, y, z)
 
-    def first_fielder_bobble(self):
+    def first_fielder_bobble(self) -> Optional[str]:
         """
         Returns None if no first fielder in event.
         """
@@ -1835,74 +1837,74 @@ class HudObj:
         self.hud_json = hud_json
         self.event_number = self.hud_json['Event Num']
 
-    def event_integer(self):
+    def event_integer(self) -> int:
         return int(str(self.event_number)[:-1])
 
-    def player(self, teamNum: int):
+    def player(self, teamNum: int) -> str:
         ErrorChecker.check_team_num(teamNum)
         if teamNum == 0:
             return self.hud_json['Away Player']
         elif teamNum == 1:
             return self.hud_json['Home Player']
     
-    def inning(self):
+    def inning(self) -> int:
         return self.hud_json['Inning']
     
-    def half_inning(self):
+    def half_inning(self) -> int:
         return self.hud_json['Half Inning']
     
-    def inning_float(self):
+    def inning_float(self) -> float:
         return float(self.hud_json['Inning'] + 0.5*self.hud_json['Half Inning'])
     
-    def score(self, teamNum: int):
+    def score(self, teamNum: int) -> int:
         ErrorChecker.check_team_num(teamNum)
         team_string = "Away" if teamNum == 0 else "Home"
         
         return self.hud_json[f'{team_string} Score']
     
-    def balls(self):
+    def balls(self) -> int:
         return self.hud_json['Balls']
     
-    def strikes(self):
+    def strikes(self) -> int:
         return self.hud_json['Strikes']
     
-    def outs(self):
+    def outs(self) -> int:
         return self.hud_json['Outs']
     
-    def star_chance(self):
+    def star_chance(self) -> int:
         return self.hud_json['Star Chance']
     
-    def team_stars(self, teamNum: int):
+    def team_stars(self, teamNum: int) -> int:
         ErrorChecker.check_team_num(teamNum)
         team_string = "Away" if teamNum == 0 else "Home"
         
         return self.hud_json[f'{team_string} Stars']
     
-    def pitcher_stamina(self):
+    def pitcher_stamina(self) -> int:
         return self.hud_json['Pitcher Stamina']
     
-    def chem_on_base(self):
+    def chem_on_base(self) -> int:
         return self.hud_json['Chemistry Links on Base']
     
-    def outs_during_play(self):
+    def outs_during_play(self) -> int:
         return self.hud_json['Num Outs During Play']
     
-    def pitcher_roster_location(self):
+    def pitcher_roster_location(self) -> int:
         return self.hud_json['Pitcher Roster Loc']
     
-    def batter_roster_location(self):
+    def batter_roster_location(self) -> int:
         return self.hud_json['Batter Roster Loc']
     
-    def runner_on_first(self):
+    def runner_on_first(self) -> bool:
         return bool(self.hud_json.get('Runner 1B'))
     
-    def runner_on_second(self):
+    def runner_on_second(self) -> bool:
         return bool(self.hud_json.get('Runner 2B'))
     
-    def runner_on_third(self):
+    def runner_on_third(self) -> bool:
         return bool(self.hud_json.get('Runner 3B'))
 
-    def team_roster_str_list(self, teamNum: int):
+    def team_roster_str_list(self, teamNum: int) -> list[str]:
         ErrorChecker.check_team_num(teamNum)
         team_string = "Away" if teamNum == 0 else "Home"
         team_roster_str_list = []
@@ -1911,7 +1913,7 @@ class HudObj:
         
         return team_roster_str_list
 
-    def roster(self, teamNum: int):
+    def roster(self, teamNum: int) -> dict:
         roster_dict = {}
         for player in self.team_roster_str_list(teamNum):
             player_index = int(player[-1])
@@ -1921,16 +1923,16 @@ class HudObj:
 
         return roster_dict
     
-    def inning_end(self):
+    def inning_end(self) -> bool:
         return self.hud_json['Outs'] + self.hud_json['Num Outs During Play'] == 3
     
-    def event_result(self):
+    def event_result(self) -> str:
         if str(self.hud_json['Event Num'])[-1] == 'b':
             return self.hud_json['Result of AB']
         
         return 'In Play'
     
-    def captain_index(self, teamNum: int):
+    def captain_index(self, teamNum: int) -> int:
         ErrorChecker.check_team_num(teamNum)
         for player in self.team_roster_str_list(teamNum):
             if self.hud_json[player]['Captain'] == 1:

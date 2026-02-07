@@ -127,7 +127,7 @@ for teams in In_Game_Team_Names.values():
         if name:
             In_Game_Team_Names_List.append(name)
 
-def team_name(roster, captain):
+def team_name(roster: list[str], captain: str) -> str:
     if '' in roster:
         return ''
     

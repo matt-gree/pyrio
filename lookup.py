@@ -286,7 +286,7 @@ class Lookup:
     def __init__(self):
         pass
 
-    def _lookup(self, dictionary, search_term):
+    def _lookup(self, dictionary: dict, search_term):
         def single_lookup(term):
             original_term = term
             if isinstance(term, str) and term.isdigit():
@@ -313,16 +313,16 @@ class Lookup:
         else:
             return single_lookup(search_term)
 
-    def lookup(self, dictionary, search_term, auto_print=False):
+    def lookup(self, dictionary: dict, search_term, auto_print: bool = False):
         result = self._lookup(dictionary, search_term)
         if auto_print:
             print(result)
         return result
 
-    def translate_values(self, dictionary, values):
+    def translate_values(self, dictionary: dict, values):
         return self._lookup(dictionary, values)
 
-    def create_translated_columns(self, df):
+    def create_translated_columns(self, df: pd.DataFrame) -> pd.DataFrame:
         column_to_dict_map = {
             'batter_char_id': LookupDicts.CHAR_NAME,
             'pitcher_char_id': LookupDicts.CHAR_NAME,

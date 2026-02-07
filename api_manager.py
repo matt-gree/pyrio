@@ -1,14 +1,16 @@
+from __future__ import annotations
 import requests
 from functools import wraps
 import json
 import re
+from typing import Optional, Callable, Any
 
 ### In theory maybe base url and endpoints etc could all go in a dataclass just so they're centralized
 BASE_URL = "https://api.projectrio.app"
 
 ### decorator just so that we don't have to include the rio key in every post body ever. any function that has `@include_rio_key(RIO_KEY) above its definition will have the rio key added to the body automatically`
-def include_rio_key(rio_key):
-    def decorator(func):
+def include_rio_key(rio_key: str) -> Callable:
+    def decorator(func: Callable) -> Callable:
         @wraps(func)
         def wrapper(*args, **kwargs):
             data = kwargs.get('data', {})
@@ -30,7 +32,7 @@ class APIManager:
         self.session = requests.Session()
         self.session.headers.update({'Content-Type': 'application/json'})
 
-    def send_request(self, endpoint, method="GET", data=None):
+    def send_request(self, endpoint: str, method: str = "GET", data: Optional[dict] = None) -> Optional[dict]:
         url = self.base_url + endpoint
         try:
             if method == "POST":
@@ -70,7 +72,7 @@ class APIManager:
     
     ### just to get rid of dumb html that I don't want to look at
     @staticmethod
-    def extract_message_from_html(html):
+    def extract_message_from_html(html: str) -> str:
         match = re.search(r"<p>(.*?)</p>", html)
         if match:
             return match.group(1)
@@ -84,11 +86,11 @@ class RequestBuilder:
         self.requests = []
 
     ### edited add/execute that directly accept the endpoint functions
-    def add(self, func, *args, **kwargs):
+    def add(self, func: Callable, *args: Any, **kwargs: Any) -> RequestBuilder:
         self.requests.append((func, args, kwargs))
         return self
     
-    def execute(self):
+    def execute(self) -> list:
         results = []
         for func, args, kwargs in self.requests:
             result = func(*args, **kwargs)
