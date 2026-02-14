@@ -1,0 +1,55 @@
+Character,Character Class,Captain Character,Ability 1,Ability 2,Weight,Star Pitch (Captain w/o Item),Curve Ball Speed,Fast Ball Speed,Curve,Cursed Ball,Curve Control,Fielding Arm,Throwing Power,Speed,Batting Stance,Star Swing (Captain w/o Item),Slap Hit Power,Charge Hit Power,Bunting,Horizontal Hit Trajectory,Vertical Hit Trajectory,Slap Contact Size Multiplier,Charge Contact Size Multiplier,CSS Sort,Char Id Sort,Extra,Horizontal Range Near,Horizontal Range Far,Trimmed Bat
+Mario,Balance,Yes,Wall Jump,Sliding Catch,2,Fireball (Fastball),150,188,100,100,100,Right,100,100,Right,Fireball (Pop Fly),100,100,85,Mid,Mid,100,85,1,1,,-0.65,0.55,0
+Luigi,Balance,Yes,Wall Jump,Super Jump,2,Green Fireball (Fastball),145,185,100,100,100,Right,100,110,Left,Green Fireball (Grounder),98,100,90,Mid,Mid,100,90,2,2,,-0.65,0.65,0
+DK,Power,Yes,Clamber,Laser Beam,4,Banana Ball (Breaking Ball),150,185,85,100,100,Right,100,90,Left,Banana Ball (Pop Fly),100,100,70,Pull,High,80,65,9,3,,-0.55,0.65,1
+Diddy,Speed,Yes,Super Catch,Clamber,1,Boomerang Ball (Breaking Ball),135,175,100,95,100,Right,100,120,Left,Boomerang Ball (Grounder),95,80,70,Mid,Low,95,65,8,4,,-0.55,0.55,0
+Peach,Technique,Yes,Quick Throw,Super Catch,2,Heart Ball (Change-Up),145,185,100,100,140,Right,90,100,Right,Heart Ball (Grounder),96,95,95,Push,Low,100,95,5,5,,-0.75,0.5,0
+Daisy,Balance,Yes,Quick Throw,Sliding Catch,2,Flower Ball (Change-Up),140,180,100,100,105,Right,90,90,Left,Flower Ball (Pop Fly),99,100,100,Mid,Mid,100,90,3,6,,-0.65,0.6,0
+Yoshi,Speed,Yes,Tongue Catch,Clamber,2,Egg Ball (Change-Up),140,175,100,100,100,Right,90,140,Left,Egg Ball (Grounder),100,95,75,Mid,Mid,100,80,7,7,,-0.65,0.65,0
+Baby Mario,Speed,,Wall Jump,,0,Breaking Ball,135,170,100,100,100,Right,80,120,Right,Grounder,94,80,75,Mid,Low,100,75,39,8,,-0.75,0.55,0
+Baby Luigi,Speed,,Wall Jump,,0,Breaking Ball,135,170,100,90,100,Right,80,130,Left,Grounder,92,70,75,Mid,Low,95,75,40,9,,-0.65,0.55,0
+Bowser,Power,Yes,Body Check,Laser Beam,4,Killer Ball (Fastball),140,195,85,100,100,Right,100,60,Left,Killer Ball (Pop Fly),100,100,70,Pull,High,90,65,10,10,Wall Splat,-0.55,1.45,0
+Wario,Power,Yes,Sliding Catch,Body Check,3,Phony Ball (Fastball),145,185,80,100,100,Right,100,80,Right,Phony Ball (Pop Fly),100,100,75,Mid,Mid,100,75,11,11,Wall Splat,-0.55,0.75,0
+Waluigi,Technique,Yes,Laser Beam,Super Jump,3,Liar Ball (Breaking Ball),130,189,100,100,110,Left,90,90,Left,Liar Ball (Line Drive),100,51,95,Push,Low,100,90,6,12,,-0.55,0.85,0
+Koopa(G),Balance,,Sliding Catch,,0,Breaking Ball,140,180,100,100,100,Right,100,90,Left,Grounder,90,100,80,Mid,Mid,100,80,24,13,,-0.5,0.55,0
+Toad(R),Balance,,Body Check,,0,Fastball,135,175,100,100,100,Right,100,110,Right,Pop Fly,95,100,75,Mid,Mid,100,80,13,14,,-0.95,0.55,0
+Boo,Technique,,Super Jump,,0,Breaking Ball,140,180,100,100,110,Left,90,90,Left,Grounder,90,80,100,Mid,Mid,100,95,27,15,Curved Hits,-0.45,0.85,0
+Toadette,Speed,,Wall Jump,Sliding Catch,0,Breaking Ball,135,170,100,100,100,Right,90,140,Right,Grounder,94,70,75,Mid,Low,100,80,41,16,,-0.65,0.5,0
+Shy Guy(R),Balance,,Sliding Catch,,1,Change-Up,140,180,100,100,100,Left,90,90,Left,Pop Fly,96,100,75,Mid,Mid,100,80,18,17,,-0.55,0.65,0
+Birdo,Balance,Yes,Suction,Body Check,3,Weird Ball (Fastball),145,185,90,100,100,Right,100,90,Right,Weird Ball (Pop Fly),100,100,70,Mid,Mid,95,80,4,18,Wall Splat,-0.55,0.55,0
+Monty,Speed,,Ball Dash,,1,Change-Up,140,175,100,100,100,Right,80,110,Left,Grounder,95,80,70,Mid,Low,90,80,42,19,Wall Splat,-0.55,0.85,0
+Bowser Jr,Power,Yes,Body Check,Wall Jump,2,Killer Jr. Ball (Fastball),145,186,90,100,100,Left,100,90,Right,Killer Jr. Ball (Pop Fly),100,100,80,Mid,High,85,70,12,20,,-0.65,0.65,0
+Paratroopa(R),Technique,,Super Jump,,1,Breaking Ball,135,175,100,100,100,Right,100,110,Left,Grounder,98,85,70,Mid,Low,100,80,29,21,,-0.55,0.65,0
+Pianta(B),Power,,Laser Beam,,3,Change-Up,145,180,80,100,100,Right,100,70,Right,Grounder,100,100,70,Pull,Low,85,65,48,22,Wall Splat,-0.45,0.85,0
+Pianta(R),Power,,Laser Beam,,3,Fastball,145,180,80,100,100,Right,100,60,Right,Pop Fly,100,100,70,Pull,Low,85,65,49,23,Wall Splat,-0.45,0.85,0
+Pianta(Y),Power,,Laser Beam,,3,Breaking Ball,145,185,90,100,100,Right,100,60,Right,Grounder,100,100,70,Pull,Low,85,65,50,24,Wall Splat,-0.45,0.85,0
+Noki(B),Speed,,Sliding Catch,,1,Change-Up,135,175,100,100,100,Right,100,120,Left,Grounder,93,80,70,Mid,Low,90,65,44,25,,-0.65,0.65,0
+Noki(R),Speed,,Sliding Catch,,1,Fastball,135,175,100,100,100,Right,100,110,Left,Pop Fly,95,90,70,Mid,Low,90,65,45,26,,-0.65,0.65,0
+Noki(G),Speed,,Sliding Catch,,1,Breaking Ball,135,175,100,100,100,Right,100,110,Left,Line Drive,93,80,75,Mid,Low,95,63,46,27,,-0.65,0.65,0
+Bro(H),Power,,Body Check,,3,Fastball,145,185,90,100,100,Right,100,80,Right,Pop Fly,60,100,65,Pull,High,80,70,52,28,Wall Splat,-0.65,0.65,1
+Toadsworth,Technique,,Super Catch,,0,Change-Up,140,175,100,100,100,Right,80,90,Right,Line Drive,95,90,95,Mid,Mid,100,90,28,29,Wall Splat,-0.65,0.55,1
+Toad(B),Balance,,Body Check,,0,Change-Up,135,175,100,100,100,Right,100,120,Right,Grounder,90,100,75,Mid,Mid,100,80,14,30,,-0.45,0.45,0
+Toad(Y),Balance,,Body Check,,0,Breaking Ball,140,180,100,100,100,Right,100,110,Right,Grounder,90,100,75,Mid,Mid,100,80,15,31,,-0.45,0.45,0
+Toad(G),Balance,,Body Check,,0,Change-Up,135,175,100,100,100,Right,100,110,Right,Grounder,95,100,85,Mid,Mid,100,85,16,32,,-0.45,0.45,0
+Toad(P),Balance,,Body Check,,0,Fastball,135,175,100,100,100,Right,100,100,Right,Pop Fly,95,100,75,Mid,Mid,100,80,17,33,,-0.45,0.45,0
+Magikoopa(B),Technique,,Magical Catch,,2,Breaking Ball,140,170,100,100,90,Right,90,70,Left,Line Drive,98,90,90,Push,Low,100,85,31,34,,-0.6,0.7,0
+Magikoopa(R),Technique,,Magical Catch,,2,Breaking Ball,140,175,100,100,90,Right,90,60,Left,Line Drive,100,95,90,Push,Low,100,85,32,35,,-0.6,0.7,0
+Magikoopa(G),Technique,,Magical Catch,,2,Breaking Ball,140,170,100,100,100,Right,90,60,Left,Line Drive,98,90,90,Push,Low,100,85,33,36,,-0.6,0.7,0
+Magikoopa(Y),Technique,,Magical Catch,,2,Breaking Ball,140,170,100,100,100,Right,90,60,Left,Line Drive,90,80,90,Push,Low,100,85,34,37,,-0.6,0.7,0
+King Boo,Power,,Super Jump,,4,Fastball,145,185,100,100,100,Right,100,80,Right,Pop Fly,100,100,70,Mid,Mid,100,65,47,38,"Curved Hits, Wall Splat",-0.65,0.65,0
+Petey,Power,,Body Check,,4,Change-Up,150,190,80,100,100,Left,100,60,Left,Pop Fly,100,100,60,Pull,High,80,60,51,39,Wall Splat,-0.65,0.65,0
+Dixie,Technique,,Clamber,,1,Breaking Ball,135,175,100,100,100,Right,100,110,Left,Grounder,92,75,80,Push,Low,100,75,26,40,,-0.65,0.55,0
+Goomba,Balance,,Ball Dash,,0,Fastball,135,175,100,100,100,Right,80,100,Right,Grounder,95,90,100,Mid,Mid,90,65,23,41,,-0.55,0.55,0
+Paragoomba,Speed,,Super Jump,,1,Breaking Ball,135,174,100,100,100,Right,100,120,Right,Grounder,95,80,100,Mid,Low,100,80,43,42,,-0.55,0.55,0
+Koopa(R),Balance,,Sliding Catch,,0,Fastball,140,185,100,100,100,Right,100,80,Left,Pop Fly,90,100,80,Mid,Mid,80,65,25,43,,-0.5,0.55,0
+Paratroopa(G),Technique,,Super Jump,,1,Breaking Ball,135,175,100,100,100,Right,100,110,Left,Line Drive,90,80,70,Mid,Low,100,85,30,44,,-0.55,0.65,0
+Shy Guy(B),Balance,,Sliding Catch,,1,Change-Up,140,180,100,100,100,Left,90,100,Left,Grounder,92,100,75,Mid,Mid,100,80,19,45,,-0.55,0.65,0
+Shy Guy(Y),Balance,,Sliding Catch,,1,Breaking Ball,150,185,100,100,100,Left,90,90,Left,Grounder,92,100,75,Mid,Mid,100,80,20,46,,-0.55,0.65,0
+Shy Guy(G),Balance,,Sliding Catch,,1,Change-Up,145,180,100,100,110,Left,90,90,Left,Grounder,92,100,75,Mid,Mid,100,80,21,47,,-0.55,0.65,0
+Shy Guy(Bk),Balance,,Sliding Catch,,1,Fastball,140,180,100,100,100,Left,100,90,Left,Pop Fly,92,100,75,Mid,Mid,100,80,22,48,,-0.55,0.65,0
+Dry Bones(Gy),Technique,,Sliding Catch,,1,Breaking Ball,140,170,100,100,100,Left,100,90,Left,Grounder,90,100,80,Mid,Mid,100,75,35,49,Wall Splat,-0.75,0.55,0
+Dry Bones(G),Technique,,Sliding Catch,,1,Breaking Ball,140,170,100,100,100,Left,100,80,Left,Line Drive,90,100,80,Mid,Mid,100,75,36,50,Wall Splat,-0.75,0.55,0
+Dry Bones(R),Technique,,Sliding Catch,,1,Fastball,145,175,100,100,100,Left,100,80,Left,Pop Fly,94,100,80,Mid,Mid,100,75,37,51,Wall Splat,-0.75,0.55,0
+Dry Bones(B),Technique,,Sliding Catch,,1,Change-Up,140,170,100,100,100,Left,100,80,Left,Grounder,90,100,80,Mid,Mid,100,75,38,52,Wall Splat,-0.75,0.55,0
+Bro(F),Power,,Body Check,,3,Fastball,145,185,90,100,100,Right,100,70,Right,Grounder,55,100,65,Pull,Low,80,70,53,53,Wall Splat,-0.65,0.65,1
+Bro(B),Power,,Body Check,,3,Breaking Ball,145,185,90,100,100,Right,100,80,Right,Line Drive,70,100,65,Mid,Mid,80,70,54,54,"Wall Splat, Curved Hits",-0.65,0.65,1
