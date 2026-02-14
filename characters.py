@@ -9,7 +9,7 @@ char_name_list = []
 
 char_lookup = Lookup().lookup
 
-def resource_path(relative_path):
+def resource_path(relative_path: str) -> str:
     """ Get absolute path to resource, works for dev and for PyInstaller bundle """
     if hasattr(sys, '_MEIPASS'):
         # Running in PyInstaller bundle
@@ -29,17 +29,14 @@ for i, sublist in enumerate(char_name_list):
     for name in sublist:
         charNameDict[name] = i
 
-def userInputToCharacter(userInput):
+def userInputToCharacter(userInput: str) -> str:
     userInput = userInput.replace(' ', '').lower()
-    if userInput not in charNameDict.keys():
-        raise Exception(f'{userInput} is an invalid character name')
+    if userInput not in charNameDict:
+        raise ValueError(f'{userInput} is an invalid character name')
     return char_lookup(LookupDicts.CHAR_NAME, charNameDict[userInput.lower()])
 
-def is_captain(character):
-    if userInputToCharacter(character) in CAPTAINS:
-        return True
-    
-    return False
+def is_captain(character: str) -> bool:
+    return userInputToCharacter(character) in CAPTAINS
 
 if __name__ == '__main__':
     print(userInputToCharacter('luigi'))

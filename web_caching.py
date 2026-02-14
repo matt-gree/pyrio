@@ -8,7 +8,7 @@ from .api_manager import APIManager
 import pandas as pd
 
 class CompleterCache:
-    def __init__(self, manager: APIManager, cache_dir='cache', cache_expiration_days=1):
+    def __init__(self, manager: APIManager, cache_dir: str = 'cache', cache_expiration_days: int = 1):
         self.manager = manager
         self.cache_dir = cache_dir
         self.cache_expiration_days = cache_expiration_days
@@ -31,7 +31,7 @@ class CompleterCache:
         # Load cache if it's available and not expired
         self._load_cache()
 
-    def _load_cache(self):
+    def _load_cache(self) -> None:
         """Load cached data from file if available and not expired."""
         if os.path.exists(self.cache_file):
             with open(self.cache_file, 'rb') as f:
@@ -48,7 +48,7 @@ class CompleterCache:
             # No cache file exists, so refresh the cache
             self._refresh_cache()
 
-    def _refresh_cache(self):
+    def _refresh_cache(self) -> None:
         """Fetch data from API and save to cache."""
         self._cache['last_updated'] = datetime.now()
         self._cache['tags_df'] = self._call_tags_api()
@@ -61,40 +61,40 @@ class CompleterCache:
         # Save to file after refreshing
         self._save_cache()
 
-    def _save_cache(self):
+    def _save_cache(self) -> None:
         """Save the current cache to a file."""
         with open(self.cache_file, 'wb') as f:
             pickle.dump(self._cache, f)
 
-    def _call_tags_api(self):
+    def _call_tags_api(self) -> pd.DataFrame:
         """Fetch tags data from API."""
         return pd.DataFrame(list_tags(self.manager)['Tags']).set_index('id')
 
-    def return_tags_df(self):
+    def return_tags_df(self) -> pd.DataFrame:
         """Get the tags dataframe, fetching from the API if needed."""
         return self._cache['tags_df']
     
-    def communities(self):
+    def communities(self) -> list[str]:
         """Get the community tags from the cache or fetch if needed."""
         return self._cache['communities']
     
-    def users_dictionary(self):
+    def users_dictionary(self) -> dict:
         """Get the users dictionary from the cache or fetch if needed."""
         return self._cache['users_dict']
     
-    def users(self):
+    def users(self) -> list:
         """Get the users list from the cache or fetch if needed."""
         return self._cache['users_list']
     
-    def tags_dictionary(self):
+    def tags_dictionary(self) -> dict:
         """Get the tags dictionary for Gecko Code and Component types."""
         return self._cache['tags_dict']
 
-    def game_mode_dictionary(self):
+    def game_mode_dictionary(self) -> dict:
         """Get the game mode dictionary from the cache or fetch if needed."""
         return self._cache['game_mode_dict']
 
-    def refresh_cache(self):
+    def refresh_cache(self) -> None:
         """Public method to force an update of the cache."""
         self._refresh_cache()
         print("Cache has been updated successfully.")

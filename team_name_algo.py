@@ -127,7 +127,7 @@ for teams in In_Game_Team_Names.values():
         if name:
             In_Game_Team_Names_List.append(name)
 
-def team_name(roster, captain):
+def team_name(roster: list[str], captain: str) -> str:
     if '' in roster:
         return ''
     
@@ -167,8 +167,8 @@ def team_name(roster, captain):
 
     class_list.remove(captain_class)
     
-    if ((class_count_dict[captain_class] > class_count_dict[class_list[0]]) &
-        (class_count_dict[captain_class] > class_count_dict[class_list[1]]) &
+    if ((class_count_dict[captain_class] > class_count_dict[class_list[0]]) and
+        (class_count_dict[captain_class] > class_count_dict[class_list[1]]) and
         (class_count_dict[captain_class] > class_count_dict[class_list[2]])):
         return In_Game_Team_Names[captain][1]['Name']
 

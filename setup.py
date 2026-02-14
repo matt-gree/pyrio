@@ -18,5 +18,5 @@ setup(
     description="Library for interacting with Mario Superstar Baseball and Project Rio",
     author="MattGree",
     author_email="MattGreeMSSB@gmail.com",
-    url="https://github.com/matt-gree/pyRio",
+    url="https://github.com/matt-gree/pyrio",
 )

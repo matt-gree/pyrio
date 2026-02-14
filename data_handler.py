@@ -20,7 +20,7 @@ class StatFileHandler:
 
 
 class WebHandler:
-    def __init__(self, cache=False):
+    def __init__(self, cache: bool = False):
         self.api_url = "https://api.projectrio.app"
         self.request_builder = RequestBuilder()
         self.cache = cache
@@ -78,14 +78,14 @@ class WebHandler:
 
         return df_list
 
-    def _generate_csv_filename(self, endpoint, parameters):
+    def _generate_csv_filename(self, endpoint: str, parameters: dict) -> str:
         # Generate a CSV filename based on the endpoint and parameters
         f_name = endpoint.replace("/", "")
-        for key in parameters.keys():
+        for key in parameters:
             f_name += f"-{key}"
         return f_name
 
-    def fetch_data(self, requests_info, concatenate=False):
+    def fetch_data(self, requests_info: list[tuple], concatenate: bool = False) -> pd.DataFrame:
         """
         Fetch data from one or more endpoints. Handles both single and multiple requests efficiently.
 
@@ -112,11 +112,11 @@ class WebHandler:
             #     return results
 
 
-    def save_to_csv(self, data, file_name):
+    def save_to_csv(self, data: pd.DataFrame, file_name: str) -> None:
         # todo: allow for calling data fetch within this function
         data.to_csv(f"{file_name}.csv", index=False)
 
-    def save_to_database(self, data, table_name, db_file_name="data", db="sqlite", exists="replace"):
+    def save_to_database(self, data: pd.DataFrame, table_name: str, db_file_name: str = "data", db: str = "sqlite", exists: str = "replace") -> None:
         # todo: allow for calling data fetch within this function
         engine = create_engine(f"{db}:///{db_file_name}.db")
         data.to_sql(table_name, con=engine, if_exists=exists, index=False)
@@ -126,7 +126,7 @@ class CSVHandler:
     def __init__(self):
         self.dataframes = []
 
-    def load_files(self, filepaths):
+    def load_files(self, filepaths: list[str]) -> list[pd.DataFrame]:
         df_list = []
         for filepath in filepaths:
             df_list.append(pd.read_csv(f"{filepath}.csv"))
@@ -135,11 +135,11 @@ class CSVHandler:
 
 
 class DatabaseHandler:
-    def __init__(self, db="sqlite", db_file_name="data"):
+    def __init__(self, db: str = "sqlite", db_file_name: str = "data"):
         self.databases = []
         self.engine = create_engine(f"{db}:{db_file_name}.db")
 
-    def load_tables(self, tables):
+    def load_tables(self, tables: list[str]) -> list[pd.DataFrame]:
         tables_list = []
         for table in tables:
             tables_list.append(pd.read_sql(table, con=self.engine))
