@@ -45,8 +45,8 @@ class ErrorChecker:
     def check_team_num(teamNum: int) -> None:
         """Checks if the team number is valid (either 0 or 1)."""
         if teamNum != 0 and teamNum != 1:
-            raise ValueError(
-                f'Invalid team arg {teamNum}. Function only accepts team args of 0 (home team) or 1 (away team).')
+            raise Exception(
+                f'Invalid team arg {teamNum}. Function only accepts team args of 0 (away team) or 1 (home team).')
 
     @staticmethod
     def check_roster_num(rosterNum: int) -> None:
@@ -1904,22 +1904,29 @@ class HudObj:
     def runner_on_third(self) -> bool:
         return bool(self.hud_json.get('Runner 3B'))
 
-    def team_roster_str_list(self, teamNum: int) -> list[str]:
+    def team_roster_str(self, teamNum: int, rosterNum: int):
         ErrorChecker.check_team_num(teamNum)
+        ErrorChecker.check_roster_num(rosterNum)
         team_string = "Away" if teamNum == 0 else "Home"
-        team_roster_str_list = []
-        for i in range (9):
-             team_roster_str_list.append(f'{team_string} Roster {i}')
-        
-        return team_roster_str_list
+        return f'{team_string} Roster {rosterNum}'
+    
+    def character_offensive_stats(self, teamNum: int, rosterNum: int):
+        ErrorChecker.check_team_num(teamNum)
+        ErrorChecker.check_roster_num(rosterNum)
+        return self.hud_json[self.team_roster_str(teamNum, rosterNum)]['Offensive Stats']
+    
+    def character_defensive_stats(self, teamNum: int, rosterNum: int):
+        ErrorChecker.check_team_num(teamNum)
+        ErrorChecker.check_roster_num(rosterNum)
+        return self.hud_json[self.team_roster_str(teamNum, rosterNum)]['Defensive Stats']
 
     def roster(self, teamNum: int) -> dict:
         roster_dict = {}
-        for player in self.team_roster_str_list(teamNum):
-            player_index = int(player[-1])
-            roster_dict[player_index] = {}
-            roster_dict[player_index]['captain'] = self.hud_json[player]['Captain']
-            roster_dict[player_index]['char_id'] = self.hud_json[player]['CharID']
+        for i in range(9):
+            player = self.hud_json[self.team_roster_str(teamNum, i)]
+            roster_dict[i] = {}
+            roster_dict[i]['captain'] = player['Captain']
+            roster_dict[i]['char_id'] = player['CharID']
 
         return roster_dict
     
@@ -1934,10 +1941,16 @@ class HudObj:
     
     def captain_index(self, teamNum: int) -> int:
         ErrorChecker.check_team_num(teamNum)
-        for player in self.team_roster_str_list(teamNum):
-            if self.hud_json[player]['Captain'] == 1:
-                return int(player[-1])
-        raise ValueError(f'No captain on teamNum {teamNum}')
+        for i in range(9):
+            if self.hud_json[self.team_roster_str(teamNum,i)]['Captain'] == 1:
+                return int(i)
+        raise Exception(f'No captain on teamNum {teamNum}')
+    
+    def batting_team(self):
+        return self.half_inning()
+    
+    def fielding_team(self):
+        return abs(self.half_inning()-1)
 
     
 '''
