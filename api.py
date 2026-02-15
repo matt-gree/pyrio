@@ -1,6 +1,6 @@
 from dataclasses import dataclass, fields, asdict
 from typing import Optional, List, Union
-from lookup import Lookup
+from .lookup import Lookup
 # @dataclass
 # class StatsEndpoint:
 #     # todo: some way to readily retrieve and manipulate params for requests, such as a parameter/query builder
