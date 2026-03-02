@@ -2055,7 +2055,28 @@ class HudObj:
             positionNumber = lookup.lookup(LookupDicts.POSITION, position)
 
         return self.team_positions(teamNum)[positionNumber]
-        
+
+class RunnerObj:
+    def __init__(self, runner_json: dict):
+        self.runner_json = runner_json
+
+    def roster_location(self) -> int:
+        return self.runner_json['Runner Roster Loc']
+    
+    def character(self, output_format: str = "name") -> str | int:
+        return lookup.get_character(self.runner_json['Runner Char Id'], output_format=output_format)
+    
+    def initial_base(self) -> int:
+        return self.runner_json['Runner Initial Base']
+    
+    def result_base(self) -> int:
+        return self.runner_json['Runner Result Base']
+    
+    def total_bases(self) -> int:
+        return self.result_base() - self.initial_base()
+    
+    def isOut(self) -> bool:
+        return (self.runner_json['Out Type'] != "None")
 
 
 
