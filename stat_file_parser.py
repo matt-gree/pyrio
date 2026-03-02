@@ -143,7 +143,13 @@ class StatObj:
             return self.statJson["Away Score"]
         else:
             return self.statJson["Home Score"]
+    
+    def inning_scores(self, teamNum: int) -> list[int]:
+        teamNum = self.teamNumVersionCorrection(teamNum)
+        team_string = "Away" if teamNum == 0 else "Home"
         
+        return self.statJson.get(f'{team_string} Inning Scores', [])
+    
     def winning_team(self) -> int:
         # returns the team number of the winning team
         if self.score(0) > self.score(1):
@@ -219,7 +225,7 @@ class StatObj:
         # if no roster spot is provided, returns a list of characters on a given team
         # teamNum: 0 == home team, 1 == away team
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
-        ErrorChecker.check_team_num(teamNum)
+        teamNum = self.teamNumVersionCorrection(teamNum)
         ErrorChecker.check_roster_num(rosterNum)
         if rosterNum == -1:
             charList = []
@@ -1896,6 +1902,12 @@ class HudObj:
         
         return self.hud_json[f'{team_string} Score']
     
+    def inning_scores(self, teamNum: int) -> list[int]:
+        ErrorChecker.check_team_num(teamNum)
+        team_string = "Away" if teamNum == 0 else "Home"
+        
+        return self.hud_json[f'{team_string} Inning Scores']
+    
     def balls(self) -> int:
         return self.hud_json['Balls']
     
@@ -2001,6 +2013,10 @@ class HudObj:
             if self.hud_json[self.team_roster_str(teamNum,i)]['Captain'] == 1:
                 return int(i)
         raise Exception(f'No captain on teamNum {teamNum}')
+    
+    def captain(self, teamNum: int, output_format: str = "name") -> str | int:
+        #returns the name or ID of the captain character
+        return self.roster(teamNum, output_format=output_format)[self.captain_index(teamNum)]['char_id']
     
     def batting_team(self):
         return self.half_inning()
