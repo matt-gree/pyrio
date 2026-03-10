@@ -1894,7 +1894,7 @@ class HudObj:
     
     def logo(self, teamNum: int) -> int:
         ErrorChecker.check_team_num(teamNum)
-        return self.hud_json[f'Team {teamNum} Logo']
+        return self.hud_json[f'Team {teamNum} Name']
     
     def score(self, teamNum: int) -> int:
         ErrorChecker.check_team_num(teamNum)
@@ -1948,7 +1948,6 @@ class HudObj:
             teamName = "Away" if teamNum == 0 else "Home"
             return self.hud_json[f'{teamName} Batter Roster Loc']
     
-
     def runner_on_first(self) -> bool:
         return bool(self.hud_json.get('Runner 1B'))
     
@@ -1995,6 +1994,8 @@ class HudObj:
             roster_dict[i]['captain'] = player['Captain']
             roster_dict[i]['char_id'] = lookup.get_character(player['CharID'], output_format=output_format)
             roster_dict[i]['position'] = player['Fielding Position']
+            roster_dict[i]['fielding_hand'] = player['Fielding Hand']
+            roster_dict[i]['batting_hand'] = player['Batting Hand']
 
         return roster_dict
     
@@ -2041,6 +2042,20 @@ class HudObj:
             batterList.append(lookup.get_character(character['CharID'], output_format=output_format))
         return batterList
     
+    def characterId(self, teamNum: int, rosterNum: int, output_format: str = "name") -> str | int:
+        ErrorChecker.check_team_num(teamNum)
+        ErrorChecker.check_roster_num(rosterNum)
+
+        character = self.hud_json[self.team_roster_str(teamNum, rosterNum)]
+        return lookup.get_character(character['CharID'], output_format=output_format)
+    
+    def isSuperstar(self, teamNum: int, rosterNum: int) -> bool:
+        ErrorChecker.check_team_num(teamNum)
+        ErrorChecker.check_roster_num(rosterNum)
+
+        character = self.hud_json[self.team_roster_str(teamNum, rosterNum)]
+        return character['Superstar']
+    
     def position(self, teamNum: int, rosterNum: int) -> str:
         ErrorChecker.check_team_num(teamNum)
         ErrorChecker.check_roster_num(rosterNum)
@@ -2071,6 +2086,19 @@ class HudObj:
             positionNumber = lookup.lookup(LookupDicts.POSITION, position)
 
         return self.team_positions(teamNum)[positionNumber]
+    
+    def fielding_hand(self, teamNum: int, rosterNum: int) -> int:
+        # returns fielding handedness of character
+        # rosterNum: 0 -> 8 for each of the 9 roster spots
+        ErrorChecker.check_roster_num_no_neg(rosterNum)
+        return self.hud_json[self.team_roster_str(teamNum, rosterNum)]["Fielding Hand"]
+
+    def batting_hand(self, teamNum: int, rosterNum: int) -> int:
+        # returns batting handedness of character
+        # rosterNum: 0 -> 8 for each of the 9 roster spots
+        ErrorChecker.check_roster_num_no_neg(rosterNum)
+        return self.hud_json[self.team_roster_str(teamNum, rosterNum)]["Batting Hand"]
+
 
 class RunnerObj:
     def __init__(self, runner_json: dict):
