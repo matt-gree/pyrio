@@ -1,4 +1,5 @@
 __pycache__/
+*.egg-info/
 api_cache.sqlite
 my_data.db
 .env
@@ -11,3 +12,6 @@ dme/
 *.sqlite
 *.db
 .DS_Store
+.python-version
+output/
+/.claude

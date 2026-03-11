@@ -280,6 +280,126 @@ class LookupDicts():
         None: "None"
     }
 
+
+# Character name -> simplified/base name (e.g., 'Toad(R)' -> 'Toad')
+CHAR_TO_SIMPLIFIED = {
+    'Mario': 'Mario',
+    'Luigi': 'Luigi',
+    'DK': 'DK',
+    'Diddy': 'Diddy',
+    'Peach': 'Peach',
+    'Daisy': 'Daisy',
+    'Yoshi': 'Yoshi',
+    'Baby Mario': 'Baby Mario',
+    'Baby Luigi': 'Baby Luigi',
+    'Bowser': 'Bowser',
+    'Wario': 'Wario',
+    'Waluigi': 'Waluigi',
+    'Koopa(G)': 'Koopa',
+    'Toad(R)': 'Toad',
+    'Boo': 'Boo',
+    'Toadette': 'Toadette',
+    'Shy Guy(R)': 'Shy Guy',
+    'Birdo': 'Birdo',
+    'Monty': 'Monty',
+    'Bowser Jr': 'Bowser Jr',
+    'Paratroopa(R)': 'Paratroopa',
+    'Pianta(B)': 'Pianta',
+    'Pianta(R)': 'Pianta',
+    'Pianta(Y)': 'Pianta',
+    'Noki(B)': 'Noki',
+    'Noki(R)': 'Noki',
+    'Noki(G)': 'Noki',
+    'Bro(H)': 'Bro',
+    'Toadsworth': 'Toadsworth',
+    'Toad(B)': 'Toad',
+    'Toad(Y)': 'Toad',
+    'Toad(G)': 'Toad',
+    'Toad(P)': 'Toad',
+    'Magikoopa(B)': 'Magikoopa',
+    'Magikoopa(R)': 'Magikoopa',
+    'Magikoopa(G)': 'Magikoopa',
+    'Magikoopa(Y)': 'Magikoopa',
+    'King Boo': 'King Boo',
+    'Petey': 'Petey',
+    'Dixie': 'Dixie',
+    'Goomba': 'Goomba',
+    'Paragoomba': 'Paragoomba',
+    'Koopa(R)': 'Koopa',
+    'Paratroopa(G)': 'Paratroopa',
+    'Shy Guy(B)': 'Shy Guy',
+    'Shy Guy(Y)': 'Shy Guy',
+    'Shy Guy(G)': 'Shy Guy',
+    'Shy Guy(Bk)': 'Shy Guy',
+    'Dry Bones(Gy)': 'Dry Bones',
+    'Dry Bones(G)': 'Dry Bones',
+    'Dry Bones(R)': 'Dry Bones',
+    'Dry Bones(B)': 'Dry Bones',
+    'Bro(F)': 'Bro',
+    'Bro(B)': 'Bro',
+}
+
+# Simplified name -> character class
+SIMPLIFIED_TO_CLASS = {
+    'Mario': 'Balance',
+    'Luigi': 'Balance',
+    'DK': 'Power',
+    'Diddy': 'Speed',
+    'Peach': 'Technique',
+    'Daisy': 'Balance',
+    'Yoshi': 'Speed',
+    'Baby Mario': 'Speed',
+    'Baby Luigi': 'Speed',
+    'Bowser': 'Power',
+    'Wario': 'Power',
+    'Waluigi': 'Technique',
+    'Koopa': 'Balance',
+    'Toad': 'Balance',
+    'Boo': 'Technique',
+    'Toadette': 'Speed',
+    'Shy Guy': 'Balance',
+    'Birdo': 'Balance',
+    'Monty': 'Speed',
+    'Bowser Jr': 'Power',
+    'Paratroopa': 'Technique',
+    'Pianta': 'Power',
+    'Noki': 'Speed',
+    'Bro': 'Power',
+    'Toadsworth': 'Technique',
+    'Magikoopa': 'Technique',
+    'King Boo': 'Power',
+    'Petey': 'Power',
+    'Dixie': 'Technique',
+    'Goomba': 'Balance',
+    'Paragoomba': 'Speed',
+    'Dry Bones': 'Technique',
+}
+
+
+def simplified_name(char_name):
+    """Return the simplified/base name for a character variant.
+    e.g., 'Toad(R)' -> 'Toad', 'Mario' -> 'Mario'
+    """
+    return CHAR_TO_SIMPLIFIED[char_name]
+
+
+def char_class(char_name):
+    """Return the class for a character.
+    e.g., 'Toad(R)' -> 'Balance', 'Mario' -> 'Balance'
+    """
+    return SIMPLIFIED_TO_CLASS[CHAR_TO_SIMPLIFIED[char_name]]
+
+
+def simplified_name_groups():
+    """Return a dict mapping simplified names to lists of character variant names.
+    e.g., {'Toad': ['Toad(R)', 'Toad(B)', 'Toad(Y)', 'Toad(G)', 'Toad(P)'], ...}
+    """
+    groups = {}
+    for char, sn in CHAR_TO_SIMPLIFIED.items():
+        groups.setdefault(sn, []).append(char)
+    return groups
+
+
 # todo - more complete error handling
 
 class Lookup:

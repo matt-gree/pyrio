@@ -18,7 +18,7 @@ def resource_path(relative_path: str) -> str:
         # Running in normal Python environment
         return os.path.join(os.path.abspath("."), relative_path)
 
-csv_path = resource_path(os.path.join("pyrio", "CharNames.csv"))
+csv_path = resource_path(os.path.join(os.path.dirname(__file__), "CharNames.csv"))
 with open(csv_path, "r") as file:
     reader = csv.reader(file)
     for row in reader:

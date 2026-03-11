@@ -1,61 +1,5 @@
 from .characters import is_captain
-
-char_class_dict = {
-        'Mario': {'Class': 'Balance', 'Simplified Name': 'Mario'},
-        'Luigi': {'Class': 'Balance', 'Simplified Name': 'Luigi'},
-        'DK': {'Class': 'Power', 'Simplified Name': 'DK'},
-        'Diddy': {'Class': 'Speed', 'Simplified Name': 'Diddy'},
-        'Peach': {'Class': 'Technique', 'Simplified Name': 'Peach'},
-        'Daisy': {'Class': 'Balance', 'Simplified Name': 'Daisy'},
-        'Yoshi': {'Class': 'Speed', 'Simplified Name': 'Yoshi'},
-        'Baby Mario': {'Class': 'Speed', 'Simplified Name': 'Baby Mario'},
-        'Baby Luigi': {'Class': 'Speed', 'Simplified Name': 'Baby Luigi'},
-        'Bowser': {'Class': 'Power', 'Simplified Name': 'Bowser'},
-        'Wario': {'Class': 'Power', 'Simplified Name': 'Wario'},
-        'Waluigi': {'Class': 'Technique', 'Simplified Name': 'Waluigi'},
-        'Koopa(G)': {'Class': 'Balance', 'Simplified Name': 'Koopa'},
-        'Toad(R)': {'Class': 'Balance', 'Simplified Name': 'Toad'},
-        'Boo': {'Class': 'Technique', 'Simplified Name': 'Boo'},
-        'Toadette': {'Class': 'Speed', 'Simplified Name': 'Toadette'},
-        'Shy Guy(R)': {'Class': 'Balance', 'Simplified Name': 'Shy Guy'},
-        'Birdo': {'Class': 'Balance', 'Simplified Name': 'Birdo'},
-        'Monty': {'Class': 'Speed', 'Simplified Name': 'Monty'},
-        'Bowser Jr': {'Class': 'Power', 'Simplified Name': 'Bowser Jr'},
-        'Paratroopa(R)': {'Class': 'Technique', 'Simplified Name': 'Paratroopa'},
-        'Pianta(B)': {'Class': 'Power', 'Simplified Name': 'Pianta'},
-        'Pianta(R)': {'Class': 'Power', 'Simplified Name': 'Pianta'},
-        'Pianta(Y)': {'Class': 'Power', 'Simplified Name': 'Pianta'},
-        'Noki(B)': {'Class': 'Speed', 'Simplified Name': 'Noki'},
-        'Noki(R)': {'Class': 'Speed', 'Simplified Name': 'Noki'},
-        'Noki(G)': {'Class': 'Speed', 'Simplified Name': 'Noki'},
-        'Bro(H)': {'Class': 'Power', 'Simplified Name': 'Bro'},
-        'Toadsworth': {'Class': 'Technique', 'Simplified Name': 'Toadsworth'},
-        'Toad(B)': {'Class': 'Balance', 'Simplified Name': 'Toad'},
-        'Toad(Y)': {'Class': 'Balance', 'Simplified Name': 'Toad'},
-        'Toad(G)': {'Class': 'Balance', 'Simplified Name': 'Toad'},
-        'Toad(P)': {'Class': 'Balance', 'Simplified Name': 'Toad'},
-        'Magikoopa(B)': {'Class': 'Technique', 'Simplified Name': 'Magikoopa'},
-        'Magikoopa(R)': {'Class': 'Technique', 'Simplified Name': 'Magikoopa'},
-        'Magikoopa(G)': {'Class': 'Technique', 'Simplified Name': 'Magikoopa'},
-        'Magikoopa(Y)': {'Class': 'Technique', 'Simplified Name': 'Magikoopa'},
-        'King Boo': {'Class': 'Power', 'Simplified Name': 'King Boo'},
-        'Petey': {'Class': 'Power', 'Simplified Name': 'Petey'},
-        'Dixie': {'Class': 'Technique', 'Simplified Name': 'Dixie'},
-        'Goomba': {'Class': 'Balance', 'Simplified Name': 'Goomba'},
-        'Paragoomba': {'Class': 'Speed', 'Simplified Name': 'Paragoomba'},
-        'Koopa(R)': {'Class': 'Balance', 'Simplified Name': 'Koopa'},
-        'Paratroopa(G)': {'Class': 'Technique', 'Simplified Name': 'Paratroopa'},
-        'Shy Guy(B)': {'Class': 'Balance', 'Simplified Name': 'Shy Guy'},
-        'Shy Guy(Y)': {'Class': 'Balance', 'Simplified Name': 'Shy Guy'},
-        'Shy Guy(G)': {'Class': 'Balance', 'Simplified Name': 'Shy Guy'},
-        'Shy Guy(Bk)': {'Class': 'Balance', 'Simplified Name': 'Shy Guy'},
-        'Dry Bones(Gy)': {'Class': 'Technique', 'Simplified Name': 'Dry Bones'},
-        'Dry Bones(G)': {'Class': 'Technique', 'Simplified Name': 'Dry Bones'},
-        'Dry Bones(R)': {'Class': 'Technique', 'Simplified Name': 'Dry Bones'},
-        'Dry Bones(B)': {'Class': 'Technique', 'Simplified Name': 'Dry Bones'},
-        'Bro(F)': {'Class': 'Power', 'Simplified Name': 'Bro'},
-        'Bro(B)': {'Class': 'Power', 'Simplified Name': 'Bro'},
-    }
+from .lookup import CHAR_TO_SIMPLIFIED, SIMPLIFIED_TO_CLASS
 
 In_Game_Team_Names = {
         'Mario':[{'Name':'Mario Heroes'},
@@ -136,7 +80,7 @@ def team_name(roster: list[str], captain: str) -> str:
     
     simplified_roster = []
     for character in roster:
-        simplified_roster.append(char_class_dict[character]['Simplified Name'])
+        simplified_roster.append(CHAR_TO_SIMPLIFIED[character])
 
     running_total = 0
     for character in In_Game_Team_Names[captain][2]['Characters']:
@@ -144,24 +88,24 @@ def team_name(roster: list[str], captain: str) -> str:
 
     if running_total >= 4:
         return In_Game_Team_Names[captain][2]['Name']
-    
+
     running_total = 0
     for character in In_Game_Team_Names[captain][3]['Characters']:
         running_total += simplified_roster.count(character)
-    
+
     if running_total >= 4:
         return In_Game_Team_Names[captain][3]['Name']
-    
+
     class_roster = []
     for character in roster:
-        class_roster.append(char_class_dict[character]['Class'])
+        class_roster.append(SIMPLIFIED_TO_CLASS[CHAR_TO_SIMPLIFIED[character]])
 
     class_count_dict = {'Balance': class_roster.count('Balance'),
                     'Technique': class_roster.count('Technique'),
                     'Speed': class_roster.count('Speed'),
                     'Power': class_roster.count('Power')}
-    
-    captain_class = char_class_dict[captain]['Class']
+
+    captain_class = SIMPLIFIED_TO_CLASS[CHAR_TO_SIMPLIFIED[captain]]
 
     class_list = ['Balance', 'Technique', 'Speed', 'Power']
 

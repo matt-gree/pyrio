@@ -1,9 +1,10 @@
-from setuptools import setup, find_packages
+from setuptools import setup
 
 setup(
     name="pyrio",
     version="0.1.0",
-    packages=find_packages(),
+    packages=["pyrio"],
+    package_dir={"pyrio": "."},
     install_requires=[
         "matplotlib>=3.10.3",
         "numpy>=2.2.0",
