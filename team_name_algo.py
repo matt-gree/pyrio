@@ -1,5 +1,4 @@
-from .characters import is_captain
-from .lookup import CHAR_TO_SIMPLIFIED, SIMPLIFIED_TO_CLASS
+from .lookup import is_captain, lookup
 
 In_Game_Team_Names = {
         'Mario':[{'Name':'Mario Heroes'},
@@ -80,7 +79,7 @@ def team_name(roster: list[str], captain: str) -> str:
     
     simplified_roster = []
     for character in roster:
-        simplified_roster.append(CHAR_TO_SIMPLIFIED[character])
+        simplified_roster.append(lookup("simplified_name", character))
 
     running_total = 0
     for character in In_Game_Team_Names[captain][2]['Characters']:
@@ -98,14 +97,14 @@ def team_name(roster: list[str], captain: str) -> str:
 
     class_roster = []
     for character in roster:
-        class_roster.append(SIMPLIFIED_TO_CLASS[CHAR_TO_SIMPLIFIED[character]])
+        class_roster.append(lookup("char_class", lookup("simplified_name", character)))
 
     class_count_dict = {'Balance': class_roster.count('Balance'),
                     'Technique': class_roster.count('Technique'),
                     'Speed': class_roster.count('Speed'),
                     'Power': class_roster.count('Power')}
 
-    captain_class = SIMPLIFIED_TO_CLASS[CHAR_TO_SIMPLIFIED[captain]]
+    captain_class = lookup("char_class", lookup("simplified_name", captain))
 
     class_list = ['Balance', 'Technique', 'Speed', 'Power']
 

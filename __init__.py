@@ -2,13 +2,15 @@
 from .stat_file_parser import StatObj, EventSearch, EventObj, HudObj
 
 # Lookup tables and translation
-from .lookup import Lookup, LookupDicts, CAPTAINS
+from .lookup import (
+    Lookup, LookupDicts, CAPTAINS,
+    lookup, list_dicts, simplified_name_groups,
+    userInputToCharacter, is_captain,
+)
 
-# Web API building blocks
+# API parameter lists and endpoint constants
 from .api import (
     Endpoint,
-    RequestBuilder,
-    RequestInfo,
     ParameterList,
     GamesParameterList,
     EventsParameterList,
@@ -19,10 +21,10 @@ from .api import (
 )
 
 # Web API client
-from .api_manager import APIManager
+from .rio_web import RioWeb
 
-# Character utilities
-from .characters import userInputToCharacter, is_captain
+# Custom exceptions
+from .exceptions import RioAPIError, RioAuthError, RioNotFoundError
 
 # Team name resolution
 from .team_name_algo import team_name
