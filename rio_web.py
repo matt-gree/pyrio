@@ -108,12 +108,12 @@ class RioWeb:
         return self._process_games(response)
 
     def get_stats(self, params: Union[StatsParameterList, dict] = None, raw: bool = False, **kwargs) -> Union[pd.DataFrame, dict]:
-        """Fetch stats data. Returns a MultiIndex DataFrame organized by category/stat."""
+        """Fetch stats data. Returns a DataFrame with grouping columns and MultiIndex stat columns."""
         serialized = self._serialize_params(params, kwargs)
         response = self._get(Endpoint.STATS, serialized)
         if raw:
             return response
-        return self._process_stats(response)
+        return self._process_stats(response, serialized)
 
     def get_events(self, params: Union[EventsParameterList, dict] = None, raw: bool = False, **kwargs) -> Union[pd.DataFrame, dict]:
         """Fetch event-level data."""
@@ -397,94 +397,108 @@ class RioWeb:
         return df
 
     @staticmethod
-    def _process_stats(api_response: dict) -> pd.DataFrame:
-        """Process raw stats API response into a MultiIndex DataFrame."""
+    def _process_stats(api_response: dict, params: dict = None) -> pd.DataFrame:
+        """Process raw stats API response into a DataFrame.
+
+        Uses the request params to determine the nesting structure of the response
+        rather than guessing from the keys. Grouping dimensions become regular columns;
+        stat values become MultiIndex columns (Category, Stat) or (Category, Sub, Stat).
+        """
         stats_data = api_response.get("Stats", {})
         if not stats_data:
             return pd.DataFrame()
 
-        possible_characters = set(LookupDicts.CHAR_NAME.values())
+        if params is None:
+            params = {}
 
-        def has_swing_types(batting_data: dict) -> bool:
-            swing_keys = {"charge", "slap", "star", "none"}
-            return any(k.lower() in swing_keys for k in batting_data)
+        # Outer dimensions in server nesting order: game → user → roster_order → char
+        OUTER_DIMENSIONS = [
+            ("by_game", "game_id"),
+            ("by_user", "username"),
+            ("by_roster_order", "roster_loc"),
+            ("by_char", "char_name"),
+        ]
 
-        def sort_columns(df):
-            if isinstance(df.columns, pd.MultiIndex):
-                if df.columns.nlevels == 3:
-                    swing_order = ["slap", "charge", "star", "none", "summary"]
-                    df = df.reindex(
-                        columns=pd.MultiIndex.from_tuples(
-                            sorted(df.columns, key=lambda col: (
-                                col[0],
-                                swing_order.index(col[1].lower()) if col[1].lower() in swing_order else 99,
-                                col[2],
-                            ))
-                        )
-                    )
-                elif df.columns.nlevels == 2:
-                    df = df.sort_index(axis=1)
-            return df
+        by_swing = bool(params.get("by_swing"))
+        by_batting_hand = bool(params.get("by_batting_hand"))
+        by_fielding_hand = bool(params.get("by_fielding_hand"))
+        has_inner = by_swing or by_batting_hand or by_fielding_hand
 
-        def _flatten_stats(stats: dict, with_swing: bool) -> dict:
+        active_outer = [col_name for param_key, col_name in OUTER_DIMENSIONS
+                        if params.get(param_key)]
+
+        STAT_CATEGORIES = {"Batting", "Pitching", "Fielding", "Misc"}
+
+        def _flatten_stat_leaf(stats: dict) -> dict:
+            """Flatten a stat_type → values dict into column tuples."""
             flat = {}
             for category, values in stats.items():
-                if category == "Batting" and with_swing:
+                if category not in STAT_CATEGORIES:
+                    continue
+                if category == "Batting" and by_swing:
                     for swing_key, swing_stats in values.items():
                         if swing_key.startswith("summary_"):
                             flat[("Batting", "summary", swing_key)] = swing_stats
                         else:
                             for stat, val in swing_stats.items():
                                 flat[("Batting", swing_key, stat)] = val
+                elif category == "Batting" and by_batting_hand:
+                    for hand_key, hand_stats in values.items():
+                        for stat, val in hand_stats.items():
+                            flat[("Batting", hand_key, stat)] = val
+                elif category == "Pitching" and by_fielding_hand:
+                    for hand_key, hand_stats in values.items():
+                        for stat, val in hand_stats.items():
+                            flat[("Pitching", hand_key, stat)] = val
                 else:
                     for stat, val in values.items():
-                        key = (category, "summary", stat) if with_swing else (category, stat)
+                        key = (category, "summary", stat) if has_inner else (category, stat)
                         flat[key] = val
             return flat
 
-        def _build_df(rows, index, with_swing):
-            data = [r[1] for r in rows]
-            df = pd.DataFrame(data, index=index)
-            if with_swing:
-                df.columns = pd.MultiIndex.from_tuples(df.columns, names=["Category", "Swing Type", "Stat"])
+        def _collect_rows(data, depth=0):
+            """Recursively walk the nested dict, collecting flat rows."""
+            if depth < len(active_outer):
+                rows = []
+                for key, nested in data.items():
+                    sub_rows = _collect_rows(nested, depth + 1)
+                    for row in sub_rows:
+                        row[active_outer[depth]] = key
+                    rows.extend(sub_rows)
+                return rows
             else:
-                df.columns = pd.MultiIndex.from_tuples(df.columns, names=["Category", "Stat"])
-            return sort_columns(df)
+                return [_flatten_stat_leaf(data)]
 
-        # Aggregate (no user/char breakdown)
-        if any(k in ("Batting", "Pitching", "Fielding", "Misc") for k in stats_data):
-            batting = stats_data.get("Batting", {})
-            with_swing = has_swing_types(batting)
-            flat = _flatten_stats(stats_data, with_swing)
-            df = pd.DataFrame([flat], index=["Total"])
-            if with_swing:
-                df.columns = pd.MultiIndex.from_tuples(df.columns, names=["Category", "Swing Type", "Stat"])
-            else:
-                df.columns = pd.MultiIndex.from_tuples(df.columns, names=["Category", "Stat"])
-            return sort_columns(df)
+        rows = _collect_rows(stats_data)
 
-        keys = list(stats_data.keys())
-        first_val = stats_data[keys[0]]
+        if not rows:
+            return pd.DataFrame()
 
-        # By character
-        if all(k in possible_characters for k in keys):
-            with_swing = has_swing_types(first_val.get("Batting", {}))
-            rows = [(char, _flatten_stats(stats, with_swing)) for char, stats in stats_data.items()]
-            return _build_df(rows, pd.Index([r[0] for r in rows], name="Character"), with_swing)
+        # Build DataFrame from collected rows (mix of string keys and tuple keys)
+        df = pd.DataFrame(rows)
 
-        # By user
-        if all(k in ("Batting", "Fielding", "Pitching", "Misc") for k in first_val):
-            with_swing = has_swing_types(first_val.get("Batting", {}))
-            rows = [(user, _flatten_stats(user_stats, with_swing)) for user, user_stats in stats_data.items()]
-            return _build_df(rows, pd.Index([r[0] for r in rows], name="User"), with_swing)
+        # Separate grouping columns (str) from stat columns (tuple)
+        grouping_cols = [col for col in df.columns if isinstance(col, str)]
+        stat_cols = [col for col in df.columns if isinstance(col, tuple)]
 
-        # By user and character
-        with_swing = has_swing_types(
-            next(iter(next(iter(stats_data.values())).values())).get("Batting", {})
-        )
-        rows = []
-        for user, characters in stats_data.items():
-            for char, stats in characters.items():
-                rows.append(((user, char), _flatten_stats(stats, with_swing)))
-        index = pd.MultiIndex.from_tuples([r[0] for r in rows], names=["User", "Character"])
-        return _build_df(rows, index, with_swing)
+        if not stat_cols:
+            return pd.DataFrame(df[grouping_cols]) if grouping_cols else pd.DataFrame()
+
+        # Build stat DataFrame with MultiIndex columns
+        stat_df = df[stat_cols].copy()
+        if has_inner:
+            stat_df.columns = pd.MultiIndex.from_tuples(stat_cols, names=["Category", "Sub", "Stat"])
+        else:
+            stat_df.columns = pd.MultiIndex.from_tuples(stat_cols, names=["Category", "Stat"])
+        stat_df = stat_df.sort_index(axis=1)
+
+        if grouping_cols:
+            # Reorder grouping columns to match the nesting order
+            ordered = [c for c in [col for _, col in OUTER_DIMENSIONS] if c in grouping_cols]
+            group_df = df[ordered].reset_index(drop=True)
+            stat_df = stat_df.reset_index(drop=True)
+            df = pd.concat([group_df, stat_df], axis=1)
+        else:
+            df = stat_df
+
+        return df

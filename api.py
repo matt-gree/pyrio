@@ -67,7 +67,8 @@ class LandingDataParameterList(EventsParameterList):
 
 
 @dataclass
-class StarChancesParameterList:
+class StarChancesParameterList(EventsParameterList):
+    events: Optional[List[int]] = None
     by_inning: Optional[bool] = None
 
 
@@ -76,12 +77,18 @@ class StatsParameterList(EventsParameterList):
     char_id: Optional[int] = None
     by_user: Optional[bool] = None
     by_char: Optional[bool] = None
+    by_game: Optional[bool] = None
+    by_roster_order: Optional[bool] = None
     by_swing: Optional[bool] = None
+    by_batting_hand: Optional[bool] = None
+    by_fielding_hand: Optional[bool] = None
     exclude_nonfair: Optional[bool] = None
     exclude_batting: Optional[bool] = None
     exclude_pitching: Optional[bool] = None
     exclude_misc: Optional[bool] = None
     exclude_fielding: Optional[bool] = None
+    include_pitcher_wins: Optional[bool] = None
+    include_runs_scored: Optional[bool] = None
 
 
 def get_parameter_list(parameter_list_class, include_parent=False):
