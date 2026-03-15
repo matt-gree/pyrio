@@ -108,7 +108,7 @@ class RioWeb:
         return self._process_games(response)
 
     def get_stats(self, params: Union[StatsParameterList, dict] = None, raw: bool = False, **kwargs) -> Union[pd.DataFrame, dict]:
-        """Fetch stats data. Returns a DataFrame with grouping columns and MultiIndex stat columns."""
+        """Fetch stats data. Returns a DataFrame with grouping columns and flat stat columns (Category_stat)."""
         serialized = self._serialize_params(params, kwargs)
         response = self._get(Endpoint.STATS, serialized)
         if raw:
@@ -402,7 +402,8 @@ class RioWeb:
 
         Uses the request params to determine the nesting structure of the response
         rather than guessing from the keys. Grouping dimensions become regular columns;
-        stat values become MultiIndex columns (Category, Stat) or (Category, Sub, Stat).
+        stat names are flattened as Category_stat (e.g. Batting_hits, Pitching_strikeouts).
+        With inner dimensions: Category_Sub_stat (e.g. Batting_Slap_hits).
         """
         stats_data = api_response.get("Stats", {})
         if not stats_data:
@@ -422,7 +423,6 @@ class RioWeb:
         by_swing = bool(params.get("by_swing"))
         by_batting_hand = bool(params.get("by_batting_hand"))
         by_fielding_hand = bool(params.get("by_fielding_hand"))
-        has_inner = by_swing or by_batting_hand or by_fielding_hand
 
         active_outer = [col_name for param_key, col_name in OUTER_DIMENSIONS
                         if params.get(param_key)]
@@ -430,30 +430,29 @@ class RioWeb:
         STAT_CATEGORIES = {"Batting", "Pitching", "Fielding", "Misc"}
 
         def _flatten_stat_leaf(stats: dict) -> dict:
-            """Flatten a stat_type → values dict into column tuples."""
+            """Flatten a stat_type → values dict into underscore-joined column names."""
             flat = {}
             for category, values in stats.items():
                 if category not in STAT_CATEGORIES:
                     continue
                 if category == "Batting" and by_swing:
                     for swing_key, swing_stats in values.items():
-                        if swing_key.startswith("summary_"):
-                            flat[("Batting", "summary", swing_key)] = swing_stats
-                        else:
+                        if isinstance(swing_stats, dict):
                             for stat, val in swing_stats.items():
-                                flat[("Batting", swing_key, stat)] = val
+                                flat[f"Batting_{swing_key}_{stat}"] = val
+                        else:
+                            flat[f"Batting_{swing_key}"] = swing_stats
                 elif category == "Batting" and by_batting_hand:
                     for hand_key, hand_stats in values.items():
                         for stat, val in hand_stats.items():
-                            flat[("Batting", hand_key, stat)] = val
+                            flat[f"Batting_{hand_key}_{stat}"] = val
                 elif category == "Pitching" and by_fielding_hand:
                     for hand_key, hand_stats in values.items():
                         for stat, val in hand_stats.items():
-                            flat[("Pitching", hand_key, stat)] = val
+                            flat[f"Pitching_{hand_key}_{stat}"] = val
                 else:
                     for stat, val in values.items():
-                        key = (category, "summary", stat) if has_inner else (category, stat)
-                        flat[key] = val
+                        flat[f"{category}_{stat}"] = val
             return flat
 
         def _collect_rows(data, depth=0):
@@ -474,31 +473,11 @@ class RioWeb:
         if not rows:
             return pd.DataFrame()
 
-        # Build DataFrame from collected rows (mix of string keys and tuple keys)
         df = pd.DataFrame(rows)
 
-        # Separate grouping columns (str) from stat columns (tuple)
-        grouping_cols = [col for col in df.columns if isinstance(col, str)]
-        stat_cols = [col for col in df.columns if isinstance(col, tuple)]
-
-        if not stat_cols:
-            return pd.DataFrame(df[grouping_cols]) if grouping_cols else pd.DataFrame()
-
-        # Build stat DataFrame with MultiIndex columns
-        stat_df = df[stat_cols].copy()
-        if has_inner:
-            stat_df.columns = pd.MultiIndex.from_tuples(stat_cols, names=["Category", "Sub", "Stat"])
-        else:
-            stat_df.columns = pd.MultiIndex.from_tuples(stat_cols, names=["Category", "Stat"])
-        stat_df = stat_df.sort_index(axis=1)
-
-        if grouping_cols:
-            # Reorder grouping columns to match the nesting order
-            ordered = [c for c in [col for _, col in OUTER_DIMENSIONS] if c in grouping_cols]
-            group_df = df[ordered].reset_index(drop=True)
-            stat_df = stat_df.reset_index(drop=True)
-            df = pd.concat([group_df, stat_df], axis=1)
-        else:
-            df = stat_df
+        # Reorder so grouping columns come first in nesting order
+        ordered_grouping = [c for _, c in OUTER_DIMENSIONS if c in df.columns]
+        stat_cols = [c for c in df.columns if c not in ordered_grouping]
+        df = df[ordered_grouping + sorted(stat_cols)]
 
         return df
