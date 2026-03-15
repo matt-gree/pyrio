@@ -1,6 +1,6 @@
 from .lookup import is_captain, lookup
 
-In_Game_Team_Names = {
+TEAM_NAMES_DICT = {
         'Mario':[{'Name':'Mario Heroes'},
                 {'Name':'Mario Fireballs'},
                 {'Name': 'Mario Sunshines', 'Characters':['Luigi', 'Monty', 'Pianta', 'Noki']},
@@ -42,9 +42,9 @@ In_Game_Team_Names = {
                 {'Name': 'Waluigi Mashers', 'Characters':['Mario', 'Luigi', 'Toadsworth', 'Wario']}],
 
         'DK':[{'Name': 'DK Explorers'},
-            {'Name': 'DK Wild Ones'},
-            {'Name': 'DK Kongs', 'Characters':['Diddy', 'Dixie', 'Goomba', 'Koopa']},
-            {'Name': 'DK Animals', 'Characters':['Yoshi', 'Bowser', 'Monty', 'Petey']}],
+                {'Name': 'DK Wild Ones'},
+                {'Name': 'DK Kongs', 'Characters':['Diddy', 'Dixie', 'Goomba', 'Koopa']},
+                {'Name': 'DK Animals', 'Characters':['Yoshi', 'Bowser', 'Monty', 'Petey']}],
 
         'Diddy':[{'Name': 'Diddy Survivors'},
                 {'Name': 'Diddy Ninjas'},
@@ -62,13 +62,13 @@ In_Game_Team_Names = {
                     {'Name': 'Jr Rookies', 'Characters':['Diddy', 'Dixie', 'Baby Mario', 'Baby Luigi']},]
 }
 
-In_Game_Team_Names_List = []
+in_game_team_names_list = []
 
-for teams in In_Game_Team_Names.values():
+for teams in TEAM_NAMES_DICT.values():
     for entry in teams:
         name = entry.get("Name")
         if name:
-            In_Game_Team_Names_List.append(name)
+            in_game_team_names_list.append(name)
 
 def team_name(roster: list[str], captain: str) -> str:
     if '' in roster:
@@ -82,18 +82,18 @@ def team_name(roster: list[str], captain: str) -> str:
         simplified_roster.append(lookup("simplified_name", character))
 
     running_total = 0
-    for character in In_Game_Team_Names[captain][2]['Characters']:
+    for character in TEAM_NAMES_DICT[captain][2]['Characters']:
         running_total += simplified_roster.count(character)
 
     if running_total >= 4:
-        return In_Game_Team_Names[captain][2]['Name']
+        return TEAM_NAMES_DICT[captain][2]['Name']
 
     running_total = 0
-    for character in In_Game_Team_Names[captain][3]['Characters']:
+    for character in TEAM_NAMES_DICT[captain][3]['Characters']:
         running_total += simplified_roster.count(character)
 
     if running_total >= 4:
-        return In_Game_Team_Names[captain][3]['Name']
+        return TEAM_NAMES_DICT[captain][3]['Name']
 
     class_roster = []
     for character in roster:
@@ -113,6 +113,6 @@ def team_name(roster: list[str], captain: str) -> str:
     if ((class_count_dict[captain_class] > class_count_dict[class_list[0]]) and
         (class_count_dict[captain_class] > class_count_dict[class_list[1]]) and
         (class_count_dict[captain_class] > class_count_dict[class_list[2]])):
-        return In_Game_Team_Names[captain][1]['Name']
+        return TEAM_NAMES_DICT[captain][1]['Name']
 
-    return In_Game_Team_Names[captain][0]['Name']
+    return TEAM_NAMES_DICT[captain][0]['Name']

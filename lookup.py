@@ -263,7 +263,6 @@ class LookupDicts:
         None: "None"
     }
 
-    # Character variant -> simplified/base name (e.g., 'Toad(R)' -> 'Toad')
     SIMPLIFIED_NAME = {
         'Mario': 'Mario',
         'Luigi': 'Luigi',
@@ -321,7 +320,6 @@ class LookupDicts:
         'Bro(B)': 'Bro',
     }
 
-    # Simplified name -> character class
     CHAR_CLASS = {
         'Mario': 'Balance',
         'Luigi': 'Balance',
