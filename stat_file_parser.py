@@ -1897,12 +1897,19 @@ class HudObj:
     
     def runner_on_first(self) -> bool:
         return bool(self.hud_json.get('Runner 1B'))
-    
+
     def runner_on_second(self) -> bool:
         return bool(self.hud_json.get('Runner 2B'))
-    
+
     def runner_on_third(self) -> bool:
         return bool(self.hud_json.get('Runner 3B'))
+
+    def runner_char_name(self, base: int) -> str:
+        """Return the character name of the runner on the given base (1, 2, or 3), or '' if empty."""
+        runner = self.hud_json.get(f'Runner {base}B')
+        if runner and isinstance(runner, dict):
+            return runner.get('Runner Char Id', '')
+        return ''
 
     def team_roster_str(self, teamNum: int, rosterNum: int):
         ErrorChecker.check_team_num(teamNum)

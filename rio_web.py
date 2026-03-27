@@ -80,6 +80,15 @@ class RioWeb:
         return self._post(endpoint, data)
 
     @staticmethod
+    def _strip_value(v):
+        """Remove all whitespace from a string or list-of-strings value."""
+        if isinstance(v, str):
+            return "".join(v.split())
+        if isinstance(v, list):
+            return ["".join(item.split()) if isinstance(item, str) else item for item in v]
+        return v
+
+    @staticmethod
     def _serialize_params(params=None, kwargs: dict = None) -> dict:
         """Convert a ParameterList dataclass or kwargs into a dict for the API."""
         if params is not None:
@@ -93,7 +102,8 @@ class RioWeb:
             result = {}
         if kwargs:
             result.update({k: v for k, v in kwargs.items() if v is not None})
-        return result
+        # Strip whitespace from all string values
+        return {k: RioWeb._strip_value(v) for k, v in result.items()}
 
     # -------------------------------------------------------------------------
     # Data endpoints (GET) - return DataFrames by default, raw=True for dict
