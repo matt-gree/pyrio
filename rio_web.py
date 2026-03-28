@@ -40,11 +40,12 @@ class RioWeb:
         games_raw = client.get_games(tag=["tournament"], raw=True)
     """
 
-    def __init__(self, rio_key: str = None, base_url: str = BASE_URL):
+    def __init__(self, rio_key: str = None, base_url: str = BASE_URL, cache_dir: str = None):
         self.rio_key = rio_key or os.environ.get("PYRIO_KEY") or _load_key_from_file()
         if not self.rio_key:
             print("WARNING: No Rio API key found. Set PYRIO_KEY env var, pass rio_key=, or create rio_key.json.")
         self.base_url = base_url
+        self._cache_dir = cache_dir
         self.session = requests.Session()
         self.session.headers.update({"Content-Type": "application/json"})
         self._cache = None
@@ -54,7 +55,10 @@ class RioWeb:
         """Lazy-loaded CompleterCache for game mode / user lookups."""
         if self._cache is None:
             from .web_caching import CompleterCache
-            self._cache = CompleterCache(self)
+            kwargs = {}
+            if self._cache_dir is not None:
+                kwargs["cache_dir"] = self._cache_dir
+            self._cache = CompleterCache(self, **kwargs)
         return self._cache
 
     # -------------------------------------------------------------------------
