@@ -33,6 +33,7 @@ class GamesParameterList(ParameterList):
     limit_games: Optional[Union[int, bool]] = None
     include_teams: Optional[bool] = None
     stadium: Optional[int] = None
+    include_linescore: Optional[int] = None
 
 
 @dataclass
