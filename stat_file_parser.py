@@ -66,6 +66,48 @@ class ErrorChecker:
         if (baseNum < -1 or baseNum > 3):
             raise ValueError(f'Invalid base arg {baseNum}. Function only accepts base args of -1 to 3')
 
+class RosterObj:
+    """Represents the 9-character roster for one team.
+
+    Both HUD and stat files share the same roster entry format:
+      {'CharID': str, 'Captain': int, 'Offensive Stats': dict, 'Defensive Stats': dict, ...}
+    Stat files additionally include 'Superstar', 'Fielding Hand', and 'Batting Hand'.
+    """
+
+    def __init__(self, slots: dict[int, dict]):
+        self._slots = slots
+
+    def char_id(self, rosterNum: int) -> str:
+        ErrorChecker.check_roster_num_no_neg(rosterNum)
+        return self._slots[rosterNum]['CharID']
+
+    def captain_index(self) -> int:
+        for i in range(9):
+            if self._slots[i]['Captain'] == 1:
+                return i
+        raise Exception('No captain in roster')
+
+    def offensive_stats(self, rosterNum: int) -> dict:
+        ErrorChecker.check_roster_num_no_neg(rosterNum)
+        return self._slots[rosterNum]['Offensive Stats']
+
+    def defensive_stats(self, rosterNum: int) -> dict:
+        ErrorChecker.check_roster_num_no_neg(rosterNum)
+        return self._slots[rosterNum]['Defensive Stats']
+
+    def is_starred(self, rosterNum: int) -> bool:
+        ErrorChecker.check_roster_num_no_neg(rosterNum)
+        return self._slots[rosterNum].get('Superstar', 0) == 1
+
+    def fielding_hand(self, rosterNum: int) -> int:
+        ErrorChecker.check_roster_num_no_neg(rosterNum)
+        return self._slots[rosterNum]['Fielding Hand']
+
+    def batting_hand(self, rosterNum: int) -> int:
+        ErrorChecker.check_roster_num_no_neg(rosterNum)
+        return self._slots[rosterNum]['Batting Hand']
+
+
 # create stat obj
 class StatObj:
     def __init__(self, statJson: dict):
@@ -192,13 +234,15 @@ class StatObj:
         teamStr = "Away" if teamNum == 0 else "Home"
         return f"{teamStr} Roster {rosterNum}"
     
+    def roster_obj(self, teamNum: int) -> RosterObj:
+        teamNum = self.teamNumVersionCorrection(teamNum)
+        slots = {i: self.statJson["Character Game Stats"][self.getTeamString(teamNum, i)] for i in range(9)}
+        return RosterObj(slots)
+
     def getRosterDict(self, teamNum: int) -> dict[int, str]:
         # returns a dict of rosterNum: characterName for the given team
-        teamNum = self.teamNumVersionCorrection(teamNum)
-        rosterDict = {}
-        for x in range(0, 9):
-            rosterDict[x] = self.statJson["Character Game Stats"][self.getTeamString(teamNum, x)]["CharID"]
-        return rosterDict
+        ro = self.roster_obj(teamNum)
+        return {i: ro.char_id(i) for i in range(9)}
 
     def characterName(self, teamNum: int, rosterNum: int = -1) -> Union[str, list[str]]:
         # returns name of specified character
@@ -207,78 +251,57 @@ class StatObj:
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
         ErrorChecker.check_team_num(teamNum)
         ErrorChecker.check_roster_num(rosterNum)
+        ro = self.roster_obj(teamNum)
         if rosterNum == -1:
-            charList = []
-            for x in range(0, 9):
-                charList.append(self.statJson["Character Game Stats"][self.getTeamString(teamNum, x)]["CharID"])
-            return charList
-        else:
-            return self.statJson["Character Game Stats"][self.getTeamString(teamNum, rosterNum)]["CharID"]
+            return [ro.char_id(i) for i in range(9)]
+        return ro.char_id(rosterNum)
 
     def isStarred(self, teamNum: int, rosterNum: int = -1) -> bool:
         # returns if a character is starred
         # if no arg, returns if any character on the team is starred
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
-        teamNum = self.teamNumVersionCorrection(teamNum)
         ErrorChecker.check_roster_num(rosterNum)
+        ro = self.roster_obj(teamNum)
         if rosterNum == -1:
-            for x in range(0, 9):
-                if self.statJson["Character Game Stats"][self.getTeamString(teamNum, x)]["Superstar"] == 1:
-                    return True
-            return False
-        else:
-            return self.statJson["Character Game Stats"][self.getTeamString(teamNum, rosterNum)]["Superstar"] == 1
+            return any(ro.is_starred(i) for i in range(9))
+        return ro.is_starred(rosterNum)
 
     def captain(self, teamNum: int) -> str:
         # returns name of character who is the captain
-        teamNum = self.teamNumVersionCorrection(teamNum)
-        captain = ""
-        for character in self.characterGameStats():
-            if character["Captain"] == 1 and int(character["Team"]) == teamNum:
-                captain = character["CharID"]
-        return captain
+        ro = self.roster_obj(teamNum)
+        return ro.char_id(ro.captain_index())
 
     def offensiveStats(self, teamNum: int, rosterNum: int = -1) -> Union[dict, list[dict]]:
         # grabs offensive stats of a character as seen in the stat json
         # if no roster provided, returns a list of all character's offensive stats
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
-        teamNum = self.teamNumVersionCorrection(teamNum)
         ErrorChecker.check_roster_num(rosterNum)
+        ro = self.roster_obj(teamNum)
         if rosterNum == -1:
-            oStatList = []
-            for x in range(0, 9):
-                oStatList.append(self.statJson["Character Game Stats"][self.getTeamString(teamNum, x)]["Offensive Stats"])
-            return oStatList
-        else:
-            return self.statJson["Character Game Stats"][self.getTeamString(teamNum, rosterNum)]["Offensive Stats"]
+            return [ro.offensive_stats(i) for i in range(9)]
+        return ro.offensive_stats(rosterNum)
 
     def defensiveStats(self, teamNum: int, rosterNum: int = -1) -> Union[dict, list[dict]]:
         # grabs defensive stats of a character as seen in the stat json
         # if no roster provided, returns a list of all character's defensive stats
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
-        teamNum = self.teamNumVersionCorrection(teamNum)
         ErrorChecker.check_roster_num(rosterNum)
+        ro = self.roster_obj(teamNum)
         if rosterNum == -1:
-            dStatList = []
-            for x in range(0, 9):
-                dStatList.append(self.statJson["Character Game Stats"][self.getTeamString(teamNum, x)]["Defensive Stats"])
-            return dStatList
-        else:
-            return self.statJson["Character Game Stats"][self.getTeamString(teamNum, rosterNum)]["Defensive Stats"]
+            return [ro.defensive_stats(i) for i in range(9)]
+        return ro.defensive_stats(rosterNum)
 
     def fieldingHand(self, teamNum: int, rosterNum: int) -> int:
         # returns fielding handedness of character
         # rosterNum: 0 -> 8 for each of the 9 roster spots
-        teamNum = self.teamNumVersionCorrection(teamNum)
         ErrorChecker.check_roster_num_no_neg(rosterNum)
-        return self.statJson["Character Game Stats"][self.getTeamString(teamNum, rosterNum)]["Fielding Hand"]
+        return self.roster_obj(teamNum).fielding_hand(rosterNum)
 
     def battingHand(self, teamNum: int, rosterNum: int) -> int:
         # returns batting handedness of character
         # rosterNum: 0 -> 8 for each of the 9 roster spots
-        teamNum = self.teamNumVersionCorrection(teamNum)
         ErrorChecker.check_roster_num_no_neg(rosterNum)
-        return self.statJson["Character Game Stats"][self.getTeamString(teamNum, rosterNum)]["Batting Hand"]
+        return self.roster_obj(teamNum).batting_hand(rosterNum)
 
     # defensive stats
     def era(self, teamNum: int, rosterNum: int = -1) -> float:
@@ -1917,25 +1940,24 @@ class HudObj:
         team_string = "Away" if teamNum == 0 else "Home"
         return f'{team_string} Roster {rosterNum}'
     
+    def roster_obj(self, teamNum: int) -> RosterObj:
+        ErrorChecker.check_team_num(teamNum)
+        slots = {i: self.hud_json[self.team_roster_str(teamNum, i)] for i in range(9)}
+        return RosterObj(slots)
+
     def character_offensive_stats(self, teamNum: int, rosterNum: int):
         ErrorChecker.check_team_num(teamNum)
-        ErrorChecker.check_roster_num(rosterNum)
-        return self.hud_json[self.team_roster_str(teamNum, rosterNum)]['Offensive Stats']
-    
+        ErrorChecker.check_roster_num_no_neg(rosterNum)
+        return self.roster_obj(teamNum).offensive_stats(rosterNum)
+
     def character_defensive_stats(self, teamNum: int, rosterNum: int):
         ErrorChecker.check_team_num(teamNum)
-        ErrorChecker.check_roster_num(rosterNum)
-        return self.hud_json[self.team_roster_str(teamNum, rosterNum)]['Defensive Stats']
+        ErrorChecker.check_roster_num_no_neg(rosterNum)
+        return self.roster_obj(teamNum).defensive_stats(rosterNum)
 
     def roster(self, teamNum: int) -> dict:
-        roster_dict = {}
-        for i in range(9):
-            player = self.hud_json[self.team_roster_str(teamNum, i)]
-            roster_dict[i] = {}
-            roster_dict[i]['captain'] = player['Captain']
-            roster_dict[i]['char_id'] = player['CharID']
-
-        return roster_dict
+        ro = self.roster_obj(teamNum)
+        return {i: {'captain': ro._slots[i]['Captain'], 'char_id': ro.char_id(i)} for i in range(9)}
     
     def inning_end(self) -> bool:
         return self.hud_json['Outs'] + self.hud_json['Num Outs During Play'] == 3
@@ -1947,11 +1969,7 @@ class HudObj:
         return 'In Play'
     
     def captain_index(self, teamNum: int) -> int:
-        ErrorChecker.check_team_num(teamNum)
-        for i in range(9):
-            if self.hud_json[self.team_roster_str(teamNum,i)]['Captain'] == 1:
-                return int(i)
-        raise Exception(f'No captain on teamNum {teamNum}')
+        return self.roster_obj(teamNum).captain_index()
     
     def batting_team(self):
         return self.half_inning()
