@@ -18,6 +18,7 @@ def required_team_filenames() -> list[str]:
     return [f"{name}.png" for name in in_game_team_names_list]
 
 
-def required_bat_glove_filenames() -> list[str]:
-    """Bat and glove sprites used by overlays to mark batting/pitching teams."""
-    return ["bat.png", "glove.png"]
+def required_game_icon_filenames() -> list[str]:
+    """Miscellaneous in-game icons (bat/glove for batting/pitching team
+    indicator, superstar badge, and any future game UI sprites)."""
+    return ["bat.png", "glove.png", "superstar.png"]
