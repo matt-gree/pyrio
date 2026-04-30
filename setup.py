@@ -8,9 +8,7 @@ setup(
     install_requires=[
         "numpy>=2.2.0",
         "pandas>=2.2.3",
-        "pytz>=2024.2",
         "Requests>=2.29.0",
-        "requests_cache>=1.2.1",
     ],
     extras_require={
         # The draw module is plotting-only and not imported by pyrio's
