@@ -33,19 +33,12 @@ from pathlib import Path
 from typing import Callable, Iterable, Optional
 
 from . import hit_simulation as hs
-from . import hit_sim_tables as T
+from . import rio_tags
+from .constants import game_constants as G
 from .stat_file_parser import StatObj, EventObj
 
-# Map the simulator's Batter_ContactType index to the stat-file string.
-_RECORDED_CONTACT_TYPE = {
-    T.LeftSour: "Sour - Left",
-    T.LeftNice: "Nice - Left",
-    T.Perfect: "Perfect",
-    T.RightNice: "Nice - Right",
-    T.RightSour: "Sour - Right",
-}
-
-_SUPPORTED_SWINGS = ("Slap", "Charge", "Star")
+# game Type of Swing codes that the simulator supports: 1 Slap, 2 Charge, 3 Star.
+_SUPPORTED_SWING_CODES = (1, 2, 3)
 
 
 def _ci(value) -> int:
@@ -75,8 +68,8 @@ class _FieldSpec:
 def _contact_field_specs(vel_tol: float, float_tol: float) -> list[_FieldSpec]:
     return [
         _FieldSpec("contact_type",
-                   lambda c: c["Type of Contact"],
-                   lambda r: _RECORDED_CONTACT_TYPE[r.contact_type]),
+                   lambda c: G.to_encoded(G.TYPE_OF_CONTACT, c["Type of Contact"]),
+                   lambda r: r.contact_type),
         _FieldSpec("contact_absolute",
                    lambda c: float(c["Contact Absolute"]),
                    lambda r: r.contact_absolute, tol=float_tol),
@@ -122,11 +115,18 @@ class FieldStat:
     name: str
     matches: int = 0
     total: int = 0
-    mismatches: list = field(default_factory=list)  # (game_id, event_num, recorded, computed)
+    expected: int = 0                                # known-mod exceptions (see KNOWN_MOD_EXCEPTIONS)
+    mismatches: list = field(default_factory=list)   # (game_id, event_num, recorded, computed)
+    expected_examples: list = field(default_factory=list)  # (game_id, event_num, exception_name)
 
     @property
     def rate(self) -> float:
-        return self.matches / self.total if self.total else 1.0
+        # Expected exceptions count as accounted-for, not failures.
+        return (self.matches + self.expected) / self.total if self.total else 1.0
+
+    @property
+    def failures(self) -> int:
+        return self.total - self.matches - self.expected
 
 
 @dataclass
@@ -153,19 +153,22 @@ class ValidationReport:
             mine = self._stat(name)
             mine.matches += st.matches
             mine.total += st.total
+            mine.expected += st.expected
             mine.mismatches += st.mismatches
+            mine.expected_examples += st.expected_examples
         return self
 
     def all_fields_perfect(self) -> bool:
-        return all(st.matches == st.total for st in self.fields.values())
+        return all(st.failures == 0 for st in self.fields.values())
 
     def contact_fields_perfect(self) -> bool:
         """True if the deterministic contact-stage fields all match.
 
-        Excludes the informational 'landing_*' fields, which are expected to
-        diverge (the JS trajectory model was never verified against the game).
+        Known-mod exceptions (e.g. Remove slice) are counted as expected, not
+        failures. Excludes the informational 'landing_*' fields, which are
+        expected to diverge (the JS trajectory model was never verified).
         """
-        return all(st.matches == st.total
+        return all(st.failures == 0
                    for name, st in self.fields.items()
                    if not name.startswith("landing_"))
 
@@ -177,10 +180,11 @@ class ValidationReport:
             f"skipped: {len(self.skipped)} | errors: {len(self.errors)}"
         )
         lines.append("")
-        lines.append(f"{'field':18} {'match':>12}   rate")
-        lines.append("-" * 44)
+        lines.append(f"{'field':18} {'match':>12} {'exp':>5} {'fail':>5}   rate")
+        lines.append("-" * 56)
         for name, st in self.fields.items():
-            lines.append(f"{name:18} {st.matches:>6}/{st.total:<5} {st.rate * 100:6.2f}%")
+            lines.append(f"{name:18} {st.matches:>6}/{st.total:<5} {st.expected:>5} "
+                         f"{st.failures:>5} {st.rate * 100:6.2f}%")
 
         # group skip reasons
         if self.skipped:
@@ -192,6 +196,17 @@ class ValidationReport:
             lines.append("Skipped reasons:")
             for reason, n in sorted(reasons.items(), key=lambda kv: -kv[1]):
                 lines.append(f"  {n:>4}  {reason}")
+
+        # known-mod exceptions, grouped by exception name
+        exc_counts: dict[str, int] = {}
+        for st in self.fields.values():
+            for _, _, exc_name in st.expected_examples:
+                exc_counts[exc_name] = exc_counts.get(exc_name, 0) + 1
+        if exc_counts:
+            lines.append("")
+            lines.append("Expected (known mod exceptions):")
+            for exc_name, n in sorted(exc_counts.items(), key=lambda kv: -kv[1]):
+                lines.append(f"  {n:>4}  {exc_name}")
 
         # mismatch examples per field
         flagged = [st for st in self.fields.values() if st.mismatches]
@@ -221,21 +236,110 @@ def _ball_reached_ground(contact: dict) -> bool:
     'Ball Landing Position', so those events must be excluded from any landing
     comparison.
     """
-    return contact.get("Contact Result - Secondary") != "Out-caught"
+    sec = contact.get("Contact Result - Secondary")
+    if sec is None:
+        return True
+    return G.to_encoded(G.SECONDARY_CONTACT_RESULT, sec) != 0  # 0 = Out-caught
+
+
+# ---------------------------------------------------------------- known mod exceptions
+# Some matches run gecko-code mods that change in-game behavior the vanilla
+# simulator doesn't model, so the recording legitimately diverges from the sim.
+# Each exception is gated on the mod's tag (the `name` from the ProjectRio
+# /tag/list) being active for the match, only excuses its listed fields, and
+# only for events its predicate identifies. See rio_tags.active_tags_for_stat.
+
+@dataclass(frozen=True)
+class KnownModException:
+    name: str                       # label for the report
+    tag: str                        # gecko tag name that must be active
+    fields: frozenset               # field names this exception may excuse
+    predicate: Callable             # (event, contact, result) -> bool
+
+
+def _is_slice_event(event, contact, result) -> bool:
+    """A non-line-drive star swing hit on frame 2 or 10 (the "slice").
+
+    Vanilla sends these straight up the middle (raw horizontal angle 0x400);
+    the "Remove slice" mod replaces them with foul balls, so the recorded
+    horizontal trajectory diverges from the sim.
+    """
+    swing = event.pitch_dict().get("Type of Swing")
+    if swing is None or G.to_encoded(G.TYPE_OF_SWING, swing) != 3:  # 3 = Star
+        return False
+    try:
+        frame = _ci(contact.get("Frame of Swing Upon Contact"))
+    except (TypeError, ValueError):
+        return False
+    if frame not in (2, 10):
+        return False
+    # Line-drive star swings (non-captain star type 3) don't slice.
+    batter = hs.BatterAttributes.from_name(event.batter())
+    is_line_drive_star = (batter.captain_star_hit_pitch == 0
+                          and batter.non_captain_star_swing == 3)
+    return not is_line_drive_star
+
+
+# All deterministic contact-stage field names (the toad bat-reach fix shifts the
+# whole contact, so it can affect any of them).
+_CONTACT_FIELD_NAMES = frozenset(s.name for s in _contact_field_specs(0.0, 0.0))
+
+# Non-red Toad color variants; the "Fix Non-red Toad Hitboxes and Bat Reach" mod
+# gives these Red Toad's bat reach, changing where/whether contact lands.
+_NON_RED_TOADS = frozenset({"Toad(B)", "Toad(Y)", "Toad(G)", "Toad(P)"})
+
+
+def _is_non_red_toad_batter(event, contact, result) -> bool:
+    # from_name normalizes either a name or an encoded char id to the canonical name.
+    return hs.BatterAttributes.from_name(event.batter()).name in _NON_RED_TOADS
+
+
+KNOWN_MOD_EXCEPTIONS = [
+    KnownModException(
+        name="Slice (up-the-middle star swing)",
+        tag="Remove slice",
+        fields=frozenset({"horizontal_angle", "velocity_x", "velocity_z"}),
+        predicate=_is_slice_event,
+    ),
+    KnownModException(
+        name="Non-red toad bat reach",
+        tag="Fix Non-red Toad Hitboxes and Bat Reach",
+        fields=_CONTACT_FIELD_NAMES,
+        predicate=_is_non_red_toad_batter,
+    ),
+]
+
+
+def _excused(field_name, event, contact, result, active_tags):
+    """Return the KnownModException excusing this field mismatch, or None."""
+    for exc in KNOWN_MOD_EXCEPTIONS:
+        if (exc.tag in active_tags and field_name in exc.fields
+                and exc.predicate(event, contact, result)):
+            return exc
+    return None
 
 
 def validate_statobj(stat: StatObj, *, include_landing: bool = False,
                      landing_exclude_caught: bool = True,
                      vel_tol: float = 1e-4, float_tol: float = 1e-3,
-                     landing_tol: float = 1.0,
+                     landing_tol: float = 1.0, active_tags=None,
                      report: Optional[ValidationReport] = None) -> ValidationReport:
-    """Compare every contact event in one game against the simulator."""
+    """Compare every contact event in one game against the simulator.
+
+    ``active_tags`` is the set of gecko-mod tag names active for this match (see
+    rio_tags). Mismatches attributable to an active mod (KNOWN_MOD_EXCEPTIONS)
+    are counted as expected rather than failures. If None, the match's tags are
+    resolved automatically from its TagSetID (cached); pass an empty set to skip.
+    """
     report = report or ValidationReport()
     report.files += 1
     try:
         game_id = stat.gameID()
     except Exception:
         game_id = "?"
+
+    if active_tags is None:
+        active_tags = rio_tags.active_tags_for_stat(stat)
 
     specs = _contact_field_specs(vel_tol, float_tol)
     if include_landing:
@@ -250,7 +354,8 @@ def validate_statobj(stat: StatObj, *, include_landing: bool = False,
         report.contact_events += 1
 
         swing = event.pitch_dict().get("Type of Swing")
-        if swing not in _SUPPORTED_SWINGS:
+        swing_code = G.to_encoded(G.TYPE_OF_SWING, swing) if swing is not None else None
+        if swing_code not in _SUPPORTED_SWING_CODES:
             report.skipped.append((game_id, i, f"unsupported swing: {swing!r}"))
             continue
 
@@ -276,6 +381,11 @@ def validate_statobj(stat: StatObj, *, include_landing: bool = False,
             st.total += 1
             if ok:
                 st.matches += 1
+                continue
+            exc = _excused(spec.name, event, contact, result, active_tags)
+            if exc:
+                st.expected += 1
+                st.expected_examples.append((game_id, i, exc.name))
             else:
                 st.mismatches.append((game_id, i, rec, com))
 
@@ -324,9 +434,13 @@ def main(argv=None):
     parser.add_argument("--include-caught-landing", action="store_true",
                         help="include caught balls in the landing comparison "
                              "(their recorded landing is the fielder's position)")
+    parser.add_argument("--no-tags", action="store_true",
+                        help="don't resolve match tags from the ProjectRio API; "
+                             "known-mod exceptions (e.g. Remove slice) won't be excused")
     args = parser.parse_args(argv)
     report = validate(args.path, include_landing=args.landing,
-                      landing_exclude_caught=not args.include_caught_landing)
+                      landing_exclude_caught=not args.include_caught_landing,
+                      active_tags=frozenset() if args.no_tags else None)
     print(report.summary())
     # Exit status reflects the deterministic fields only; landing is informational.
     return 0 if report.contact_fields_perfect() and not report.errors else 1

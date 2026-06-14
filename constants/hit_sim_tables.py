@@ -8,9 +8,9 @@ update them here in lockstep.
 
 This module holds only constants -- no logic. Per-character data
 (hit power, contact size, trajectories, horizontal range, trimmed bat, pitching
-height) lives in ``character_attributes_ston.csv`` / ``character_attributes_stoff.csv``
-and is joined by character NAME, never by the JS numeric char id (which does not
-match the real game -- e.g. Koopa(R)/(G) are swapped).
+height) lives in ``constants/character_attributes.csv`` and is joined by
+character NAME, never by the JS numeric char id (which does not match the real
+game -- e.g. Koopa(R)/(G) are swapped).
 """
 
 # --- Contact type enum (Batter_ContactType) ---
@@ -72,12 +72,6 @@ DEFAULT_STATIC_RANDOM_INT1 = 7769
 DEFAULT_STATIC_RANDOM_INT2 = 5359
 DEFAULT_USHORT_8089269c = 1828
 
-# Characters with the "Super Curve" hit (Curved Hits ability). The JS keys this
-# off its own char ids [0xe, 0x35, 0x25]; we key off NAME so it survives the
-# JS-vs-game id mismatch. These match the "Curved Hits" tag in the Extra column
-# of the character attribute CSVs.
-SUPER_CURVE_CHARACTERS = frozenset({"Boo", "King Boo", "Bro(B)"})
-
 # Trajectory integration constants (calculateHitGround).
 AIR_RESISTANCE = 0.996
 GRAVITY = 0.00275
@@ -137,64 +131,7 @@ BattingExtensions = [[-0.85, 0.15], [-0.35, 0.35]]
 # Super-curve factors, indexed [hasSuperCurve] -> [base, xAccel, zAccel].
 FLOAT_ARRAY_ARRAY_807b72bc = [[0.5, 0.001, 0.003], [0.25, 0.006, 0.008]]
 
-# Per-character star-swing metadata from the JS `stats` array (the CSVs lack
-# these in usable numeric form). Value is (captain_star_hit_pitch, non_captain_star_swing):
-#   captain_star_hit_pitch: 1-12 for captains (indexes the Captain* tables), 0 otherwise
-#   non_captain_star_swing: 1-3 (indexes the NonCaptain* tables)
-# Candidate to fold into the character attribute CSVs later, like Pitching Height.
-BATTER_STAR_FIELDS = {
-    "Mario": (1, 1),
-    "Luigi": (2, 2),
-    "DK": (5, 1),
-    "Diddy": (6, 2),
-    "Peach": (11, 2),
-    "Daisy": (12, 1),
-    "Yoshi": (9, 2),
-    "Baby Mario": (0, 2),
-    "Baby Luigi": (0, 2),
-    "Bowser": (7, 1),
-    "Wario": (3, 1),
-    "Waluigi": (4, 3),
-    "Koopa(R)": (0, 2),
-    "Toad(R)": (0, 1),
-    "Boo": (0, 2),
-    "Toadette": (0, 2),
-    "Shy Guy(R)": (0, 1),
-    "Birdo": (10, 1),
-    "Monty": (0, 2),
-    "Bowser Jr": (8, 1),
-    "Paratroopa(R)": (0, 2),
-    "Pianta(B)": (0, 2),
-    "Pianta(R)": (0, 1),
-    "Pianta(Y)": (0, 2),
-    "Noki(B)": (0, 2),
-    "Noki(R)": (0, 1),
-    "Noki(G)": (0, 3),
-    "Bro(H)": (0, 1),
-    "Toadsworth": (0, 3),
-    "Toad(B)": (0, 2),
-    "Toad(Y)": (0, 2),
-    "Toad(G)": (0, 2),
-    "Toad(P)": (0, 1),
-    "Magikoopa(B)": (0, 3),
-    "Magikoopa(R)": (0, 3),
-    "Magikoopa(G)": (0, 3),
-    "Magikoopa(Y)": (0, 3),
-    "King Boo": (0, 1),
-    "Petey": (0, 1),
-    "Dixie": (0, 2),
-    "Goomba": (0, 2),
-    "Paragoomba": (0, 2),
-    "Koopa(G)": (0, 1),
-    "Paratroopa(G)": (0, 3),
-    "Shy Guy(B)": (0, 2),
-    "Shy Guy(Y)": (0, 2),
-    "Shy Guy(G)": (0, 2),
-    "Shy Guy(Bk)": (0, 1),
-    "Dry Bones(Gy)": (0, 2),
-    "Dry Bones(G)": (0, 3),
-    "Dry Bones(R)": (0, 1),
-    "Dry Bones(B)": (0, 2),
-    "Bro(F)": (0, 2),
-    "Bro(B)": (0, 3),
-}
+# Star-swing codes (captain_star_hit_pitch 1-12 / 0, non_captain_star_swing 1-3)
+# now live pre-encoded in the "Captain Star Hit" / "Non-Captain Star Hit" columns
+# of constants/character_attributes.csv; their name<->code maps are
+# constants.game_constants.CAPTAIN_STAR_BALL / NON_CAPTAIN_STAR_HIT.

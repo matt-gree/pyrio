@@ -2,10 +2,11 @@
 # From a directory of stat files, creates a pitch-level data set and exports to CSV.
 
 from . import stat_file_parser
+from .constants import CHARACTER_ATTRIBUTES_CSV
+from .constants import game_constants as G
 import json
 import csv
 import os
-from pathlib import Path
 
 dataRows = []
 prevEv = {}
@@ -149,15 +150,13 @@ def pitch_rows_from_statobj(sf, include_character_attributes=False):
 
         # Optional: append character attributes
         if include_character_attributes:
-            if pitcherStarred == 0:
-                pitcher_attrs = _CHAR_ATTRS_STOFF.get(pitchingCharacter)
-            else:
-                pitcher_attrs = _CHAR_ATTRS_STON.get(pitchingCharacter)
+            pitcher_attrs = _CHAR_ATTRS.get(pitchingCharacter)
+            if pitcher_attrs and pitcherStarred != 0:
+                pitcher_attrs = G.apply_superstar_row(pitcher_attrs)
 
-            if batterStarred == 0:
-                batter_attrs = _CHAR_ATTRS_STOFF.get(battingCharacter)
-            else:
-                batter_attrs = _CHAR_ATTRS_STON.get(battingCharacter)
+            batter_attrs = _CHAR_ATTRS.get(battingCharacter)
+            if batter_attrs and batterStarred != 0:
+                batter_attrs = G.apply_superstar_row(batter_attrs)
 
             for attrs in (pitcher_attrs, batter_attrs):
                 if attrs:
@@ -208,41 +207,28 @@ BASE_HEADER = [
 ]
 
 # for option to load character attributes data if the user would like to append it to the pitch data rows.
-_CHAR_ATTRS_STOFF = None
-_CHAR_ATTRS_STON = None
+# Single star-OFF (base) table; star-ON values are derived on the fly via
+# game_constants.apply_superstar_row.
+_CHAR_ATTRS = None
 _CHAR_ATTR_COLUMNS = None
 
 def _load_character_attributes():
-    global _CHAR_ATTRS_STOFF, _CHAR_ATTRS_STON, _CHAR_ATTR_COLUMNS
+    global _CHAR_ATTRS, _CHAR_ATTR_COLUMNS
 
-    if _CHAR_ATTRS_STOFF is not None and _CHAR_ATTRS_STON is not None:
+    if _CHAR_ATTRS is not None:
         return
 
-    data_path = Path(__file__).parent / "character_attributes_stoff.csv"
-
-    attrs_stoff = {}
-    with open(data_path, newline="") as f:
+    attrs = {}
+    with open(CHARACTER_ATTRIBUTES_CSV, newline="") as f:
         reader = csv.DictReader(f)
-        _CHAR_ATTR_COLUMNS = reader.fieldnames[1:]  
+        # Append every column except the "Character" name (the join key, already
+        # present on the pitch row as pitchingCharacter / battingCharacter).
+        _CHAR_ATTR_COLUMNS = [c for c in reader.fieldnames if c != "Character"]
 
         for row in reader:
-            name = row["Character"]
-            attrs_stoff[name] = row
+            attrs[row["Character"]] = row
 
-    _CHAR_ATTRS_STOFF = attrs_stoff
-
-    data_path = Path(__file__).parent / "character_attributes_ston.csv"
-
-    attrs_ston = {}
-    with open(data_path, newline="") as f:
-        reader = csv.DictReader(f)
-        _CHAR_ATTR_COLUMNS = reader.fieldnames[1:]  
-
-        for row in reader:
-            name = row["Character"]
-            attrs_ston[name] = row
-
-    _CHAR_ATTRS_STON = attrs_ston
+    _CHAR_ATTRS = attrs
 
 def make_header(include_char_attrs=False):
     header = BASE_HEADER.copy()

@@ -9,39 +9,41 @@ Public API:
     simulate_hit(HitInputs) -> HitResult            # pure core
     simulate_hit_from_event(EventObj) -> HitResult  # stat-file adapter
 
-Character attributes are loaded by NAME from character_attributes_stoff.csv (the
-star-OFF table == the JS `stats` base values); the JS's flat +50 superstar buff
-is applied to slap/charge power (batter) and cursed ball (pitcher). This mirrors
-the calculator rather than pyrio's measured `ston` table, so the port reproduces
-the calculator/game; swap the loader to `ston` later if desired.
+Character attributes are loaded by NAME from constants/character_attributes.csv
+(the encoded star-OFF table == the JS `stats` base values). When stars_on, the
+superstar conversion (constants.game_constants.apply_superstar, a capped +50/+20
+per stat) is applied to slap/charge power (batter) and cursed ball (pitcher) --
+the same stats the JS calculator buffed, now clamped to the in-game caps.
 
 Notes / known JS quirks carried over:
   - Moonshot (`AtBat_MoonShot`) is unreachable here: the JS hardcodes
     starsForBatter = 4, so the moonshot branch (needs >= 5) never runs. Its
     undefined `AtBat_MoonShotMultiplier` therefore never matters.
-  - Super curve is keyed by character NAME (hit_sim_tables.SUPER_CURVE_CHARACTERS)
-    instead of the JS's hardcoded char ids.
+  - Super curve is read from the "Super Curve" column of the character attribute
+    CSV (derived from the "Curved Hits" Extra tag) instead of the JS's hardcoded
+    char ids.
+
+Testing status (via hit_sim_validation.py):
+    - Hit inputs, such as horizontal/vertical angle thresholds and hit power, have been spot-checked with 2 stars off stat files and they achieved 100% convergence.
+    - The hit path is not validating against the landing spot output in the stat files, even for balls that stay in-play and aren't caught by fielders.
+        - The outputs are usually close, but there are some large deviances that are concerning.
 """
 from __future__ import annotations
 
 import csv
 import math
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Optional
 
-from . import hit_sim_tables as T
+from .constants import hit_sim_tables as T
+from .constants import CHARACTER_ATTRIBUTES_CSV
+from .constants import game_constants as G
 from .stat_file_parser import EventObj
-
-_STOFF_CSV = Path(__file__).parent / "character_attributes_stoff.csv"
-_SUPERSTAR_BUFF = 50  # JS batterStarsOnIncrease / pitcherStarsOnIncrease
 
 # JS leaves AtBat_MoonShotMultiplier undefined; the branch is unreachable here
 # (starsForBatter is hardcoded 4), so this value is never actually used.
 _MOONSHOT_MULTIPLIER = 1.0
 
-_HORIZ_TRAJ = {"Mid": 0, "Pull": 1, "Push": 2}
-_VERT_TRAJ = {"Mid": 0, "High": 1, "Low": 2}
 _CONTACT_TYPE_NAMES = ["Left Sour", "Left Nice", "Perfect", "Right Nice", "Right Sour"]
 
 
@@ -93,11 +95,24 @@ _attr_rows: Optional[dict] = None
 
 
 def _load_attr_rows() -> dict:
+    """Character-attribute rows indexed by BOTH name (decoded files) and encoded
+    char id (encoded files), so a row resolves whichever identity a stat file uses.
+    """
     global _attr_rows
     if _attr_rows is None:
-        with open(_STOFF_CSV, newline="") as f:
-            _attr_rows = {row["Character"]: row for row in csv.DictReader(f)}
+        rows = {}
+        with open(CHARACTER_ATTRIBUTES_CSV, newline="") as f:
+            for row in csv.DictReader(f):
+                rows[row["Character"]] = row     # by name ("Boo")
+                rows[int(row["CharId"])] = row   # by encoded char id (0xe)
+        _attr_rows = rows
     return _attr_rows
+
+
+def _stat(row, col, stars_on):
+    """Read an integer stat, applying the superstar conversion when stars_on."""
+    value = int(row[col])
+    return G.apply_superstar(col, value) if stars_on else value
 
 
 @dataclass
@@ -119,26 +134,25 @@ class BatterAttributes:
     has_super_curve: bool
 
     @classmethod
-    def from_name(cls, name: str, stars_on: bool = False) -> "BatterAttributes":
+    def from_name(cls, name, stars_on: bool = False) -> "BatterAttributes":
+        # `name` may be a character name (decoded files) or an encoded char id.
         row = _load_attr_rows()[name]
-        buff = _SUPERSTAR_BUFF if stars_on else 0
-        cap, ncs = T.BATTER_STAR_FIELDS[name]
         return cls(
-            name=name,
-            slap_hit_power=int(row["Slap Hit Power"]) + buff,
-            charge_power=int(row["Charge Hit Power"]) + buff,
+            name=row["Character"],
+            slap_hit_power=_stat(row, "Slap Hit Power", stars_on),
+            charge_power=_stat(row, "Charge Hit Power", stars_on),
             slap_contact_size=int(row["Slap Contact Size Multiplier"]),
             charge_contact_size=int(row["Charge Contact Size Multiplier"]),
             bunting=int(row["Bunting"]),
-            horizontal_trajectory=_HORIZ_TRAJ[row["Horizontal Hit Trajectory"]],
-            vertical_trajectory=_VERT_TRAJ[row["Vertical Hit Trajectory"]],
-            captain_star_hit_pitch=cap,
-            non_captain_star_swing=ncs,
+            horizontal_trajectory=int(row["Horizontal Hit Trajectory"]),
+            vertical_trajectory=int(row["Vertical Hit Trajectory"]),
+            captain_star_hit_pitch=int(row["Captain Star Hit"]),
+            non_captain_star_swing=int(row["Non-Captain Star Hit"]),
             horizontal_range_near=float(row["Horizontal Range Near"]),
             horizontal_range_far=float(row["Horizontal Range Far"]),
             trimmed_bat=int(float(row["Trimmed Bat"])),
             pitching_height=float(row["Pitching Height"]),
-            has_super_curve=name in T.SUPER_CURVE_CHARACTERS,
+            has_super_curve=bool(int(row["Super Curve"])),
         )
 
 
@@ -148,10 +162,10 @@ class PitcherAttributes:
     cursed_ball: int
 
     @classmethod
-    def from_name(cls, name: str, stars_on: bool = False) -> "PitcherAttributes":
+    def from_name(cls, name, stars_on: bool = False) -> "PitcherAttributes":
+        # `name` may be a character name (decoded files) or an encoded char id.
         row = _load_attr_rows()[name]
-        buff = _SUPERSTAR_BUFF if stars_on else 0
-        return cls(name=name, cursed_ball=int(row["Cursed Ball"]) + buff)
+        return cls(name=row["Character"], cursed_ball=_stat(row, "Cursed Ball", stars_on))
 
 
 # ---------------------------------------------------------------- I/O structs
@@ -785,15 +799,20 @@ def simulate_hit_from_event(event: EventObj) -> HitResult:
     if not contact:
         raise ValueError(f"Event {event.event_num()} has no contact to simulate")
 
-    swing_type = pitch.get("Type of Swing")
-    if swing_type not in ("Slap", "Charge", "Star"):
-        raise ValueError(f"Unsupported swing type {swing_type!r} (bunts not supported)")
+    # Categorical fields may be decoded strings or encoded ints; coerce to codes
+    # so the simulator works against either stat-file flavor.
+    swing_code = G.to_encoded(G.TYPE_OF_SWING, pitch.get("Type of Swing"))
+    if swing_code not in (1, 2, 3):  # 1 Slap, 2 Charge, 3 Star (0 None / 4 Bunt unsupported)
+        raise ValueError(
+            f"Unsupported swing type {pitch.get('Type of Swing')!r} (bunts not supported)"
+        )
 
-    pitch_name = pitch.get("Pitch Type")
-    if pitch_name == "Curve":
+    pitch_code = G.to_encoded(G.PITCH_TYPE, pitch.get("Pitch Type"))  # 0 Curve/1 Charge/2 ChangeUp
+    if pitch_code == 0:
         pitch_type_val = 0
-    elif pitch_name == "Charge":
-        pitch_type_val = 1 if pitch.get("Charge Type") == "Slider" else 2
+    elif pitch_code == 1:
+        charge_code = G.to_encoded(G.CHARGE_PITCH_TYPE, pitch.get("Charge Type"))  # 2 Slider/3 Perfect
+        pitch_type_val = 1 if charge_code == 2 else 2
     else:
         pitch_type_val = 3
 
@@ -802,7 +821,7 @@ def simulate_hit_from_event(event: EventObj) -> HitResult:
     batter_starred = bool(event.rioStat.isStarred(batting_team, event.batter_roster_loc()))
     pitcher_starred = bool(event.rioStat.isStarred(pitching_team, event.pitcher_roster_loc()))
 
-    stick = contact.get("Input Direction - Stick", "") or ""
+    up, down, left, right = G.stick_directions(contact.get("Input Direction - Stick"))
 
     inputs = HitInputs(
         batter_name=event.batter(),
@@ -810,17 +829,17 @@ def simulate_hit_from_event(event: EventObj) -> HitResult:
         pitch_type_val=pitch_type_val,
         pos_x=pitch.get("Bat Contact Pos - X"),
         ball_x=contact.get("Ball Contact Pos - X"),
-        batter_hand=T.Righty if event.batter_hand() == "Right" else T.Lefty,
-        swing=T.Charge if swing_type == "Charge" else T.Slap,
-        is_star=swing_type == "Star",
+        batter_hand=G.to_encoded(G.HAND, event.batter_hand()),  # 0 Right/1 Left == T.Righty/T.Lefty
+        swing=T.Charge if swing_code == 2 else T.Slap,
+        is_star=swing_code == 3,
         charge_up=float(contact.get("Charge Power Up", 0.0)),
         charge_down=float(contact.get("Charge Power Down", 0.0)),
         chem_links=event.chem_links_on_base(),
         frame=_int_no_commas(contact.get("Frame of Swing Upon Contact")),
-        input_up="Up" in stick,
-        input_down="Down" in stick,
-        input_left="Left" in stick,
-        input_right="Right" in stick,
+        input_up=up,
+        input_down=down,
+        input_left=left,
+        input_right=right,
         easy_batting=False,  # not recorded in stat files
         batter_stars_on=batter_starred,
         pitcher_stars_on=pitcher_starred,
