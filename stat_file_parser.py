@@ -107,6 +107,15 @@ class RosterObj:
         ErrorChecker.check_roster_num_no_neg(rosterNum)
         return self._slots[rosterNum]['Batting Hand']
 
+    def fielding_position(self, rosterNum: int):
+        """Defensive position for this roster slot (e.g. "SS", "1B").
+
+        Present in HUD files (and stat files post-positions update). Returns
+        None when absent so callers can fall back gracefully.
+        """
+        ErrorChecker.check_roster_num_no_neg(rosterNum)
+        return self._slots[rosterNum].get('Fielding Position')
+
 
 # create stat obj
 class StatObj:
@@ -1970,10 +1979,80 @@ class HudObj:
     
     def captain_index(self, teamNum: int) -> int:
         return self.roster_obj(teamNum).captain_index()
-    
+
+    def fielding_positions(self, teamNum: int) -> list:
+        """List of 9 defensive positions (strings) indexed by roster slot."""
+        ro = self.roster_obj(teamNum)
+        return [ro.fielding_position(i) for i in range(9)]
+
+    def defensive_diamond(self, teamNum: int) -> list:
+        """Roster slots arranged onto the defensive diamond.
+
+        The roster is stored in batting order; each slot carries a "Fielding
+        Position" abbreviation. This inverts that into a position-indexed list
+        of length 9 where the index is the diamond position
+        (0=P, 1=C, 2=1B, 3=2B, 4=3B, 5=SS, 6=LF, 7=CF, 8=RF) and the value is
+        the roster slot occupying it, or None if unfilled. Slots whose position
+        is missing/"Inv"/"None" (e.g. a designated extra) are dropped.
+        """
+        ro = self.roster_obj(teamNum)
+        diamond = [None] * 9
+        for slot in range(9):
+            idx = LookupDicts.POSITION_INDEX.get(ro.fielding_position(slot))
+            if idx is not None:
+                diamond[idx] = slot
+        return diamond
+
+    def logo(self, teamNum: int):
+        """In-game team-banner name for the side (independent of roster)."""
+        ErrorChecker.check_team_num(teamNum)
+        return self.hud_json.get('Away Logo' if teamNum == 0 else 'Home Logo')
+
+    def port(self, teamNum: int):
+        """Controller port (0-indexed) assigned to the side, or None."""
+        ErrorChecker.check_team_num(teamNum)
+        return self.hud_json.get('Away Port' if teamNum == 0 else 'Home Port')
+
+    def inning_scores(self, teamNum: int) -> list:
+        """Per-inning run totals for the side."""
+        ErrorChecker.check_team_num(teamNum)
+        return self.hud_json.get(
+            'Away Inning Scores' if teamNum == 0 else 'Home Inning Scores', []
+        ) or []
+
+    def batter_roster_location_for(self, teamNum: int):
+        """Each side's current/due-up batter roster slot (HUD tracks both)."""
+        ErrorChecker.check_team_num(teamNum)
+        return self.hud_json.get(
+            'Away Batter Roster Loc' if teamNum == 0 else 'Home Batter Roster Loc'
+        )
+
+    def tag_set_id(self):
+        return self.hud_json.get('TagSetID')
+
+    def stadium(self):
+        return self.hud_json.get('StadiumID')
+
+    def innings_selected(self):
+        return self.hud_json.get('Innings Selected')
+
+    def first_batting_team(self):
+        return self.hud_json.get('First Batting Team')
+
+    def game_id(self):
+        return self.hud_json.get('GameID')
+
+    def runner_roster_location(self, base: int):
+        """Roster slot of the runner on the given base (1-3), or -1 if empty."""
+        runner = self.hud_json.get(f'Runner {base}B')
+        if runner and isinstance(runner, dict):
+            loc = runner.get('Runner Roster Loc')
+            return loc if loc is not None else -1
+        return -1
+
     def batting_team(self):
         return self.half_inning()
-    
+
     def fielding_team(self):
         return abs(self.half_inning()-1)
 

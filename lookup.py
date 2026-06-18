@@ -96,6 +96,62 @@ class LookupDicts:
         6: "Toy Field"
     }
 
+    # Team logo id -> in-game team name. The logo is the team-banner art chosen
+    # in-game; it is independent of the roster-derived team name (which the
+    # team_name_algo computes) because players can deliberately pick a banner
+    # that doesn't match their roster. HUD files store the name string directly;
+    # the API ongoing-games feed stores this integer id.
+    LOGO = {
+        0:  "Mario Sunshines",
+        1:  "Mario All Stars",
+        2:  "Mario Fireballs",
+        3:  "Mario Heroes",
+        4:  "Luigi Mansioneers",
+        5:  "Luigi Leapers",
+        6:  "Luigi Vacuums",
+        7:  "Luigi Gentlemen",
+        8:  "Peach Monarchs",
+        9:  "Peach Princesses",
+        10: "Peach Dynasties",
+        11: "Peach Roses",
+        12: "Daisy Queen Bees",
+        13: "Daisy Petals",
+        14: "Daisy Cupids",
+        15: "Daisy Lillies",
+        16: "Yoshi Islanders",
+        17: "Yoshi Flutters",
+        18: "Yoshi Speed Stars",
+        19: "Yoshi Eggs",
+        20: "Birdo Bows",
+        21: "Birdo Fans",
+        22: "Birdo Models",
+        23: "Birdo Beauties",
+        24: "Wario Greats",
+        25: "Wario Beasts",
+        26: "Wario Steakheads",
+        27: "Wario Garlics",
+        28: "Waluigi Flankers",
+        29: "Waluigi Mashers",
+        30: "Waluigi Smart Alecks",
+        31: "Waluigi Mystiques",
+        32: "DK Kongs",
+        33: "DK Animals",
+        34: "DK Wild Ones",
+        35: "DK Explorers",
+        36: "Diddy Tails",
+        37: "Diddy Red Caps",
+        38: "Diddy Ninjas",
+        39: "Diddy Survivors",
+        40: "Bowser Monsters",
+        41: "Bowser Black Stars",
+        42: "Bowser Blue Shells",
+        43: "Bowser Flames",
+        44: "Jr Pixies",
+        45: "Jr Rookies",
+        46: "Jr Bombers",
+        47: "Jr Fangs",
+    }
+
     CONTACT_TYPE = {
         255: "Miss",
         0: "Sour - Left",
@@ -165,6 +221,14 @@ class LookupDicts:
         8: "RF",
         255: "Inv",
         None: "None"
+    }
+
+    # Inverse of the nine real fielding positions: abbreviation -> diamond
+    # index (0=P .. 8=RF). Excludes the sentinel "Inv"/"None" entries so callers
+    # building a position-indexed diamond only see the playable nine.
+    POSITION_INDEX = {
+        "P": 0, "C": 1, "1B": 2, "2B": 3, "3B": 4,
+        "SS": 5, "LF": 6, "CF": 7, "RF": 8,
     }
 
     FIELDER_ACTIONS = {
