@@ -1,4 +1,4 @@
-# project_rio_lib
+# pyrio
 Library containing classes and functions to interact with Project Rio statfiles, web API, etc.
 
 ## lookup.py
