@@ -1,5 +1,7 @@
 __pycache__/
 *.egg-info/
+.venv/
+venv/
 api_cache.sqlite
 my_data.db
 .env

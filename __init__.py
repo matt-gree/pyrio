@@ -1,5 +1,8 @@
 # Stat file parsing
-from .stat_file_parser import StatObj, EventSearch, EventObj, HudObj
+from .stat_file_parser import (
+    StatObj, EventSearch, EventObj, HudObj,
+    load_stat_file, iter_stat_files,
+)
 
 # Lookup tables and translation
 from .lookup import (

@@ -1,7 +1,13 @@
 from __future__ import annotations
-from .lookup import LookupDicts
+
+import fnmatch
+import json
+import warnings
 from datetime import datetime
-from typing import Optional, Union
+from pathlib import Path
+from typing import Iterator, Optional, Union
+
+from .lookup import LookupDicts
 
 '''
 Intended to parse "decoded" files which would be present on a user's computer
@@ -74,6 +80,13 @@ class StatObj:
     def gameID(self) -> int:
         # returns it in int form
         return int(self.statJson["GameID"].replace(',', ''), 16)
+
+    def game_mode(self) -> int:
+        """Game mode id for this game (the stat file's raw TagSetID).
+
+        Resolve to a human-readable mode/community name via CompleterCache.
+        """
+        return self.statJson["TagSetID"]
 
     # should look to convert to unix or some other standard date fmt
     def startDate(self) -> datetime:
@@ -2052,6 +2065,47 @@ class HudObj:
       }
     },
     '''
+
+# ---------------------------------------------------------------------------
+# Stat-file loaders
+#
+# Entry points for reading decoded stat files off disk into StatObj instances.
+# When this module is split into a `stat_file/` subpackage, these belong in
+# `stat_file/loaders.py` -- the view classes above stay pure / I/O-free.
+# ---------------------------------------------------------------------------
+
+def load_stat_file(path: Union[str, Path]) -> StatObj:
+    """Read a single decoded stat-file JSON from disk and wrap it in a StatObj."""
+    with open(path, "r") as f:
+        return StatObj(json.load(f))
+
+
+def iter_stat_files(
+    directory: Union[str, Path],
+    pattern: str = "*decoded*",
+    skip_errors: bool = False,
+) -> Iterator[StatObj]:
+    """Yield a StatObj for each decoded stat file in ``directory``.
+
+    pattern: filename glob selecting stat files (default matches Rio's
+        ``decoded`` naming). Pass ``"*"`` to load every file.
+    skip_errors: if True, unreadable or malformed files are warned about and
+        skipped instead of raising.
+    """
+    directory = Path(directory)
+    for path in sorted(directory.iterdir()):
+        if not path.is_file():
+            continue
+        if not fnmatch.fnmatch(path.name, pattern):
+            continue
+        try:
+            yield load_stat_file(path)
+        except (OSError, json.JSONDecodeError) as exc:
+            if skip_errors:
+                warnings.warn(f"Skipping stat file {path.name}: {exc}")
+                continue
+            raise
+
 
 if __name__ == '__main__':
     print({value: set() for value in LookupDicts.FINAL_RESULT.values()})
