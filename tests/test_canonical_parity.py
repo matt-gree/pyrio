@@ -36,12 +36,13 @@ CANON_TO_PYRIO = {
     "cPrimaryContactResult": "PRIMARY_CONTACT_RESULT",
     "cSecondaryContactResult": "SECONDARY_CONTACT_RESULT",
     "cAtBatResult": "FINAL_RESULT",
+    "cManualSelectDecode": "MANUAL_SELECT",
 }
 
-# Deliberately NOT compared: the similarly-named canonical map describes a
-# different field than the pyrio dict.
-#   cInputDirectionToHR (None/Towards/Away) vs INPUT_DIRECTION (stick bitmask)
-#   cManualSelectDecode (selected fielder)  vs MANUAL_SELECT (selection state)
+# INPUT_DIRECTION is NOT compared here: it mirrors the C++ "StickVec" decoder
+# (a computed 0-15 bitmask), not a header std::map -- it is checked directly in
+# test_lookup_values.py. The header's cInputDirectionToHR is a *different* field
+# (Input Direction - Push/Pull: None/Towards/Away), which pyrio has no dict for.
 
 
 def _find_header():

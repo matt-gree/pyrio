@@ -129,6 +129,7 @@ class LookupDicts:
         9: "Left+Up",
         10: "Right+Up",
         11: "Left+Right+Up",
+        12: "Down+Up",
         13: "Left+Down+Up",
         14: "Right+Down+Up",
         15: "Left+Right+Down+Up"
@@ -260,9 +261,10 @@ class LookupDicts:
 
     MANUAL_SELECT = {
         0: "No Selected Char",
-        1: "Selected Other Char",
-        2: "Selected This Char",
-        None: "None"
+        1: "Pitcher",
+        2: "Catcher",
+        3: "Closest to Ball",
+        4: "Closest to Drop",
     }
 
     SIMPLIFIED_NAME = {

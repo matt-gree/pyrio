@@ -1,6 +1,6 @@
 import pytest
 
-from pyrio import Character, LookupValue, Lookup, Stadium
+from pyrio import Character, LookupValue, Lookup, Stadium, LookupDicts
 
 
 def test_value_to_value_equality_only():
@@ -73,3 +73,20 @@ def test_lookup_stadium_by_id_name_and_legacy():
 def test_lookup_stadium_rejects_unknown():
     with pytest.raises(ValueError):
         Lookup.stadium("Not A Stadium")
+
+
+def test_input_direction_matches_stickvec_bitmask():
+    # Canonical "StickVec" decoder: 0x1 Left, 0x2 Right, 0x4 Down, 0x8 Up, '+'-joined.
+    def stickvec(value):
+        parts = []
+        if value & 0x1:
+            parts.append("Left")
+        if value & 0x2:
+            parts.append("Right")
+        if value & 0x4:
+            parts.append("Down")
+        if value & 0x8:
+            parts.append("Up")
+        return "+".join(parts)
+
+    assert LookupDicts.INPUT_DIRECTION == {v: stickvec(v) for v in range(16)}
