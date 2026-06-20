@@ -9,6 +9,7 @@
 import csv
 import os
 import sys
+from dataclasses import dataclass
 
 import pandas as pd
 
@@ -413,6 +414,70 @@ def simplified_name_groups() -> dict[str, list[str]]:
 
 
 # -------------------------------------------------------------------------
+# Value objects
+# -------------------------------------------------------------------------
+
+@dataclass(frozen=True, eq=False, repr=False)
+class LookupValue:
+    """An id paired with its canonical name.
+
+    Behaves like its integer id under ``int()``, indexing, and ``==`` against an
+    int, and like its name under ``str()`` -- so it stays drop-in compatible
+    with code that previously received a raw id.
+    """
+    id: int
+    name: str
+
+    def __int__(self) -> int:
+        return self.id
+
+    def __index__(self) -> int:
+        return self.id
+
+    def __str__(self) -> str:
+        return self.name
+
+    def __repr__(self) -> str:
+        return f"{type(self).__name__}({self.id!r}, {self.name!r})"
+
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, LookupValue):
+            return type(self) is type(other) and self.id == other.id
+        if isinstance(other, bool):
+            return NotImplemented
+        if isinstance(other, int):
+            return self.id == other
+        return NotImplemented
+
+    def __hash__(self) -> int:
+        return hash(self.id)
+
+
+class Character(LookupValue):
+    """A Mario Superstar Baseball character: char id plus canonical name."""
+
+    @property
+    def name_no_variant(self) -> str:
+        """Name without the colour/variant suffix, e.g. 'Pianta(R)' -> 'Pianta'."""
+        return LookupDicts.SIMPLIFIED_NAME.get(self.name, self.name)
+
+    @property
+    def hex(self) -> str:
+        """Char id as a hex string, e.g. '0x15'."""
+        return hex(self.id)
+
+    @property
+    def char_class(self) -> str | None:
+        """Class ('Balance', 'Power', 'Speed', 'Technique'), or None if unknown."""
+        return LookupDicts.CHAR_CLASS.get(self.name_no_variant)
+
+    @property
+    def is_captain(self) -> bool:
+        """Whether this character can captain a team."""
+        return self.name_no_variant in CAPTAINS
+
+
+# -------------------------------------------------------------------------
 # Lookup class and module-level function
 # -------------------------------------------------------------------------
 
@@ -463,6 +528,19 @@ class Lookup:
     @staticmethod
     def translate_values(dictionary, values):
         return Lookup.lookup(dictionary, values)
+
+    @staticmethod
+    def character(search_term: int | str) -> "Character":
+        """Resolve a char id or name (any alias) to a Character value object."""
+        if isinstance(search_term, str) and not search_term.isdigit():
+            name = userInputToCharacter(search_term)  # raises ValueError if unknown
+            char_id = Lookup.lookup(LookupDicts.CHAR_NAME, name)
+        else:
+            char_id = int(search_term)
+            name = Lookup.lookup(LookupDicts.CHAR_NAME, char_id)
+            if not isinstance(name, str) or name.startswith("Invalid"):
+                raise ValueError(f"Unknown character id: {search_term!r}")
+        return Character(char_id, name)
 
     @staticmethod
     def create_translated_columns(df: pd.DataFrame) -> pd.DataFrame:

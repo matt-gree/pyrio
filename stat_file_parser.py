@@ -7,7 +7,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Iterator, Optional, Union
 
-from .lookup import LookupDicts
+from .lookup import LookupDicts, Lookup, Character
 
 '''
 Intended to parse "decoded" files which would be present on a user's computer
@@ -213,20 +213,26 @@ class StatObj:
             rosterDict[x] = self.statJson["Character Game Stats"][self.getTeamString(teamNum, x)]["CharID"]
         return rosterDict
 
-    def characterName(self, teamNum: int, rosterNum: int = -1) -> Union[str, list[str]]:
-        # returns name of specified character
-        # if no roster spot is provided, returns a list of characters on a given team
-        # teamNum: 0 == home team, 1 == away team
-        # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
+    def character(self, teamNum: int, rosterNum: int = -1) -> Character | list[Character]:
+        """Character(s) on a team as Character value objects.
+
+        With no rosterNum, returns all 9 roster spots as a list. Each Character
+        behaves like its char id under int()/== and its name under str().
+        teamNum: 0 == home team, 1 == away team
+        rosterNum: 0 -> 8 for each roster spot, or -1 (default) for the whole team
+        """
         ErrorChecker.check_team_num(teamNum)
         ErrorChecker.check_roster_num(rosterNum)
         if rosterNum == -1:
-            charList = []
-            for x in range(0, 9):
-                charList.append(self.statJson["Character Game Stats"][self.getTeamString(teamNum, x)]["CharID"])
-            return charList
-        else:
-            return self.statJson["Character Game Stats"][self.getTeamString(teamNum, rosterNum)]["CharID"]
+            return [
+                Lookup.character(self.statJson["Character Game Stats"][self.getTeamString(teamNum, x)]["CharID"])
+                for x in range(0, 9)
+            ]
+        return Lookup.character(self.statJson["Character Game Stats"][self.getTeamString(teamNum, rosterNum)]["CharID"])
+
+    def characterName(self, teamNum: int, rosterNum: int = -1) -> Character | list[Character]:
+        """Deprecated alias for character(); returns Character value object(s)."""
+        return self.character(teamNum, rosterNum)
 
     def isStarred(self, teamNum: int, rosterNum: int = -1) -> bool:
         # returns if a character is starred
@@ -1506,20 +1512,20 @@ class EventObj():
     def pitcher_roster_loc(self) -> int:
         return self.eventDict['Pitcher Roster Loc']
     
-    def pitcher(self) -> str:
-        return self.rioStat.characterName(self.pitching_team(), self.eventDict['Pitcher Roster Loc'])
+    def pitcher(self) -> Character:
+        return self.rioStat.character(self.pitching_team(), self.eventDict['Pitcher Roster Loc'])
     
     def batter_roster_loc(self) -> int:
         return self.eventDict['Batter Roster Loc']
         
-    def batter(self) -> str:
-        return self.rioStat.characterName(self.batting_team(), self.eventDict['Batter Roster Loc'])
+    def batter(self) -> Character:
+        return self.rioStat.character(self.batting_team(), self.eventDict['Batter Roster Loc'])
     
     def batter_hand(self) -> int:
         return self.rioStat.battingHand(self.batting_team(), self.eventDict['Batter Roster Loc'])
     
-    def catcher(self) -> str:
-        return self.rioStat.characterName(self.batting_team(), self.eventDict['Catcher Roster Loc'])
+    def catcher(self) -> Character:
+        return self.rioStat.character(self.batting_team(), self.eventDict['Catcher Roster Loc'])
     
     def rbi(self) -> int:
         # returns the rbi from a specified event
