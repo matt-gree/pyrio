@@ -107,8 +107,8 @@ class LookupDicts:
     }
 
     HAND = {
-        0: "Left",
-        1: "Right"
+        0: "Right",
+        1: "Left"
     }
 
     HAND_BOOL = {
@@ -189,7 +189,7 @@ class LookupDicts:
         1: "Ready",
         2: "Normal",
         3: "Perfect",
-        55: "None"
+        255: "None"
     }
 
     OUT_TYPE = {
@@ -224,7 +224,8 @@ class LookupDicts:
         0: "Out-caught",
         1: "Out-force",
         2: "Out-tag",
-        3: "foul",
+        3: "Foul",
+        4: "Batter safe, runner out",
         7: "Single",
         8: "Double",
         9: "Triple",
@@ -354,6 +355,58 @@ class LookupDicts:
         'Goomba': 'Balance',
         'Paragoomba': 'Speed',
         'Dry Bones': 'Technique',
+    }
+
+    # Logo id -> team name (canonical cLogoIdToTeamName).
+    TEAM_NAME = {
+        0: "Mario Sunshines",
+        1: "Mario All Stars",
+        2: "Mario Fireballs",
+        3: "Mario Heroes",
+        4: "Luigi Mansioneers",
+        5: "Luigi Leapers",
+        6: "Luigi Vacuums",
+        7: "Luigi Gentlemen",
+        8: "Peach Monarchs",
+        9: "Peach Princesses",
+        10: "Peach Dynasties",
+        11: "Peach Roses",
+        12: "Daisy Queen Bees",
+        13: "Daisy Petals",
+        14: "Daisy Cupids",
+        15: "Daisy Lillies",
+        16: "Yoshi Islanders",
+        17: "Yoshi Flutters",
+        18: "Yoshi Speed Stars",
+        19: "Yoshi Eggs",
+        20: "Birdo Bows",
+        21: "Birdo Fans",
+        22: "Birdo Models",
+        23: "Birdo Beauties",
+        24: "Wario Greats",
+        25: "Wario Beasts",
+        26: "Wario Steakheads",
+        27: "Wario Garlics",
+        28: "Waluigi Flankers",
+        29: "Waluigi Mashers",
+        30: "Waluigi Smart Alecks",
+        31: "Waluigi Mystiques",
+        32: "DK Kongs",
+        33: "DK Animals",
+        34: "DK Wild Ones",
+        35: "DK Explorers",
+        36: "Diddy Tails",
+        37: "Diddy Red Caps",
+        38: "Diddy Ninjas",
+        39: "Diddy Survivors",
+        40: "Bowser Monsters",
+        41: "Bowser Black Stars",
+        42: "Bowser Blue Shells",
+        43: "Bowser Flames",
+        44: "Jr Pixies",
+        45: "Jr Rookies",
+        46: "Jr Bombers",
+        47: "Jr Fangs",
     }
 
 
