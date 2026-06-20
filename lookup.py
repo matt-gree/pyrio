@@ -421,17 +421,15 @@ def simplified_name_groups() -> dict[str, list[str]]:
 class LookupValue:
     """An id paired with its canonical name.
 
-    Behaves like its integer id under ``int()``, indexing, and ``==`` against an
-    int, and like its name under ``str()`` -- so it stays drop-in compatible
-    with code that previously received a raw id.
+    Equality is value-to-value only: a value object equals another of the same
+    type with the same id, and is never equal to a raw int or str. Compare
+    ``.id`` / ``.name`` (or another value object) instead. ``int()`` yields the
+    id and ``str()`` yields the name as explicit, unambiguous conversions.
     """
     id: int
     name: str
 
     def __int__(self) -> int:
-        return self.id
-
-    def __index__(self) -> int:
         return self.id
 
     def __str__(self) -> str:
@@ -443,14 +441,10 @@ class LookupValue:
     def __eq__(self, other: object) -> bool:
         if isinstance(other, LookupValue):
             return type(self) is type(other) and self.id == other.id
-        if isinstance(other, bool):
-            return NotImplemented
-        if isinstance(other, int):
-            return self.id == other
         return NotImplemented
 
     def __hash__(self) -> int:
-        return hash(self.id)
+        return hash((type(self).__name__, self.id))
 
 
 class Character(LookupValue):
