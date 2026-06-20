@@ -7,7 +7,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Iterator, Optional, Union
 
-from .lookup import LookupDicts, Lookup, Character
+from .lookup import LookupDicts, Lookup, Character, Stadium
 
 '''
 Intended to parse "decoded" files which would be present on a user's computer
@@ -98,17 +98,9 @@ class StatObj:
     def version(self) -> str:
         return self.statJson.get('Version', 'Pre 0.1.7')
 
-    def stadium(self) -> str:
+    def stadium(self) -> Stadium:
         # returns the stadium that was played on
-        old_stadium_names = {
-            "Bowser's Castle": "Bowser Castle",
-            "Wario's Palace": "Wario Palace",
-            "Yoshi's Island": "Yoshi Park",
-            "Peach's Garden": "Peach Garden",
-            "DK's Jungle":  "DK Jungle"
-        }
-        
-        return old_stadium_names.get(self.statJson["StadiumID"], self.statJson["StadiumID"])
+        return Lookup.stadium(self.statJson["StadiumID"])
     
     def teamNumVersionCorrection(self, teamNum: int) -> int:
         # For Project Rio versions pre 1.9.2

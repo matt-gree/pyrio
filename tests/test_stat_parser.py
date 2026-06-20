@@ -1,7 +1,7 @@
 import pathlib
 
 import pyrio
-from pyrio import StatObj, Character
+from pyrio import StatObj, Character, Stadium
 
 FIXTURES = pathlib.Path(__file__).parent / "fixtures"
 ENCODED = FIXTURES / "20260618T191655_SpiceOrange-Vs-MattGree_3896251267.json"
@@ -43,3 +43,9 @@ def test_character_accessor_is_source_agnostic():
     assert enc.character(0, 0) == Character(2, "DK")
     # whole roster matches across both representations
     assert enc.character(0) == dec.character(0)
+
+
+def test_stadium_accessor_is_source_agnostic():
+    enc = pyrio.load_stat_file(ENCODED)   # StadiumID stored as int 1
+    dec = pyrio.load_stat_file(DECODED)   # StadiumID stored as "Bowser Castle"
+    assert enc.stadium() == dec.stadium() == Stadium(1, "Bowser Castle")

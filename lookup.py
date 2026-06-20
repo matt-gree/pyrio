@@ -471,6 +471,20 @@ class Character(LookupValue):
         return self.name_no_variant in CAPTAINS
 
 
+class Stadium(LookupValue):
+    """A Mario Superstar Baseball stadium."""
+
+
+# Legacy decoded stadium names -> canonical names.
+_OLD_STADIUM_NAMES = {
+    "Bowser's Castle": "Bowser Castle",
+    "Wario's Palace": "Wario Palace",
+    "Yoshi's Island": "Yoshi Park",
+    "Peach's Garden": "Peach Garden",
+    "DK's Jungle": "DK Jungle",
+}
+
+
 # -------------------------------------------------------------------------
 # Lookup class and module-level function
 # -------------------------------------------------------------------------
@@ -535,6 +549,38 @@ class Lookup:
             if not isinstance(name, str) or name.startswith("Invalid"):
                 raise ValueError(f"Unknown character id: {search_term!r}")
         return Character(char_id, name)
+
+    @staticmethod
+    def _value(dictionary, search_term, value_cls):
+        """Resolve an id or name to a value_cls value object.
+
+        Accepts the canonical int id or the name string (so it absorbs the
+        encoded-vs-decoded difference). None passes through as None.
+        """
+        if search_term is None:
+            return None
+        if isinstance(search_term, bool):
+            raise ValueError(f"Unknown {value_cls.__name__}: {search_term!r}")
+        d = _resolve_dict(dictionary)
+        if isinstance(search_term, int):
+            id_ = search_term
+        elif isinstance(search_term, str) and search_term.isdigit():
+            id_ = int(search_term)
+        else:
+            id_ = Lookup._single_lookup(d, search_term)
+            if not isinstance(id_, int):
+                raise ValueError(f"Unknown {value_cls.__name__}: {search_term!r}")
+        name = Lookup._single_lookup(d, id_)
+        if not isinstance(name, str) or name.startswith("Invalid"):
+            raise ValueError(f"Unknown {value_cls.__name__} id: {search_term!r}")
+        return value_cls(id_, name)
+
+    @staticmethod
+    def stadium(search_term: int | str) -> "Stadium":
+        """Resolve a stadium id or name (incl. legacy names) to a Stadium."""
+        if isinstance(search_term, str):
+            search_term = _OLD_STADIUM_NAMES.get(search_term, search_term)
+        return Lookup._value(LookupDicts.STADIUM, search_term, Stadium)
 
     @staticmethod
     def create_translated_columns(df: pd.DataFrame) -> pd.DataFrame:

@@ -9,7 +9,7 @@ from .lookup import (
     Lookup, LookupDicts, CAPTAINS,
     lookup, list_dicts, simplified_name_groups,
     userInputToCharacter, is_captain,
-    LookupValue, Character,
+    LookupValue, Character, Stadium,
 )
 
 # API parameter lists and endpoint constants

@@ -1,6 +1,6 @@
 import pytest
 
-from pyrio import Character, LookupValue, Lookup
+from pyrio import Character, LookupValue, Lookup, Stadium
 
 
 def test_value_to_value_equality_only():
@@ -59,3 +59,17 @@ def test_lookup_character_rejects_unknown():
         Lookup.character("not a character")
     with pytest.raises(ValueError):
         Lookup.character(999)
+
+
+def test_lookup_stadium_by_id_name_and_legacy():
+    s = Lookup.stadium(1)
+    assert isinstance(s, Stadium)
+    assert s.id == 1 and s.name == "Bowser Castle"
+    assert Lookup.stadium("Bowser Castle") == s        # by name
+    assert Lookup.stadium("Bowser's Castle") == s      # legacy name alias
+    assert Lookup.stadium("1") == s                    # digit string
+
+
+def test_lookup_stadium_rejects_unknown():
+    with pytest.raises(ValueError):
+        Lookup.stadium("Not A Stadium")
