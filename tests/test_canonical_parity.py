@@ -90,3 +90,49 @@ def test_lookupdict_matches_canonical(canon_name, pyrio_name):
             if canon.get(k) != py_int.get(k)
         ]
         pytest.fail(f"{pyrio_name} diverges from canonical {canon_name}:\n" + "\n".join(lines))
+
+
+# --- field-name (schema) parity ---------------------------------------------
+
+def _canonical_field_names():
+    """Field names MSB_StatTracker emits (hardcoded JSON writes + TrackerValue names)."""
+    fields = set(re.findall(r'Tracker(?:Value|Adr)<[^>]*>\("([^"]+)"', HEADER.read_text()))
+    cpp = HEADER.with_suffix(".cpp")
+    if cpp.is_file():
+        fields |= set(re.findall(r'\\"([A-Z][^"\\]+)\\"\s*:', cpp.read_text()))
+    return fields
+
+
+def _pyrio_field_literals():
+    """Explicit field names read off the stat/HUD JSON containers.
+
+    Restricted to accesses on the raw-data objects (statJson/hud_json/eventDict/
+    runner_json and the *_dict() views) so it doesn't pick up pyrio's own output
+    dicts or value-string literals. Conservative: nested accesses (e.g. CharID
+    on a sub-dict) may be missed, which is fine for a subset guard.
+    """
+    pkg = pathlib.Path(__file__).resolve().parent.parent / "stat_file"
+    containers = r"(?:statJson|hud_json|eventDict|runner_json|pitch_dict\(\)|contact_dict\(\)|first_fielder_dict\(\))"
+    pattern = containers + r"\s*(?:\[\s*|\.get\(\s*)['\"]([^'\"{}]+)['\"]"
+    lits = set()
+    for p in pkg.glob("*.py"):
+        lits |= set(re.findall(pattern, p.read_text()))
+    return lits
+
+
+# Real fields the C++ emits via a constructed key ("Runner {n}B"), so they are
+# not literal in the header/cpp even though they exist in the files.
+_FIELD_ALLOWLIST: set[str] = {"Runner 1B", "Runner 2B", "Runner 3B"}
+
+
+def test_pyrio_fields_are_canonical():
+    """Every field the parser reads must exist in MSB_StatTracker (catches renames)."""
+    canonical = _canonical_field_names()
+    unknown = sorted(
+        k for k in _pyrio_field_literals()
+        if k not in canonical and k not in _FIELD_ALLOWLIST
+    )
+    assert not unknown, (
+        "parser reads fields absent from canonical MSB_StatTracker "
+        "(field rename/typo, or add to _FIELD_ALLOWLIST):\n  " + "\n  ".join(unknown)
+    )
