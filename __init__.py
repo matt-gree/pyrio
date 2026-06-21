@@ -51,4 +51,5 @@ from .glicko_calculator import glicko2_win_probability
 
 # Hit simulator (deterministic port of the MSSB batting calculator)
 from .hit_simulation import simulate_hit, simulate_hit_from_event, HitInputs, HitResult
+from .hit_sim_validation import validate_statobj
 from . import hit_analysis, stadiums

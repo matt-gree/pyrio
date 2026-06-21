@@ -2,6 +2,7 @@ import pathlib
 
 import pyrio
 from pyrio import simulate_hit_from_event
+from pyrio.hit_sim_validation import validate_statobj
 from pyrio.stat_file_parser import EventObj
 
 FIXTURES = pathlib.Path(__file__).parent / "fixtures"
@@ -9,39 +10,35 @@ DECODED = FIXTURES / "decoded.20260618T191655_SpiceOrange-Vs-MattGree_3896251267
 ENCODED = FIXTURES / "20260618T191655_SpiceOrange-Vs-MattGree_3896251267.json"
 
 
-def _contact_event_indices(sf):
-    out = []
+def _first_contact_index(sf):
     for i, ev in enumerate(sf.events()):
         pitch = ev.get("Pitch", {})
         if pitch.get("Contact") and pitch.get("Type of Swing") in ("Slap", "Charge", "Star"):
-            out.append(i)
-    return out
+            return i
+    raise AssertionError("no contact event in fixture")
 
 
-def test_sim_reproduces_recorded_contact():
+def test_simulate_hit_from_event_returns_result():
     sf = pyrio.load_stat_file(DECODED)
-    idxs = _contact_event_indices(sf)
-    assert len(idxs) > 50  # a real game's worth of contacts
-    events = sf.events()
-    angle_matches = 0
-    for i in idxs:
-        contact = events[i]["Pitch"]["Contact"]
-        result = simulate_hit_from_event(EventObj(sf, i))
-        # the contact stage is deterministic from the RNG seeds -> exact
-        assert abs(result.contact_absolute - float(contact["Contact Absolute"])) < 1e-2
-        assert abs(result.contact_quality - float(contact["Contact Quality"])) < 1e-3
-        if result.horizontal_angle == int(str(contact["Horiz Angle"]).replace(",", "")):
-            angle_matches += 1
-    # near-perfect; a single documented JS-quirk edge case is tolerated
-    assert angle_matches / len(idxs) >= 0.95
+    result = simulate_hit_from_event(EventObj(sf, _first_contact_index(sf)))
+    assert result.contact_absolute > 0
+    assert result.contact_type_name
 
 
-def test_sim_is_source_agnostic():
-    dec = pyrio.load_stat_file(DECODED)
-    enc = pyrio.load_stat_file(ENCODED)
-    for i in _contact_event_indices(dec):
-        rd = simulate_hit_from_event(EventObj(dec, i))
-        re_ = simulate_hit_from_event(EventObj(enc, i))
-        assert rd.contact_absolute == re_.contact_absolute
-        assert rd.contact_quality == re_.contact_quality
-        assert rd.horizontal_angle == re_.horizontal_angle
+def test_validation_harness_reproduces_recorded_contacts():
+    # validate_statobj re-simulates every contact via its recorded RNG seeds and
+    # compares the result field-by-field to what the game recorded.
+    rep = validate_statobj(pyrio.load_stat_file(DECODED))
+    assert rep.contact_events > 50
+    # the deterministic contact-stage outputs must reproduce exactly
+    for name in ("contact_type", "contact_absolute", "contact_quality", "power", "vertical_angle"):
+        assert rep.fields[name].failures == 0, f"{name}: {rep.fields[name].failures} mismatch(es)"
+    # every field near-perfect; a single mod-affected slice diverges on angle/velocity
+    assert all(st.rate >= 0.98 for st in rep.fields.values())
+
+
+def test_validation_is_source_agnostic():
+    dec = validate_statobj(pyrio.load_stat_file(DECODED))
+    enc = validate_statobj(pyrio.load_stat_file(ENCODED))
+    assert {n: st.failures for n, st in dec.fields.items()} == \
+           {n: st.failures for n, st in enc.fields.items()}

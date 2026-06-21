@@ -17,6 +17,8 @@ HAND = LookupDicts.HAND
 PITCH_TYPE = LookupDicts.PITCH_TYPE
 CHARGE_PITCH_TYPE = LookupDicts.CHARGE_TYPE
 TYPE_OF_SWING = LookupDicts.TYPE_OF_SWING
+TYPE_OF_CONTACT = LookupDicts.CONTACT_TYPE
+SECONDARY_CONTACT_RESULT = LookupDicts.SECONDARY_CONTACT_RESULT
 
 # Encoded stadium id -> boundary-coordinate file in constants/stadiums/.
 # Toy Field has no boundary file (open field), so it is intentionally absent.
