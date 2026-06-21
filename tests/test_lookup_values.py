@@ -3,6 +3,8 @@ import pytest
 from pyrio import (
     Character, LookupValue, Lookup, Stadium, LookupDicts,
     PitchType, ChargeType, SwingType, ContactType,
+    FinalResult, PrimaryContactResult, SecondaryContactResult,
+    OutType, StealType, PitchResult,
 )
 
 
@@ -119,3 +121,15 @@ def test_factories_tolerate_capitalization_drift():
     assert Lookup.pitch_type("CURVE") == Lookup.pitch_type("Curve")
     assert Lookup.contact_type("perfect").name == "Perfect"
     assert Lookup.stadium("bowser CASTLE").name == "Bowser Castle"
+
+
+def test_result_type_factories():
+    assert isinstance(Lookup.out_type(1), OutType)
+    assert Lookup.final_result(7).name == "Single"
+    assert Lookup.final_result(7) == Lookup.final_result("Single")
+    assert Lookup.primary_contact_result(1).name == "Foul"
+    assert Lookup.secondary_contact_result(7).name == "Single"
+    assert Lookup.out_type(1).name == "Caught"
+    assert Lookup.steal_type(2).name == "Normal"
+    assert Lookup.pitch_result(0).name == "HBP"
+    assert Lookup.final_result(None) is None

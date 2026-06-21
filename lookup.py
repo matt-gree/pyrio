@@ -546,6 +546,30 @@ class ContactType(LookupValue):
     """A type of bat contact: Sour/Nice/Perfect/Miss."""
 
 
+class FinalResult(LookupValue):
+    """The final result of an at-bat (cAtBatResult)."""
+
+
+class PrimaryContactResult(LookupValue):
+    """Primary contact result: Out / Foul / Fair / Fielded."""
+
+
+class SecondaryContactResult(LookupValue):
+    """Secondary contact result: the detailed hit/out outcome."""
+
+
+class OutType(LookupValue):
+    """How an out was made: Caught / Force / Tag / ..."""
+
+
+class StealType(LookupValue):
+    """A steal type: None / Ready / Normal / Perfect."""
+
+
+class PitchResult(LookupValue):
+    """The result of a pitch: HBP / BB / Ball / Strike / Contact."""
+
+
 # Legacy decoded stadium names -> canonical names.
 _OLD_STADIUM_NAMES = {
     "Bowser's Castle": "Bowser Castle",
@@ -672,6 +696,36 @@ class Lookup:
     def contact_type(search_term: int | str | None) -> "ContactType | None":
         """Resolve a contact-type id or name to a ContactType (None -> None)."""
         return Lookup._value(LookupDicts.CONTACT_TYPE, search_term, ContactType)
+
+    @staticmethod
+    def final_result(search_term: int | str | None) -> "FinalResult | None":
+        """Resolve an at-bat final-result id or name to a FinalResult."""
+        return Lookup._value(LookupDicts.FINAL_RESULT, search_term, FinalResult)
+
+    @staticmethod
+    def primary_contact_result(search_term: int | str | None) -> "PrimaryContactResult | None":
+        """Resolve a primary-contact-result id or name to a value object."""
+        return Lookup._value(LookupDicts.PRIMARY_CONTACT_RESULT, search_term, PrimaryContactResult)
+
+    @staticmethod
+    def secondary_contact_result(search_term: int | str | None) -> "SecondaryContactResult | None":
+        """Resolve a secondary-contact-result id or name to a value object."""
+        return Lookup._value(LookupDicts.SECONDARY_CONTACT_RESULT, search_term, SecondaryContactResult)
+
+    @staticmethod
+    def out_type(search_term: int | str | None) -> "OutType | None":
+        """Resolve an out-type id or name to an OutType (None -> None)."""
+        return Lookup._value(LookupDicts.OUT_TYPE, search_term, OutType)
+
+    @staticmethod
+    def steal_type(search_term: int | str | None) -> "StealType | None":
+        """Resolve a steal-type id or name to a StealType (None -> None)."""
+        return Lookup._value(LookupDicts.STEAL_TYPE, search_term, StealType)
+
+    @staticmethod
+    def pitch_result(search_term: int | str | None) -> "PitchResult | None":
+        """Resolve a pitch-result id or name to a PitchResult (None -> None)."""
+        return Lookup._value(LookupDicts.PITCH_RESULT, search_term, PitchResult)
 
     @staticmethod
     def create_translated_columns(df: pd.DataFrame) -> pd.DataFrame:

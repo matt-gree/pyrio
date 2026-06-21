@@ -11,6 +11,8 @@ from .lookup import (
     userInputToCharacter, is_captain,
     LookupValue, Character, Stadium,
     PitchType, ChargeType, SwingType, ContactType,
+    FinalResult, PrimaryContactResult, SecondaryContactResult,
+    OutType, StealType, PitchResult,
 )
 
 # API parameter lists and endpoint constants

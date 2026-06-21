@@ -10,6 +10,8 @@ from typing import Iterator, Optional, Union
 from .lookup import (
     LookupDicts, Lookup, Character, Stadium,
     PitchType, ChargeType, SwingType, ContactType,
+    FinalResult, PrimaryContactResult, SecondaryContactResult,
+    OutType, StealType, PitchResult,
 )
 
 '''
@@ -1529,8 +1531,8 @@ class EventObj():
     def num_outs_during_play(self) -> int:
         return self.eventDict['Num Outs During Play']
     
-    def result_of_AB(self) -> str:
-        return self.eventDict['Result of AB']
+    def result_of_AB(self) -> FinalResult:
+        return Lookup.final_result(self.eventDict['Result of AB'])
     
     def runners(self) -> set[str]:
         return set(self.eventDict).intersection(['Runner 1B', 'Runner 2B', 'Runner 3B'])
@@ -1769,17 +1771,17 @@ class EventObj():
         """
         return self.safe_int(self.contact_dict().get('Ball Hang Time'))
 
-    def contact_result_primary(self) -> Optional[str]:
+    def contact_result_primary(self) -> Optional[PrimaryContactResult]:
         """
         Returns None if no contact in event.
         """
-        return self.contact_dict().get('Contact Result - Primary')
+        return Lookup.primary_contact_result(self.contact_dict().get('Contact Result - Primary'))
 
-    def contact_result_secondary(self) -> Optional[str]:
+    def contact_result_secondary(self) -> Optional[SecondaryContactResult]:
         """
         Returns None if no contact in event.
         """
-        return self.contact_dict().get('Contact Result - Secondary')
+        return Lookup.secondary_contact_result(self.contact_dict().get('Contact Result - Secondary'))
 
     def first_fielder_dict(self) -> dict:
         """
