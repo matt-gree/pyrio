@@ -1560,6 +1560,11 @@ class EventObj():
         else:
             runner_str = f'Runner {baseNum}B'
         return self.eventDict.get(runner_str, {})
+
+    def runner(self, base_num: int) -> Optional[RunnerObj]:
+        """RunnerObj on the given base (0 = batter-runner), or None if empty."""
+        runner_json = self.runner_dict(base_num)
+        return RunnerObj(runner_json) if runner_json else None
     
     def bool_steal(self, base_num: int) -> int:
         """
@@ -2069,6 +2074,38 @@ class HudObj:
       }
     },
     '''
+
+class RunnerObj:
+    """A base runner within an event (read-only view over a runner sub-dict)."""
+
+    def __init__(self, runner_json: dict):
+        self.runner_json = runner_json
+
+    def roster_location(self) -> int:
+        return self.runner_json['Runner Roster Loc']
+
+    def character(self) -> Optional[Character]:
+        return Lookup.character(self.runner_json.get('Runner Char Id'))
+
+    def initial_base(self) -> int:
+        return self.runner_json['Runner Initial Base']
+
+    def result_base(self) -> int:
+        return self.runner_json['Runner Result Base']
+
+    def total_bases(self) -> int:
+        return self.result_base() - self.initial_base()
+
+    def out_type(self) -> Optional[OutType]:
+        return Lookup.out_type(self.runner_json.get('Out Type'))
+
+    def steal(self) -> Optional[StealType]:
+        return Lookup.steal_type(self.runner_json.get('Steal'))
+
+    def is_out(self) -> bool:
+        ot = self.out_type()
+        return ot is not None and ot.name != "None"
+
 
 # ---------------------------------------------------------------------------
 # Stat-file loaders

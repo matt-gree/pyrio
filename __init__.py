@@ -1,6 +1,6 @@
 # Stat file parsing
 from .stat_file_parser import (
-    StatObj, EventSearch, EventObj, HudObj,
+    StatObj, EventSearch, EventObj, HudObj, RunnerObj,
     load_stat_file, iter_stat_files,
 )
 
