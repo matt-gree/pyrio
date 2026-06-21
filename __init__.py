@@ -48,3 +48,7 @@ from .stat_formatters import (
 # Glicko-2 rating
 from .glicko2 import Player as GlickoPlayer
 from .glicko_calculator import glicko2_win_probability
+
+# Hit simulator (deterministic port of the MSSB batting calculator)
+from .hit_simulation import simulate_hit, simulate_hit_from_event, HitInputs, HitResult
+from . import hit_analysis, stadiums
