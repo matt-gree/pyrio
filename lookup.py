@@ -570,6 +570,30 @@ class PitchResult(LookupValue):
     """The result of a pitch: HBP / BB / Ball / Strike / Contact."""
 
 
+class Hand(LookupValue):
+    """Handedness: Right / Left."""
+
+
+class Position(LookupValue):
+    """A fielding position: P/C/1B/.../RF, or Inv."""
+
+
+class FielderAction(LookupValue):
+    """A fielder action: None / Sliding / Walljump / ..."""
+
+
+class FielderBobble(LookupValue):
+    """A fielder bobble: None / Bobble / Fireball / Fumble / ..."""
+
+
+class ManualSelect(LookupValue):
+    """Manual fielder selection: No Selected Char / Pitcher / Catcher / ..."""
+
+
+class TeamName(LookupValue):
+    """A team (logo) name, e.g. 'Mario Fireballs'."""
+
+
 # Legacy decoded stadium names -> canonical names.
 _OLD_STADIUM_NAMES = {
     "Bowser's Castle": "Bowser Castle",
@@ -633,8 +657,10 @@ class Lookup:
         return Lookup.lookup(dictionary, values)
 
     @staticmethod
-    def character(search_term: int | str) -> "Character":
+    def character(search_term: int | str | None) -> "Character | None":
         """Resolve a char id or name (any alias) to a Character value object."""
+        if search_term is None:
+            return None
         if isinstance(search_term, str) and not search_term.isdigit():
             name = userInputToCharacter(search_term)  # raises ValueError if unknown
             char_id = Lookup.lookup(LookupDicts.CHAR_NAME, name)
@@ -726,6 +752,36 @@ class Lookup:
     def pitch_result(search_term: int | str | None) -> "PitchResult | None":
         """Resolve a pitch-result id or name to a PitchResult (None -> None)."""
         return Lookup._value(LookupDicts.PITCH_RESULT, search_term, PitchResult)
+
+    @staticmethod
+    def hand(search_term: int | str | None) -> "Hand | None":
+        """Resolve a handedness id or name to a Hand (None -> None)."""
+        return Lookup._value(LookupDicts.HAND, search_term, Hand)
+
+    @staticmethod
+    def position(search_term: int | str | None) -> "Position | None":
+        """Resolve a fielding-position id or name to a Position (None -> None)."""
+        return Lookup._value(LookupDicts.POSITION, search_term, Position)
+
+    @staticmethod
+    def fielder_action(search_term: int | str | None) -> "FielderAction | None":
+        """Resolve a fielder-action id or name to a FielderAction (None -> None)."""
+        return Lookup._value(LookupDicts.FIELDER_ACTIONS, search_term, FielderAction)
+
+    @staticmethod
+    def fielder_bobble(search_term: int | str | None) -> "FielderBobble | None":
+        """Resolve a fielder-bobble id or name to a FielderBobble (None -> None)."""
+        return Lookup._value(LookupDicts.FIELDER_BOBBLES, search_term, FielderBobble)
+
+    @staticmethod
+    def manual_select(search_term: int | str | None) -> "ManualSelect | None":
+        """Resolve a manual-select id or name to a ManualSelect (None -> None)."""
+        return Lookup._value(LookupDicts.MANUAL_SELECT, search_term, ManualSelect)
+
+    @staticmethod
+    def team_name(search_term: int | str | None) -> "TeamName | None":
+        """Resolve a team (logo) id or name to a TeamName (None -> None)."""
+        return Lookup._value(LookupDicts.TEAM_NAME, search_term, TeamName)
 
     @staticmethod
     def create_translated_columns(df: pd.DataFrame) -> pd.DataFrame:

@@ -13,6 +13,7 @@ from .lookup import (
     PitchType, ChargeType, SwingType, ContactType,
     FinalResult, PrimaryContactResult, SecondaryContactResult,
     OutType, StealType, PitchResult,
+    Hand, Position, FielderAction, FielderBobble, ManualSelect, TeamName,
 )
 
 # API parameter lists and endpoint constants

@@ -5,6 +5,7 @@ from pyrio import (
     PitchType, ChargeType, SwingType, ContactType,
     FinalResult, PrimaryContactResult, SecondaryContactResult,
     OutType, StealType, PitchResult,
+    Hand, Position, FielderAction, FielderBobble, ManualSelect, TeamName,
 )
 
 
@@ -133,3 +134,20 @@ def test_result_type_factories():
     assert Lookup.steal_type(2).name == "Normal"
     assert Lookup.pitch_result(0).name == "HBP"
     assert Lookup.final_result(None) is None
+
+
+def test_roster_and_fielding_factories():
+    assert Lookup.hand(0).name == "Right"
+    assert Lookup.hand(1).name == "Left"
+    assert Lookup.hand("Left").id == 1            # canonical 0=Right, 1=Left
+    assert Lookup.position(0).name == "P"
+    assert Lookup.position("RF").id == 8
+    assert Lookup.manual_select(1).name == "Pitcher"
+    assert Lookup.team_name(2).name == "Mario Fireballs"
+    assert Lookup.team_name("Jr Fangs").id == 47
+    # round-trip without hardcoding ids for the action/bobble tables
+    assert isinstance(Lookup.fielder_action("Sliding"), FielderAction)
+    assert Lookup.fielder_action("Sliding").name == "Sliding"
+    assert isinstance(Lookup.fielder_bobble("Fumble"), FielderBobble)
+    assert Lookup.fielder_bobble("Fumble").name == "Fumble"
+    assert Lookup.hand(None) is None

@@ -1,7 +1,7 @@
 import pathlib
 
 import pyrio
-from pyrio import StatObj, Character, Stadium, PitchType, FinalResult
+from pyrio import StatObj, Character, Stadium, PitchType, FinalResult, Hand
 from pyrio.stat_file_parser import EventObj
 
 FIXTURES = pathlib.Path(__file__).parent / "fixtures"
@@ -70,3 +70,12 @@ def test_result_of_ab_is_source_agnostic():
     dec_r = EventObj(dec, idx).result_of_AB()
     assert isinstance(enc_r, FinalResult)
     assert enc_r == dec_r
+
+
+def test_batting_hand_is_source_agnostic():
+    enc = pyrio.load_stat_file(ENCODED)   # 'Batting Hand' stored as int
+    dec = pyrio.load_stat_file(DECODED)   # 'Batting Hand' stored as name
+    enc_h = enc.battingHand(0, 0)
+    dec_h = dec.battingHand(0, 0)
+    assert isinstance(enc_h, Hand)
+    assert enc_h == dec_h

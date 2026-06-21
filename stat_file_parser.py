@@ -12,6 +12,7 @@ from .lookup import (
     PitchType, ChargeType, SwingType, ContactType,
     FinalResult, PrimaryContactResult, SecondaryContactResult,
     OutType, StealType, PitchResult,
+    Hand, Position, FielderAction, FielderBobble, ManualSelect, TeamName,
 )
 
 '''
@@ -282,19 +283,19 @@ class StatObj:
         else:
             return self.statJson["Character Game Stats"][self.getTeamString(teamNum, rosterNum)]["Defensive Stats"]
 
-    def fieldingHand(self, teamNum: int, rosterNum: int) -> int:
+    def fieldingHand(self, teamNum: int, rosterNum: int) -> Hand:
         # returns fielding handedness of character
         # rosterNum: 0 -> 8 for each of the 9 roster spots
         teamNum = self.teamNumVersionCorrection(teamNum)
         ErrorChecker.check_roster_num_no_neg(rosterNum)
-        return self.statJson["Character Game Stats"][self.getTeamString(teamNum, rosterNum)]["Fielding Hand"]
+        return Lookup.hand(self.statJson["Character Game Stats"][self.getTeamString(teamNum, rosterNum)]["Fielding Hand"])
 
-    def battingHand(self, teamNum: int, rosterNum: int) -> int:
+    def battingHand(self, teamNum: int, rosterNum: int) -> Hand:
         # returns batting handedness of character
         # rosterNum: 0 -> 8 for each of the 9 roster spots
         teamNum = self.teamNumVersionCorrection(teamNum)
         ErrorChecker.check_roster_num_no_neg(rosterNum)
-        return self.statJson["Character Game Stats"][self.getTeamString(teamNum, rosterNum)]["Batting Hand"]
+        return Lookup.hand(self.statJson["Character Game Stats"][self.getTeamString(teamNum, rosterNum)]["Batting Hand"])
 
     # defensive stats
     def era(self, teamNum: int, rosterNum: int = -1) -> float:
@@ -1795,23 +1796,23 @@ class EventObj():
         """
         return self.first_fielder_dict().get('Fielder Roster Location')
 
-    def first_fielder_position(self) -> Optional[str]:
+    def first_fielder_position(self) -> Optional[Position]:
         """
         Returns None if no first fielder in event.
         """
-        return self.first_fielder_dict().get('Fielder Position')
+        return Lookup.position(self.first_fielder_dict().get('Fielder Position'))
 
-    def first_fielder_character(self) -> Optional[str]:
+    def first_fielder_character(self) -> Optional[Character]:
         """
         Returns None if no first fielder in event.
         """
-        return self.first_fielder_dict().get('Fielder Character')
+        return Lookup.character(self.first_fielder_dict().get('Fielder Character'))
 
-    def first_fielder_action(self) -> Optional[str]:
+    def first_fielder_action(self) -> Optional[FielderAction]:
         """
         Returns None if no first fielder in event.
         """
-        return self.first_fielder_dict().get('Fielder Action')
+        return Lookup.fielder_action(self.first_fielder_dict().get('Fielder Action'))
 
     def first_fielder_jump(self) -> Optional[str]:
         """
@@ -1825,11 +1826,11 @@ class EventObj():
         """
         return self.first_fielder_dict().get('Fielder Swap')
 
-    def first_fielder_maunual_selected(self) -> Optional[str]:
+    def first_fielder_maunual_selected(self) -> Optional[ManualSelect]:
         """
         Returns None if no first fielder in event.
         """
-        return self.first_fielder_dict().get('Fielder Manual Selected')
+        return Lookup.manual_select(self.first_fielder_dict().get('Fielder Manual Selected'))
 
     def first_fielder_location(self) -> tuple:
         """
@@ -1841,11 +1842,11 @@ class EventObj():
         z = self.first_fielder_dict().get('Fielder Position - Z')
         return (x, y, z)
 
-    def first_fielder_bobble(self) -> Optional[str]:
+    def first_fielder_bobble(self) -> Optional[FielderBobble]:
         """
         Returns None if no first fielder in event.
         """
-        return self.first_fielder_dict().get('Fielder Bobble')
+        return Lookup.fielder_bobble(self.first_fielder_dict().get('Fielder Bobble'))
     
 
 class HudObj:
