@@ -29,6 +29,14 @@ class StatObj:
         """
         return self.statJson["TagSetID"]
 
+    def netplay(self) -> Optional[int]:
+        """1 if the game was played over netplay, else 0 (None if absent)."""
+        return self.statJson.get("Netplay")
+
+    def loaded_from_hud(self) -> Optional[int]:
+        """1 if the stat file was loaded from a HUD capture (None if absent)."""
+        return self.statJson.get("Loaded from HUD")
+
     # should look to convert to unix or some other standard date fmt
     def startDate(self) -> datetime:
         return datetime.strptime(self.statJson["Date - Start"], "%a %b %d %H:%M:%S %Y")

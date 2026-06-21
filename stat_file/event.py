@@ -870,7 +870,15 @@ class EventObj():
         Returns an empty dict if no pitch in event
         """
         return self.eventDict.get('Pitch', {})
-    
+
+    def pitch_pitcher(self) -> Optional[Character]:
+        """Pitcher for this pitch (from the pitch sub-dict), or None if no pitch."""
+        return Lookup.character(self.pitch_dict().get('Pitcher Char Id'))
+
+    def pitch_pitcher_team(self) -> Optional[int]:
+        """Team num (0/1) of the pitcher for this pitch, or None if no pitch."""
+        return self.pitch_dict().get('Pitcher Team Id')
+
     def pitch_type(self) -> Optional[PitchType]:
         """
         Returns None if no pitch in event

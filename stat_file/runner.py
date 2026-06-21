@@ -37,11 +37,5 @@ class RunnerObj:
         ot = self.out_type()
         return ot is not None and ot.name != "None"
 
-
-# ---------------------------------------------------------------------------
-# Stat-file loaders
-#
-# Entry points for reading decoded stat files off disk into StatObj instances.
-# When this module is split into a `stat_file/` subpackage, these belong in
-# `stat_file/loaders.py` -- the view classes above stay pure / I/O-free.
-# ---------------------------------------------------------------------------
+    def out_location(self) -> int:
+        return self.runner_json['Out Location']

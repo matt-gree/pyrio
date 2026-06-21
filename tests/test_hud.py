@@ -43,3 +43,12 @@ def test_hud_runner_source_agnostic():
     assert isinstance(r_enc, RunnerObj)
     assert r_enc.character() == r_dec.character() == Character(9, "Bowser")
     assert r_enc.is_out() is False
+
+
+def test_hud_misc_accessors():
+    enc = _load(ENCODED)
+    assert enc.port(0) == 0 and enc.port(1) == 1
+    assert enc.previous_event() is not None
+    assert enc.batter_roster_location() == 2          # current batter
+    assert enc.batter_roster_location(0) == 2         # Away due-up
+    assert enc.batter_roster_location(1) == 6         # Home due-up

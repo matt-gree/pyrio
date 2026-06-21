@@ -97,6 +97,20 @@ def test_runnerobj_is_source_agnostic():
     assert er.result_base() == dr.result_base()
     assert er.total_bases() == er.result_base() - er.initial_base()
     assert isinstance(er.is_out(), bool)
+    assert isinstance(er.out_location(), int)
+
+
+def test_misc_stat_accessors():
+    enc = pyrio.load_stat_file(ENCODED)
+    dec = pyrio.load_stat_file(DECODED)
+    assert enc.netplay() == 1
+    assert enc.loaded_from_hud() == 0
+    idx = next(i for i, ev in enumerate(enc.events())
+               if "Pitch" in ev and ev["Pitch"].get("Pitcher Char Id") is not None)
+    ep = EventObj(enc, idx).pitch_pitcher()
+    dp = EventObj(dec, idx).pitch_pitcher()
+    assert isinstance(ep, Character)
+    assert ep == dp
 
 
 def test_dead_ball_reason_source_agnostic():

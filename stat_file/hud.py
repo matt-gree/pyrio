@@ -74,8 +74,22 @@ class HudObj:
     def pitcher_roster_location(self) -> int:
         return self.hud_json['Pitcher Roster Loc']
     
-    def batter_roster_location(self) -> int:
-        return self.hud_json['Batter Roster Loc']
+    def batter_roster_location(self, teamNum: Optional[int] = None) -> int:
+        # no teamNum -> current batter; otherwise the given team's due-up batter
+        if teamNum is None:
+            return self.hud_json['Batter Roster Loc']
+        ErrorChecker.check_team_num(teamNum)
+        team_string = "Away" if teamNum == 0 else "Home"
+        return self.hud_json[f'{team_string} Batter Roster Loc']
+
+    def port(self, teamNum: int) -> int:
+        ErrorChecker.check_team_num(teamNum)
+        team_string = "Away" if teamNum == 0 else "Home"
+        return self.hud_json[f'{team_string} Port']
+
+    def previous_event(self) -> Optional[dict]:
+        """Raw 'Previous Event' sub-object from the HUD, or None if absent."""
+        return self.hud_json.get('Previous Event')
     
     def runner_on_first(self) -> bool:
         return bool(self.hud_json.get('Runner 1B'))
