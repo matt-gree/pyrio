@@ -1,6 +1,9 @@
 import pytest
 
-from pyrio import Character, LookupValue, Lookup, Stadium, LookupDicts
+from pyrio import (
+    Character, LookupValue, Lookup, Stadium, LookupDicts,
+    PitchType, ChargeType, SwingType, ContactType,
+)
 
 
 def test_value_to_value_equality_only():
@@ -90,3 +93,29 @@ def test_input_direction_matches_stickvec_bitmask():
         return "+".join(parts)
 
     assert LookupDicts.INPUT_DIRECTION == {v: stickvec(v) for v in range(16)}
+
+
+def test_pitch_event_type_factories():
+    assert isinstance(Lookup.pitch_type(0), PitchType)
+    assert Lookup.pitch_type(0).name == "Curve"
+    assert Lookup.pitch_type(0) == Lookup.pitch_type("Curve")   # id == name input
+    assert Lookup.charge_type(0).name == "N/A"
+    assert Lookup.swing_type(1).name == "Slap"
+    assert Lookup.contact_type(255).name == "Miss"
+    assert Lookup.contact_type("Perfect").id == 2
+
+
+def test_value_factories_pass_through_none():
+    assert Lookup.pitch_type(None) is None
+    assert Lookup.charge_type(None) is None
+    assert Lookup.swing_type(None) is None
+    assert Lookup.contact_type(None) is None
+
+
+def test_factories_tolerate_capitalization_drift():
+    # Decoded client casing may drift; resolution is case-insensitive and the
+    # value object always carries the canonical name.
+    assert Lookup.pitch_type("changeup").name == "ChangeUp"
+    assert Lookup.pitch_type("CURVE") == Lookup.pitch_type("Curve")
+    assert Lookup.contact_type("perfect").name == "Perfect"
+    assert Lookup.stadium("bowser CASTLE").name == "Bowser Castle"

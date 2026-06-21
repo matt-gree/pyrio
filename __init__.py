@@ -10,6 +10,7 @@ from .lookup import (
     lookup, list_dicts, simplified_name_groups,
     userInputToCharacter, is_captain,
     LookupValue, Character, Stadium,
+    PitchType, ChargeType, SwingType, ContactType,
 )
 
 # API parameter lists and endpoint constants

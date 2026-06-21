@@ -7,7 +7,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Iterator, Optional, Union
 
-from .lookup import LookupDicts, Lookup, Character, Stadium
+from .lookup import (
+    LookupDicts, Lookup, Character, Stadium,
+    PitchType, ChargeType, SwingType, ContactType,
+)
 
 '''
 Intended to parse "decoded" files which would be present on a user's computer
@@ -1577,17 +1580,17 @@ class EventObj():
         """
         return self.eventDict.get('Pitch', {})
     
-    def pitch_type(self) -> Optional[str]:
+    def pitch_type(self) -> Optional[PitchType]:
         """
         Returns None if no pitch in event
         """
-        return self.pitch_dict().get('Pitch Type')
+        return Lookup.pitch_type(self.pitch_dict().get('Pitch Type'))
     
-    def charge_type(self) -> Optional[str]:
+    def charge_type(self) -> Optional[ChargeType]:
         """
         Returns None if no pitch in event
         """
-        return self.pitch_dict().get('Charge Type')
+        return Lookup.charge_type(self.pitch_dict().get('Charge Type'))
     
     def star_pitch(self) -> Optional[int]:
         """
@@ -1631,11 +1634,11 @@ class EventObj():
         """
         return self.pitch_dict().get('DB')
     
-    def type_of_swing(self) -> Optional[str]:
+    def type_of_swing(self) -> Optional[SwingType]:
         """
         Returns None if no pitch in event
         """
-        return self.pitch_dict().get('Type of Swing')
+        return Lookup.swing_type(self.pitch_dict().get('Type of Swing'))
 
     def contact_dict(self) -> dict:
         """
@@ -1643,11 +1646,11 @@ class EventObj():
         """
         return self.pitch_dict().get('Contact', {})
 
-    def type_of_contact(self) -> Optional[str]:
+    def type_of_contact(self) -> Optional[ContactType]:
         """
         Returns None if no contact in event
         """
-        return self.contact_dict().get('Type of Contact')
+        return Lookup.contact_type(self.contact_dict().get('Type of Contact'))
 
     def charge_power_up(self) -> Optional[int]:
         """

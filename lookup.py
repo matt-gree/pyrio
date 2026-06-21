@@ -530,6 +530,22 @@ class Stadium(LookupValue):
     """A Mario Superstar Baseball stadium."""
 
 
+class PitchType(LookupValue):
+    """A pitch type: Curve / Charge / ChangeUp."""
+
+
+class ChargeType(LookupValue):
+    """A charge pitch type."""
+
+
+class SwingType(LookupValue):
+    """A type of swing: None / Slap / Charge / Star / Bunt."""
+
+
+class ContactType(LookupValue):
+    """A type of bat contact: Sour/Nice/Perfect/Miss."""
+
+
 # Legacy decoded stadium names -> canonical names.
 _OLD_STADIUM_NAMES = {
     "Bowser's Castle": "Bowser Castle",
@@ -636,6 +652,26 @@ class Lookup:
         if isinstance(search_term, str):
             search_term = _OLD_STADIUM_NAMES.get(search_term, search_term)
         return Lookup._value(LookupDicts.STADIUM, search_term, Stadium)
+
+    @staticmethod
+    def pitch_type(search_term: int | str | None) -> "PitchType | None":
+        """Resolve a pitch-type id or name to a PitchType (None -> None)."""
+        return Lookup._value(LookupDicts.PITCH_TYPE, search_term, PitchType)
+
+    @staticmethod
+    def charge_type(search_term: int | str | None) -> "ChargeType | None":
+        """Resolve a charge-pitch-type id or name to a ChargeType (None -> None)."""
+        return Lookup._value(LookupDicts.CHARGE_TYPE, search_term, ChargeType)
+
+    @staticmethod
+    def swing_type(search_term: int | str | None) -> "SwingType | None":
+        """Resolve a swing-type id or name to a SwingType (None -> None)."""
+        return Lookup._value(LookupDicts.TYPE_OF_SWING, search_term, SwingType)
+
+    @staticmethod
+    def contact_type(search_term: int | str | None) -> "ContactType | None":
+        """Resolve a contact-type id or name to a ContactType (None -> None)."""
+        return Lookup._value(LookupDicts.CONTACT_TYPE, search_term, ContactType)
 
     @staticmethod
     def create_translated_columns(df: pd.DataFrame) -> pd.DataFrame:

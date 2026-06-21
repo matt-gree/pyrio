@@ -1,7 +1,8 @@
 import pathlib
 
 import pyrio
-from pyrio import StatObj, Character, Stadium
+from pyrio import StatObj, Character, Stadium, PitchType
+from pyrio.stat_file_parser import EventObj
 
 FIXTURES = pathlib.Path(__file__).parent / "fixtures"
 ENCODED = FIXTURES / "20260618T191655_SpiceOrange-Vs-MattGree_3896251267.json"
@@ -49,3 +50,13 @@ def test_stadium_accessor_is_source_agnostic():
     enc = pyrio.load_stat_file(ENCODED)   # StadiumID stored as int 1
     dec = pyrio.load_stat_file(DECODED)   # StadiumID stored as "Bowser Castle"
     assert enc.stadium() == dec.stadium() == Stadium(1, "Bowser Castle")
+
+
+def test_event_pitch_type_is_source_agnostic():
+    enc = pyrio.load_stat_file(ENCODED)   # 'Pitch Type' stored as int
+    dec = pyrio.load_stat_file(DECODED)   # 'Pitch Type' stored as name
+    idx = next(i for i, ev in enumerate(enc.events()) if "Pitch" in ev)
+    enc_pt = EventObj(enc, idx).pitch_type()
+    dec_pt = EventObj(dec, idx).pitch_type()
+    assert isinstance(enc_pt, PitchType)
+    assert enc_pt == dec_pt
