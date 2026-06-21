@@ -1949,6 +1949,61 @@ class HudObj:
         ErrorChecker.check_roster_num(rosterNum)
         return self.hud_json[self.team_roster_str(teamNum, rosterNum)]['Defensive Stats']
 
+    # --- game settings ---
+    def stadium(self) -> Stadium:
+        return Lookup.stadium(self.hud_json["StadiumID"])
+
+    def logo(self, teamNum: int) -> TeamName:
+        # the team's logo/team-name selection
+        ErrorChecker.check_team_num(teamNum)
+        team_string = "Away" if teamNum == 0 else "Home"
+        return Lookup.team_name(self.hud_json[f'{team_string} Logo'])
+
+    def first_batting_team(self) -> int:
+        return self.hud_json['First Batting Team']
+
+    def star_skills_on(self) -> bool:
+        return bool(self.hud_json['Star Skills On'])
+
+    def mercy_on(self) -> bool:
+        return bool(self.hud_json['Mercy On'])
+
+    def innings_selected(self) -> int:
+        return self.hud_json['Innings Selected']
+
+    def inning_scores(self, teamNum: int) -> list[int]:
+        ErrorChecker.check_team_num(teamNum)
+        team_string = "Away" if teamNum == 0 else "Home"
+        return self.hud_json.get(f'{team_string} Inning Scores', [])
+
+    # --- per-character ---
+    def _player(self, teamNum: int, rosterNum: int) -> dict:
+        return self.hud_json[self.team_roster_str(teamNum, rosterNum)]
+
+    def character(self, teamNum: int, rosterNum: int) -> Character:
+        return Lookup.character(self._player(teamNum, rosterNum)['CharID'])
+
+    def position(self, teamNum: int, rosterNum: int) -> Position:
+        return Lookup.position(self._player(teamNum, rosterNum)['Fielding Position'])
+
+    def fielding_hand(self, teamNum: int, rosterNum: int) -> Hand:
+        return Lookup.hand(self._player(teamNum, rosterNum)['Fielding Hand'])
+
+    def batting_hand(self, teamNum: int, rosterNum: int) -> Hand:
+        return Lookup.hand(self._player(teamNum, rosterNum)['Batting Hand'])
+
+    def is_superstar(self, teamNum: int, rosterNum: int) -> bool:
+        return bool(self._player(teamNum, rosterNum)['Superstar'])
+
+    def captain(self, teamNum: int) -> Character:
+        return self.character(teamNum, self.captain_index(teamNum))
+
+    def runner(self, base: int) -> Optional[RunnerObj]:
+        """RunnerObj on the given base (0 = batter-runner), or None if empty."""
+        runner_str = 'Runner Batter' if base == 0 else f'Runner {base}B'
+        runner_json = self.hud_json.get(runner_str)
+        return RunnerObj(runner_json) if isinstance(runner_json, dict) else None
+
     def roster(self, teamNum: int) -> dict:
         roster_dict = {}
         for i in range(9):
