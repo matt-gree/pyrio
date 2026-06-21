@@ -6,6 +6,7 @@ from pyrio import (
     FinalResult, PrimaryContactResult, SecondaryContactResult,
     OutType, StealType, PitchResult,
     Hand, Position, FielderAction, FielderBobble, ManualSelect, TeamName,
+    DeadBallReason,
 )
 
 
@@ -151,3 +152,7 @@ def test_roster_and_fielding_factories():
     assert isinstance(Lookup.fielder_bobble("Fumble"), FielderBobble)
     assert Lookup.fielder_bobble("Fumble").name == "Fumble"
     assert Lookup.hand(None) is None
+    assert isinstance(Lookup.dead_ball_reason(1), DeadBallReason)
+    assert Lookup.dead_ball_reason(1).name == "Home Run"
+    assert Lookup.dead_ball_reason("Foul Ball").id == 2
+    assert Lookup.dead_ball_reason(None) is None

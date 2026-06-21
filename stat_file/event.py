@@ -9,6 +9,7 @@ from ..lookup import (
     FinalResult, PrimaryContactResult, SecondaryContactResult,
     OutType, StealType, PitchResult,
     Hand, Position, FielderAction, FielderBobble, ManualSelect, TeamName,
+    DeadBallReason,
 )
 from .error_checking import ErrorChecker
 from .stat_obj import StatObj
@@ -812,7 +813,11 @@ class EventObj():
     
     def result_of_AB(self) -> FinalResult:
         return Lookup.final_result(self.eventDict['Result of AB'])
-    
+
+    def dead_ball_reason(self) -> Optional[DeadBallReason]:
+        """Why the ball went dead this event, or None if the field is absent."""
+        return Lookup.dead_ball_reason(self.eventDict.get('Dead Ball Reason'))
+
     def runners(self) -> set[str]:
         return set(self.eventDict).intersection(['Runner 1B', 'Runner 2B', 'Runner 3B'])
     

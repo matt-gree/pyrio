@@ -37,6 +37,7 @@ CANON_TO_PYRIO = {
     "cSecondaryContactResult": "SECONDARY_CONTACT_RESULT",
     "cAtBatResult": "FINAL_RESULT",
     "cManualSelectDecode": "MANUAL_SELECT",
+    "cDeadBallReason": "DEAD_BALL_REASON",
 }
 
 # INPUT_DIRECTION is NOT compared here: it mirrors the C++ "StickVec" decoder

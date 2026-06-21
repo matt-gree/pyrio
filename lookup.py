@@ -267,6 +267,14 @@ class LookupDicts:
         4: "Closest to Drop",
     }
 
+    DEAD_BALL_REASON = {
+        0: "N/A",
+        1: "Home Run",
+        2: "Foul Ball",
+        3: "Ground Rule Double",
+        4: "Ball Dead",
+    }
+
     SIMPLIFIED_NAME = {
         'Mario': 'Mario',
         'Luigi': 'Luigi',
@@ -594,6 +602,10 @@ class TeamName(LookupValue):
     """A team (logo) name, e.g. 'Mario Fireballs'."""
 
 
+class DeadBallReason(LookupValue):
+    """Why a ball was dead: N/A / Home Run / Foul Ball / Ground Rule Double / Ball Dead."""
+
+
 # Legacy decoded stadium names -> canonical names.
 _OLD_STADIUM_NAMES = {
     "Bowser's Castle": "Bowser Castle",
@@ -782,6 +794,11 @@ class Lookup:
     def team_name(search_term: int | str | None) -> "TeamName | None":
         """Resolve a team (logo) id or name to a TeamName (None -> None)."""
         return Lookup._value(LookupDicts.TEAM_NAME, search_term, TeamName)
+
+    @staticmethod
+    def dead_ball_reason(search_term: int | str | None) -> "DeadBallReason | None":
+        """Resolve a dead-ball-reason id or name to a DeadBallReason (None -> None)."""
+        return Lookup._value(LookupDicts.DEAD_BALL_REASON, search_term, DeadBallReason)
 
     @staticmethod
     def create_translated_columns(df: pd.DataFrame) -> pd.DataFrame:

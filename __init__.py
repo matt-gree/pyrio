@@ -14,6 +14,7 @@ from .lookup import (
     FinalResult, PrimaryContactResult, SecondaryContactResult,
     OutType, StealType, PitchResult,
     Hand, Position, FielderAction, FielderBobble, ManualSelect, TeamName,
+    DeadBallReason,
 )
 
 # API parameter lists and endpoint constants
