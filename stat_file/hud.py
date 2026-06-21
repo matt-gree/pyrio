@@ -172,6 +172,31 @@ class HudObj:
     def captain(self, teamNum: int) -> Character:
         return self.character(teamNum, self.captain_index(teamNum))
 
+    def due_up(self, teamNum: Optional[int] = None) -> list[Character]:
+        """Batting order starting from the current batter (defaults to the batting team)."""
+        if teamNum is None:
+            teamNum = self.batting_team()
+        ErrorChecker.check_team_num(teamNum)
+        start = self.batter_roster_location(teamNum)
+        return [self.character(teamNum, (start + i) % 9) for i in range(9)]
+
+    def team_positions(self, teamNum: int) -> list[int]:
+        """Roster slot at each fielding position, indexed 0=P,1=C,...,8=RF (-1 if unset)."""
+        ErrorChecker.check_team_num(teamNum)
+        positions = [-1] * 9
+        for roster_num in range(9):
+            pos = self.position(teamNum, roster_num)
+            if 0 <= pos.id <= 8:
+                positions[pos.id] = roster_num
+        return positions
+
+    def roster_id_at_position(self, teamNum: int, position) -> int:
+        """Roster slot playing the given position (int 0-8 or a name like 'SS')."""
+        ErrorChecker.check_team_num(teamNum)
+        ErrorChecker.check_position(position)
+        pos_id = position if isinstance(position, int) else Lookup.position(position).id
+        return self.team_positions(teamNum)[pos_id]
+
     def runner(self, base: int) -> Optional[RunnerObj]:
         """RunnerObj on the given base (0 = batter-runner), or None if empty."""
         runner_str = 'Runner Batter' if base == 0 else f'Runner {base}B'

@@ -27,3 +27,13 @@ class ErrorChecker:
         """Checks if the base number is valid (between 1 and 3) or -1."""
         if (baseNum < -1 or baseNum > 3):
             raise ValueError(f'Invalid base arg {baseNum}. Function only accepts base args of -1 to 3')
+
+    @staticmethod
+    def check_position(position) -> None:
+        """Checks position is an int 0-8 or a valid position-name string."""
+        valid_int = isinstance(position, int) and not isinstance(position, bool) and 0 <= position <= 8
+        valid_str = position in ("P", "C", "1B", "2B", "3B", "SS", "LF", "CF", "RF")
+        if not (valid_int or valid_str):
+            raise ValueError(
+                f'Invalid position arg {position}. Accepts 0-8 or a position name '
+                f'(P, C, 1B, 2B, 3B, SS, LF, CF, RF).')

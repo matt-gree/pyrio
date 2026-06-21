@@ -1,6 +1,8 @@
 import json
 import pathlib
 
+import pytest
+
 from pyrio import HudObj, Stadium, TeamName, Character, Position, Hand, RunnerObj
 
 FIXTURES = pathlib.Path(__file__).parent / "fixtures"
@@ -52,3 +54,18 @@ def test_hud_misc_accessors():
     assert enc.batter_roster_location() == 2          # current batter
     assert enc.batter_roster_location(0) == 2         # Away due-up
     assert enc.batter_roster_location(1) == 6         # Home due-up
+
+
+def test_hud_positions_and_due_up():
+    enc = _load(ENCODED)
+    dec = _load(DECODED)
+    # Away pitcher (position P) is roster slot 5 (Noki(G))
+    assert enc.roster_id_at_position(0, "P") == 5
+    assert enc.roster_id_at_position(0, 0) == enc.roster_id_at_position(0, "P")
+    assert enc.team_positions(0) == dec.team_positions(0)
+    assert enc.team_positions(0)[0] == 5
+    du = enc.due_up(0)
+    assert len(du) == 9 and all(isinstance(c, Character) for c in du)
+    assert du[0] == enc.character(0, enc.batter_roster_location(0))
+    with pytest.raises(ValueError):
+        enc.roster_id_at_position(0, "ZZ")
