@@ -1,9 +1,10 @@
+from __future__ import annotations
+
 import json
 import os
 from dataclasses import asdict
 from typing import Optional, Union
 
-import pandas as pd
 import requests
 
 from .api import (
@@ -135,6 +136,7 @@ class RioWeb:
         response = self._get(Endpoint.EVENTS, serialized)
         if raw:
             return response
+        import pandas as pd
         return pd.DataFrame(response.get("Events", response.get("events", [])))
 
     def get_landing_data(self, params: Union[LandingDataParameterList, dict] = None, raw: bool = False, **kwargs) -> Union[pd.DataFrame, dict]:
@@ -143,6 +145,7 @@ class RioWeb:
         response = self._get(Endpoint.LANDING_DATA, serialized)
         if raw:
             return response
+        import pandas as pd
         return pd.DataFrame(response.get("Data", []))
 
     def get_star_chances(self, params: Union[StarChancesParameterList, dict] = None, raw: bool = False, **kwargs) -> Union[pd.DataFrame, dict]:
@@ -151,6 +154,7 @@ class RioWeb:
         response = self._get(Endpoint.STAR_CHANCES, serialized)
         if raw:
             return response
+        import pandas as pd
         return pd.DataFrame(response.get("Star Chances", response.get("star_chances", [])))
 
     def get_live_games(self) -> dict:
@@ -390,6 +394,7 @@ class RioWeb:
 
     def _process_games(self, api_response: dict) -> pd.DataFrame:
         """Process raw games API response into a cleaned DataFrame."""
+        import pandas as pd
         df = pd.DataFrame.from_dict(api_response["games"])
         if df.empty:
             return df
@@ -419,6 +424,7 @@ class RioWeb:
         stat names are flattened as Category_stat (e.g. Batting_hits, Pitching_strikeouts).
         With inner dimensions: Category_Sub_stat (e.g. Batting_Slap_hits).
         """
+        import pandas as pd
         stats_data = api_response.get("Stats", {})
         if not stats_data:
             return pd.DataFrame()

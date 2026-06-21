@@ -1,8 +1,8 @@
+from __future__ import annotations
+
 import os
 import pickle
 from datetime import datetime, timedelta
-
-import pandas as pd
 
 
 class CompleterCache:
@@ -48,6 +48,7 @@ class CompleterCache:
 
     def _refresh_cache(self) -> None:
         """Fetch data from API and save to cache."""
+        import pandas as pd
         self._cache['last_updated'] = datetime.now()
 
         tags_response = self.client.list_tags()

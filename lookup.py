@@ -5,13 +5,17 @@
     lookup(LookupDicts.CHAR_NAME, 0) -> "Mario"   # also works
 
     list_dicts()  # prints all available dictionary names
+
+pandas is an optional, lazily-imported dependency: only the Series/DataFrame
+helpers (Lookup.lookup on a Series/DataFrame, create_translated_columns) use it,
+so importing this module does not require pandas.
 """
+from __future__ import annotations
+
 import csv
 import os
 import sys
 from dataclasses import dataclass
-
-import pandas as pd
 
 CAPTAINS = [
     'Mario',
@@ -651,12 +655,17 @@ class Lookup:
         d = _resolve_dict(dictionary)
         sl = Lookup._single_lookup
 
-        if isinstance(search_term, pd.Series):
-            result = search_term.apply(lambda t: sl(d, t))
-        elif isinstance(search_term, pd.DataFrame):
-            result = search_term.map(lambda t: sl(d, t))
-        elif isinstance(search_term, list):
+        if isinstance(search_term, list):
             result = [sl(d, term) for term in search_term]
+        elif type(search_term).__module__.split('.')[0] == 'pandas':
+            # Only import pandas when we were actually handed a pandas object.
+            import pandas as pd
+            if isinstance(search_term, pd.Series):
+                result = search_term.apply(lambda t: sl(d, t))
+            elif isinstance(search_term, pd.DataFrame):
+                result = search_term.map(lambda t: sl(d, t))
+            else:
+                result = sl(d, search_term)
         else:
             result = sl(d, search_term)
 
