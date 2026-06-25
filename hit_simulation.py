@@ -23,10 +23,33 @@ Notes / known JS quirks carried over:
     CSV (derived from the "Curved Hits" Extra tag) instead of the JS's hardcoded
     char ids.
 
+calculateHitGround / liveBallHitPhysics notes:
+  - Integration is semi-implicit (symplectic) Euler: each frame velocity is
+    decayed (air resistance + gravity) and acceleration added BEFORE the
+    position is stepped, matching the game's per-frame order.
+  - The trajectory starts at the world contact position. The recorded contact X
+    is batter-relative (mirrored about the plate for lefties) while velocity and
+    landing are world-frame, so the X start is mirrored for lefties.
+  - The ground plane is GROUND_Y (0.15, or 0.35 on Toy Field), not 0. Most
+    stadiums (BOUNCING_STADIUM_IDS) get a blanket flat-ground bounce: clamp Y and
+    reverse a downward Y velocity. Bowser Castle / Toy Field are excluded because
+    their ground has holes, so the game resolves them in ballCollisionLogic (not
+    ported); we approximate that with a ground-pinning skid.
+  - The aerial `landing` is recorded one frame after first ground contact (the
+    sim advances one extra frame). HitResult.trajectory stays wall-free and
+    stops at that aerial landing.
+
+Testing helpers (not used by the core sim):
+  - simulate_hit_trajectory / simulate_hit_trajectory_from_event continue the
+    ball through ground contacts (bounce/skid) for a fixed number of frames --
+    e.g. walking a grounder/liner to its recorded hang time.
+  - stadiums.wall_collision_point clips a trajectory to the outfield wall.
+  - hit_sim_validation.py exposes --walls and --bounces to compare landings.
+
 Testing status (via hit_sim_validation.py):
     - Hit inputs, such as horizontal/vertical angle thresholds and hit power, have been spot-checked with 2 stars off stat files and they achieved 100% convergence.
-    - The hit path is not validating against the landing spot output in the stat files, even for balls that stay in-play and aren't caught by fielders.
-        - The outputs are usually close, but there are some large deviances that are concerning.
+    - Landing spots (fair, in-play, contact-correct) match the recorded landing
+      within ~1 unit ~97% of the time with --walls --bounces enabled.
 """
 from __future__ import annotations
 
@@ -177,7 +200,8 @@ class HitInputs:
     # pitch: 0 Curve, 1 Charge(Slider), 2 Perfect Charge, 3 ChangeUp
     pitch_type_val: int
     pos_x: float                 # batter X at contact
-    ball_x: float                # ball X at contact
+    ball_x: float                # ball X at contact (world X start of trajectory)
+    # ball_z (world Z start of trajectory) is in the defaulted block below.
     batter_hand: int             # 0 Righty, 1 Lefty
     swing: int                   # 0 Slap, 1 Charge (Star handled via is_star)
     is_star: bool = False
@@ -192,6 +216,9 @@ class HitInputs:
     easy_batting: bool = False
     batter_stars_on: bool = False
     pitcher_stars_on: bool = False
+    ball_z: float = 0.0                     # ball Z at contact (world Z start of trajectory)
+    ground_y: float = T.GROUND_Y_DEFAULT   # landing/bounce plane (0.35 on Toy Field)
+    bounce: bool = True                     # ground bounces elastically (False = skid; Bowser Castle / Toy Field)
     rng1: int = T.DEFAULT_STATIC_RANDOM_INT1
     rng2: int = T.DEFAULT_STATIC_RANDOM_INT2
     rng3: int = T.DEFAULT_USHORT_8089269c
@@ -724,27 +751,73 @@ class _HitSim:
             if self.AtBat_BatterHand != T.Righty:
                 self.ballAcceleration[0] = -self.ballAcceleration[0]
 
-    # -- calculateHitGround --
-    def calculate_hit_ground(self):
-        px, py, pz = 0.0, self.b.pitching_height, 0.0
+    # -- calculateHitGround (per-frame loop of liveBallHitPhysics) --
+    def _build_trajectory(self, max_frames=None):
+        """Integrate the flight, semi-implicit Euler as in liveBallHitPhysics.
+
+        Aerial mode (``max_frames`` None): fly until the first ground contact,
+        then one extra frame -- the stat file records the landing one frame after
+        contact -- and stop. This is the wall-free aerial landing.
+
+        Fixed mode (``max_frames`` = N): integrate exactly N frames, continuing
+        through ground contacts. On stadiums with the blanket flat-ground bounce
+        (``HitInputs.bounce``) a downward Y velocity is reversed; on Bowser Castle
+        / Toy Field (holes in the ground, so no blanket bounce) we approximate
+        their unported ballCollisionLogic by pinning the ball to the ground plane
+        and killing its downward Y velocity (a skid). Used to walk a
+        grounder/liner along the ground for testing.
+        """
+        # Start at the ball's world contact position (the game integrates from
+        # AtBat_Contact_BallPos, which is offset from home plate, not the origin).
+        # The recorded contact X is batter-relative (mirrored about the plate for
+        # lefties), whereas velocity and landing are world-frame, so mirror the X
+        # start for lefties -- the same handedness flip the curve applies to
+        # ballAcceleration[0]. Z (depth) is not handed.
+        start_x = -self.ballContact_X if self.AtBat_BatterHand != T.Righty else self.ballContact_X
+        px, py, pz = start_x, self.b.pitching_height, self.inp.ball_z
         vx, vy, vz = self.ballVelocity
         ax, ay, az = self.ballAcceleration
         air = T.AIR_RESISTANCE
         grav = T.GRAVITY
+        ground_y = self.inp.ground_y
+        bounce = self.inp.bounce
 
-        points = []
-        while py > 0:
-            points.append((px, py, pz))
-            px += vx
-            py += vy
-            pz += vz
+        points = [(px, py, pz)]
+        landed_at = None
+        f = 0
+        while True:
+            # Decay velocity and add acceleration FIRST, then step the position
+            # (and only then resolve the ground).
             vx = vx * air + ax
             vy = (vy - grav) * air + ay
             vz = vz * air + az
-        self.trajectory = points
+            px += vx
+            py += vy
+            pz += vz
+            f += 1
+            if py < ground_y:
+                py = ground_y
+                if vy < 0.0:
+                    # bounce: blanket flat-ground reversal. skid: approximation of
+                    # the unported ballCollisionLogic on hole stadiums (Bowser
+                    # Castle / Toy Field), which have no blanket ground bounce.
+                    vy = -vy if bounce else 0.0
+                if landed_at is None:
+                    landed_at = f
+            points.append((px, py, pz))
+            if max_frames is None:
+                if landed_at is not None and f >= landed_at + 1:
+                    break
+            elif f >= max_frames:
+                break
+        self._landed_at = landed_at
+        return points
 
-    # -- run the whole pipeline --
-    def run(self) -> HitResult:
+    def calculate_hit_ground(self):
+        self.trajectory = self._build_trajectory()
+
+    # -- pipeline up to (but not including) the ground integration --
+    def _pipeline(self):
         if not self.hit_ball():
             raise ValueError("These inputs would not make contact with the ball")
         self.calculate_contact()
@@ -752,6 +825,10 @@ class _HitSim:
         self.calculate_vertical_angle()
         self.calculate_hit_power()
         self.convert_power_to_velocity()
+
+    # -- run the whole pipeline --
+    def run(self) -> HitResult:
+        self._pipeline()
         self.calculate_hit_ground()
 
         landing = self.trajectory[-1] if self.trajectory else (0.0, self.b.pitching_height, 0.0)
@@ -788,8 +865,8 @@ def _int_no_commas(value) -> int:
     return int(str(value).replace(",", "")) if value is not None else 0
 
 
-def simulate_hit_from_event(event: EventObj) -> HitResult:
-    """Build HitInputs from a stat-file contact event and simulate it.
+def _inputs_from_event(event: EventObj) -> HitInputs:
+    """Build HitInputs from a stat-file contact event.
 
     Mirrors the JS `useStatFileValues`. Requires the event to have contact
     (raises otherwise). Bunts (swing "None" with contact) are not supported.
@@ -823,12 +900,18 @@ def simulate_hit_from_event(event: EventObj) -> HitResult:
 
     up, down, left, right = G.stick_directions(contact.get("Input Direction - Stick"))
 
-    inputs = HitInputs(
+    # Toy Field's ground plane sits higher; Bowser Castle / Toy Field skid.
+    stadium_code = G.to_encoded(G.STADIUM_ID_TO_NAME, event.rioStat.stadium())
+    ground_y = T.GROUND_Y_TOY_FIELD if stadium_code == 0x6 else T.GROUND_Y_DEFAULT
+    bounce = stadium_code in T.BOUNCING_STADIUM_IDS
+
+    return HitInputs(
         batter_name=event.batter(),
         pitcher_name=event.pitcher(),
         pitch_type_val=pitch_type_val,
         pos_x=pitch.get("Bat Contact Pos - X"),
         ball_x=contact.get("Ball Contact Pos - X"),
+        ball_z=float(contact.get("Ball Contact Pos - Z", 0.0)),
         batter_hand=G.to_encoded(G.HAND, event.batter_hand()),  # 0 Right/1 Left == T.Righty/T.Lefty
         swing=T.Charge if swing_code == 2 else T.Slap,
         is_star=swing_code == 3,
@@ -843,8 +926,36 @@ def simulate_hit_from_event(event: EventObj) -> HitResult:
         easy_batting=False,  # not recorded in stat files
         batter_stars_on=batter_starred,
         pitcher_stars_on=pitcher_starred,
+        ground_y=ground_y,
+        bounce=bounce,
         rng1=_int_no_commas(contact.get("RNG1")),
         rng2=_int_no_commas(contact.get("RNG2")),
         rng3=_int_no_commas(contact.get("RNG3")),
     )
-    return simulate_hit(inputs)
+
+
+def simulate_hit_from_event(event: EventObj) -> HitResult:
+    """Build HitInputs from a stat-file contact event and simulate it."""
+    return simulate_hit(_inputs_from_event(event))
+
+
+def simulate_hit_trajectory(inputs: HitInputs, frames: int) -> list:
+    """Full bounce-inclusive (x, y, z) trajectory integrated for ``frames`` frames.
+
+    Unlike ``simulate_hit`` -- whose ``HitResult.trajectory`` stops at the
+    wall-free aerial landing -- this continues through ground contacts using the
+    bounce/skid physics (per ``HitInputs.bounce``). Intended for testing, e.g.
+    walking a grounder along the ground to a known hang time. Returns
+    ``frames + 1`` points (index 0 is the contact point, index ``frames`` is the
+    position after ``frames`` integration steps).
+    """
+    batter = BatterAttributes.from_name(inputs.batter_name, inputs.batter_stars_on)
+    pitcher = PitcherAttributes.from_name(inputs.pitcher_name, inputs.pitcher_stars_on)
+    sim = _HitSim(batter, pitcher, inputs)
+    sim._pipeline()
+    return sim._build_trajectory(max_frames=frames)
+
+
+def simulate_hit_trajectory_from_event(event: EventObj, frames: int) -> list:
+    """``simulate_hit_trajectory`` for a stat-file contact event."""
+    return simulate_hit_trajectory(_inputs_from_event(event), frames)

@@ -113,6 +113,35 @@ def is_home_run(trajectory: Iterable[tuple], stadium: str) -> bool:
     return False
 
 
+def wall_collision_point(trajectory, stadium) -> Optional[tuple]:
+    """Interpolated (x, y, z) where the trajectory first reaches the outfield
+    wall plane (z crosses ``wall_at`` for that x), or None if it never does
+    (stayed in the park, left over foul territory where there is no wall, or the
+    stadium has no walls, e.g. Toy Field).
+
+    This is the point the ball meets the wall whether it clears it (home run --
+    see ``is_home_run``) or strikes it (off the wall), so it is what a recorded
+    landing should be compared against for balls that reach the wall. It does
+    not modify the trajectory; ``HitResult`` stays wall-free.
+    """
+    if stadium not in STADIUM_WALLS:
+        return None
+    traj = list(trajectory)
+    if not traj:
+        return None
+    prev = traj[0]
+    pw = wall_at(stadium, prev[0])
+    prev_d = (prev[2] - pw[0]) if pw else None       # signed dist to wall plane (z - wall_z)
+    for cur in traj[1:]:
+        cw = wall_at(stadium, cur[0])
+        cur_d = (cur[2] - cw[0]) if cw else None
+        if prev_d is not None and cur_d is not None and prev_d < 0.0 <= cur_d:
+            t = prev_d / (prev_d - cur_d)
+            return tuple(prev[k] + t * (cur[k] - prev[k]) for k in range(3))
+        prev, prev_d = cur, cur_d
+    return None
+
+
 def home_run_stadiums(trajectory) -> list[str]:
     """Stadium names where this trajectory clears the outfield wall.
 

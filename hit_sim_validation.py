@@ -34,6 +34,7 @@ from typing import Callable, Iterable, Optional
 
 from . import hit_simulation as hs
 from . import rio_tags
+from . import stadiums
 from .constants import game_constants as G
 from .stat_file_parser import StatObj, EventObj
 
@@ -229,17 +230,29 @@ class ValidationReport:
 
 # ---------------------------------------------------------------- core driver
 
-def _ball_reached_ground(contact: dict) -> bool:
-    """True if the recorded landing is a real ground contact (not a fielder).
+def _is_natural_landing(contact: dict) -> bool:
+    """True if 'Ball Landing Position' is where the ball naturally came down,
+    rather than a point determined by a fielder.
 
-    For a ball caught in the air the stat file stores the fielder's location in
-    'Ball Landing Position', so those events must be excluded from any landing
-    comparison.
+    Excluded otherwise, because the air-only sim cannot (and should not)
+    reproduce a fielder-determined landing:
+      - a ball caught for an out (secondary 'Out-caught') stores the fielder's
+        location in 'Ball Landing Position'; and
+      - any ball a fielder reached with a special action (Sliding, Walljump,
+        ...) records the fielder-contact point (fielderActionCatchCoords), not
+        the trajectory's landing -- e.g. a sliding interception fumbled into a
+        hit. Only First Fielder Action 'None' is a clean natural landing.
     """
     sec = contact.get("Contact Result - Secondary")
-    if sec is None:
-        return True
-    return G.to_encoded(G.SECONDARY_CONTACT_RESULT, sec) != 0  # 0 = Out-caught
+    if sec is not None and G.to_encoded(G.SECONDARY_CONTACT_RESULT, sec) == 0:
+        return False  # caught for an out
+    action = (contact.get("First Fielder") or {}).get("Fielder Action", 0)
+    try:
+        if G.to_encoded(G.FIELDER_ACTIONS, action) != 0:  # 0 = None
+            return False  # a fielder reached the ball before it landed
+    except KeyError:
+        pass
+    return True
 
 
 # ---------------------------------------------------------------- known mod exceptions
@@ -320,7 +333,8 @@ def _excused(field_name, event, contact, result, active_tags):
 
 
 def validate_statobj(stat: StatObj, *, include_landing: bool = False,
-                     landing_exclude_caught: bool = True,
+                     landing_exclude_caught: bool = True, walls: bool = False,
+                     bounces: bool = False,
                      vel_tol: float = 1e-4, float_tol: float = 1e-3,
                      landing_tol: float = 1.0, active_tags=None,
                      report: Optional[ValidationReport] = None) -> ValidationReport:
@@ -330,6 +344,18 @@ def validate_statobj(stat: StatObj, *, include_landing: bool = False,
     rio_tags). Mismatches attributable to an active mod (KNOWN_MOD_EXCEPTIONS)
     are counted as expected rather than failures. If None, the match's tags are
     resolved automatically from its TagSetID (cached); pass an empty set to skip.
+
+    ``walls`` clips the landing comparison to the outfield wall: for a ball whose
+    (wall-free) trajectory reaches the wall plane, the recorded landing is
+    compared against the wall-collision point (see stadiums.wall_collision_point)
+    instead of the free-flight landing. The simulated trajectory itself is never
+    modified.
+
+    ``bounces`` compares grounders/liners that stayed in the park against the
+    bounce-physics trajectory walked to the recorded "Ball Hang Time" (where the
+    skidding ball actually is when the game records its landing), rather than the
+    aerial first-contact landing. ``walls`` takes precedence when the ball leaves
+    the park.
     """
     report = report or ValidationReport()
     report.files += 1
@@ -337,6 +363,7 @@ def validate_statobj(stat: StatObj, *, include_landing: bool = False,
         game_id = stat.gameID()
     except Exception:
         game_id = "?"
+    stadium = stat.stadium() if walls else None
 
     if active_tags is None:
         active_tags = rio_tags.active_tags_for_stat(stat)
@@ -369,7 +396,20 @@ def validate_statobj(stat: StatObj, *, include_landing: bool = False,
             continue
 
         report.simulated += 1
-        skip_landing = landing_exclude_caught and not _ball_reached_ground(contact)
+        if walls or bounces:
+            wp = stadiums.wall_collision_point(result.trajectory, stadium) if walls else None
+            if wp is not None:
+                result.landing = wp            # left the park: compare against the wall
+            elif bounces:
+                # Recorded landing for a grounder/liner is where the skidding
+                # ball is at "Ball Hang Time"; walk the bounce trajectory there.
+                try:
+                    hang = _ci(contact.get("Ball Hang Time"))
+                except (TypeError, ValueError):
+                    hang = None
+                if hang and hang > 0:
+                    result.landing = hs.simulate_hit_trajectory_from_event(event, hang)[-1]
+        skip_landing = landing_exclude_caught and not _is_natural_landing(contact)
         for spec in specs:
             if skip_landing and spec.name.startswith("landing_"):
                 continue
@@ -432,14 +472,25 @@ def main(argv=None):
                         help="also compare landing position (informational; the JS "
                              "trajectory model is unverified, so misses are expected)")
     parser.add_argument("--include-caught-landing", action="store_true",
-                        help="include caught balls in the landing comparison "
-                             "(their recorded landing is the fielder's position)")
+                        help="include fielder-determined landings in the comparison "
+                             "(caught-for-out balls and any ball a fielder reached "
+                             "with a Sliding/Walljump action store the fielder "
+                             "contact point, not the natural landing)")
+    parser.add_argument("--walls", action="store_true",
+                        help="clip the landing comparison to the outfield wall "
+                             "(compare balls that reach the wall against the wall "
+                             "collision point); the trajectory itself is unchanged")
+    parser.add_argument("--bounces", action="store_true",
+                        help="compare in-park grounders/liners against the bounce "
+                             "trajectory walked to the recorded hang time (where "
+                             "the skidding ball is when its landing is recorded)")
     parser.add_argument("--no-tags", action="store_true",
                         help="don't resolve match tags from the ProjectRio API; "
                              "known-mod exceptions (e.g. Remove slice) won't be excused")
     args = parser.parse_args(argv)
     report = validate(args.path, include_landing=args.landing,
                       landing_exclude_caught=not args.include_caught_landing,
+                      walls=args.walls, bounces=args.bounces,
                       active_tags=frozenset() if args.no_tags else None)
     print(report.summary())
     # Exit status reflects the deterministic fields only; landing is informational.

@@ -76,6 +76,21 @@ DEFAULT_USHORT_8089269c = 1828
 AIR_RESISTANCE = 0.996
 GRAVITY = 0.00275
 
+# Ground-plane Y used for landing/bounce detection in liveBallHitPhysics
+# (const_0.15(/0.35ToyField)GroundYForBounces). The ball is treated as having
+# reached the ground when its Y drops below this; Toy Field sits higher.
+GROUND_Y_DEFAULT = 0.15
+GROUND_Y_TOY_FIELD = 0.35
+
+# Stadiums where liveBallHitPhysics applies the blanket flat-ground bounce
+# (clamp Y to the ground plane, reverse a downward Y velocity). Bowser Castle
+# (0x1) and Toy Field (0x6) are excluded because their ground plane has HOLES, so
+# a uniform "clamp + bounce up everywhere" would be wrong -- their real,
+# geometry-aware ground/wall collisions are resolved by ballCollisionLogic (not
+# ported here). Keyed by encoded StadiumID. Decoded from the JS gating
+# `StadiumID == Mario || (byte)(StadiumID + ~BowserCastle) < 3 || StadiumID == DKJungle`.
+BOUNCING_STADIUM_IDS = frozenset({0x0, 0x2, 0x3, 0x4, 0x5})  # Mario, Wario, Yoshi, Peach, DK
+
 # --- Contact threshold base values, indexed [trimmedBat][slapChargeStarBunt][easyBatting] ---
 # Each leaf is [b0, b1, b2, b3, leftNice, leftPerfect, rightPerfect, rightNice].
 BallContactArray_807b6294 = [[[[50, 98, 106, 150, 30, 95, 109, 170], [40, 98, 106, 160, 20, 95, 109, 180]], [[60, 99, 101, 150, 40, 97, 103, 170], [55, 99, 101, 160, 35, 97, 103, 180]], [[50, 99, 101, 140, 40, 97, 103, 160], [45, 99, 101, 145, 35, 97, 103, 165]], [[80, 98, 102, 120, 35, 95, 105, 165], [80, 98, 102, 110, 35, 95, 105, 165]], [[0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]]], [[[40, 96, 104, 150, 30, 93, 107, 170], [30, 96, 104, 170, 20, 93, 107, 180]], [[60, 96, 104, 140, 35, 93, 107, 170], [50, 96, 104, 150, 25, 93, 107, 180]], [[60, 99, 101, 140, 40, 97, 103, 160], [40, 99, 101, 160, 30, 97, 103, 170]], [[90, 98, 102, 110, 75, 95, 105, 125], [90, 98, 102, 110, 75, 95, 105, 125]], [[0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]]]]
