@@ -57,8 +57,8 @@ PitchChangeUp = 2
 
 # --- Charge pitch type (ChargePitchType) ---
 PitchChargeType_None = 0
-PitchChargeType_Unknown = 1
-PitchChargeType_Charge = 2
+PitchChargeType_ChargedStar = 1   # a charged star pitch that never resolved to Slider/Perfect
+PitchChargeType_Charge = 2        # Slider
 PitchChargeType_Perfect = 3
 
 # --- Stick input direction (AtBat_InputDirection) ---

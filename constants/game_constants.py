@@ -200,6 +200,7 @@ PITCH_TYPE = {
 
 CHARGE_PITCH_TYPE = {
     0: "N/A",
+    1: "ChargedStar",
     2: "Slider",
     3: "Perfect",
 }

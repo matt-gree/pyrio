@@ -215,7 +215,7 @@ class PitcherAttributes:
 class HitInputs:
     batter_name: str
     pitcher_name: str
-    # pitch: 0 Curve, 1 Charge(Slider), 2 Perfect Charge, 3 ChangeUp
+    # pitch: 0 Curve, 1 Charge(Slider), 2 Perfect Charge, 3 ChangeUp, 4 ChargedStar
     pitch_type_val: int
     pos_x: float                 # batter X at contact
     ball_x: float                # ball X at contact (world X start of trajectory)
@@ -308,18 +308,24 @@ class _HitSim:
         self.s2 = inp.rng2
         self.ushort = inp.rng3
 
-        # pitcher pitch typing (parseValues)
+        # pitcher pitch typing (parseValues). pitch_type_val:
+        #   0 Curve, 1 Slider charge, 2 Perfect charge, 3 ChangeUp, 4 ChargedStar.
+        # Only ChargePitchType == Perfect is special-cased downstream; Slider and
+        # ChargedStar both take the non-perfect (else) branch in calculate_contact.
         pv = inp.pitch_type_val
         if pv == 0:
             self.Pitcher_TypeOfPitch = T.PitchCurve
             self.ChargePitchType = T.PitchChargeType_None
         elif pv == 1:
             self.Pitcher_TypeOfPitch = T.PitchCharge
-            self.ChargePitchType = T.PitchChargeType_Charge
+            self.ChargePitchType = T.PitchChargeType_Charge      # Slider
         elif pv == 2:
             self.Pitcher_TypeOfPitch = T.PitchCharge
             self.ChargePitchType = T.PitchChargeType_Perfect
-        else:
+        elif pv == 4:
+            self.Pitcher_TypeOfPitch = T.PitchCharge
+            self.ChargePitchType = T.PitchChargeType_ChargedStar
+        else:  # pv == 3
             self.Pitcher_TypeOfPitch = T.PitchChangeUp
             self.ChargePitchType = T.PitchChargeType_None
         self.cursed_ball = pitcher.cursed_ball
@@ -1158,8 +1164,18 @@ def _inputs_from_event(event: EventObj, active_tags=frozenset()) -> HitInputs:
     if pitch_code == 0:
         pitch_type_val = 0
     elif pitch_code == 1:
-        charge_code = G.to_encoded(G.CHARGE_PITCH_TYPE, pitch.get("Charge Type"))  # 2 Slider/3 Perfect
-        pitch_type_val = 1 if charge_code == 2 else 2
+        # Charge Type: 1 ChargedStar / 2 Slider / 3 Perfect. Older stat files
+        # couldn't decode ChargedStar and log "Unable to Decode. Invalid Value
+        # (1)." instead -- map that legacy string back to 1.
+        try:
+            charge_code = G.to_encoded(G.CHARGE_PITCH_TYPE, pitch.get("Charge Type"))
+        except KeyError:
+            if "(1)" in str(pitch.get("Charge Type")):
+                charge_code = 1  # ChargedStar
+            else:
+                raise ValueError(f"undecodable Charge Type {pitch.get('Charge Type')!r}")
+        # 1 ChargedStar -> 4, 3 Perfect -> 2, else (Slider) -> 1.
+        pitch_type_val = {1: 4, 3: 2}.get(charge_code, 1)
     else:
         pitch_type_val = 3
 
@@ -1212,6 +1228,78 @@ def simulate_hit_from_event(event: EventObj, active_tags=frozenset()) -> HitResu
     rio_tags); recognized mods (TAG_TO_FLAG) are modeled instead of diverging.
     """
     return simulate_hit(_inputs_from_event(event, active_tags))
+
+
+def _inputs_from_landing_row(row: dict, stadium_id: int, active_tags=frozenset(),
+                             batter_stars_on: bool = False,
+                             pitcher_stars_on: bool = False) -> HitInputs:
+    """Build HitInputs from a ProjectRio ``/landing_data/`` row.
+
+    The endpoint already serves encoded values, so characters come through as
+    encoded char ids (BatterAttributes.from_name resolves those directly) and the
+    categorical fields (swing/pitch/charge type, hand, stick) are integer codes
+    matching game_constants. The row carries everything the contact pipeline
+    needs except two game-level facts the endpoint doesn't expose: whether
+    superstars are on (``batter_stars_on``/``pitcher_stars_on``, default off) and
+    the stadium (``stadium_id``, used only for the ground plane / bounce). Walu
+    tech (see _inputs_from_event) can't be detected here -- the row lacks the
+    team's star count -- so star swings without enough stars won't be corrected.
+    """
+    swing_code = int(row["type_of_swing"])
+    if swing_code not in (1, 2, 3):  # 1 Slap, 2 Charge, 3 Star (0 None / 4 Bunt unsupported)
+        raise ValueError(
+            f"Unsupported swing type {swing_code!r} (None/Bunt not supported)"
+        )
+
+    pitch_code = int(row["pitch_type"])  # 0 Curve / 1 Charge / 2 ChangeUp
+    if pitch_code == 0:
+        pitch_type_val = 0
+    elif pitch_code == 1:
+        charge_code = int(row.get("charge_pitch_type") or 0)  # 1 ChargedStar/2 Slider/3 Perfect
+        pitch_type_val = {1: 4, 3: 2}.get(charge_code, 1)
+    else:
+        pitch_type_val = 3
+
+    up, down, left, right = G.stick_directions(int(row["stick_input"]))
+    ground_y = T.GROUND_Y_TOY_FIELD if stadium_id == 0x6 else T.GROUND_Y_DEFAULT
+    bounce = stadium_id in T.BOUNCING_STADIUM_IDS
+
+    return HitInputs(
+        batter_name=int(row["batter_char_id"]),
+        pitcher_name=int(row["pitcher_char_id"]),
+        pitch_type_val=pitch_type_val,
+        pos_x=float(row["bat_x_contact_pos"]),
+        ball_x=float(row["ball_x_contact_pos"]),
+        ball_z=float(row.get("ball_z_contact_pos") or 0.0),
+        batter_hand=int(bool(row["batting_hand"])),  # 0 Right / 1 Left
+        swing=T.Charge if swing_code == 2 else T.Slap,
+        is_star=swing_code == 3,
+        charge_up=float(row.get("charge_power_up") or 0.0),
+        charge_down=float(row.get("charge_power_down") or 0.0),
+        chem_links=int(row.get("chem_links_ob") or 0),
+        frame=int(row["frame_of_swing"]),
+        input_up=up,
+        input_down=down,
+        input_left=left,
+        input_right=right,
+        easy_batting=False,
+        batter_stars_on=batter_stars_on,
+        pitcher_stars_on=pitcher_stars_on,
+        ground_y=ground_y,
+        bounce=bounce,
+        rng1=int(row["rng1"]),  # endpoint serves the seeds as floats (e.g. 9747.0)
+        rng2=int(row["rng2"]),
+        rng3=int(row["rng3"]),
+        **_mod_flags_from_tags(active_tags),
+    )
+
+
+def simulate_hit_from_landing_row(row: dict, stadium_id: int, active_tags=frozenset(),
+                                  batter_stars_on: bool = False,
+                                  pitcher_stars_on: bool = False) -> HitResult:
+    """Build HitInputs from a ``/landing_data/`` row and simulate it."""
+    return simulate_hit(_inputs_from_landing_row(
+        row, stadium_id, active_tags, batter_stars_on, pitcher_stars_on))
 
 
 def simulate_hit_trajectory(inputs: HitInputs, frames: int) -> list:
