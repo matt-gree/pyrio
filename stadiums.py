@@ -84,7 +84,13 @@ NOTE_BLOCKS = [
     {"x": 39, "y": 10, "z": 36, "type": "Brick"},
 ]
 
-_NOTE_BLOCK_RADIUS = 2.0  # JS hitNoteBlock: blockBallDist < 2
+# Effective block-collision radius. The JS hitNoteBlock used 2.0, but validating
+# against recorded Peach Garden landings shows deflected balls passing up to ~4.7
+# from a block center, so ~5 better matches the real collision volume (estimate).
+_NOTE_BLOCK_RADIUS = 5.0
+
+# The note blocks live only in Peach Garden; note_block_hit is a no-op elsewhere.
+NOTE_BLOCK_STADIUM = "Peach Garden"
 
 
 def wall_at(stadium: str, x: float) -> Optional[tuple[float, float]]:
@@ -281,11 +287,16 @@ def home_run_stadiums(trajectory) -> list[str]:
     return [name for name in STADIUM_NAMES if is_home_run(trajectory, name)]
 
 
-def note_block_hit(trajectory) -> Optional[dict]:
-    """First Peach Garden block (note/random/brick) the trajectory passes
-    within range of, or None. Port of the JS `hitNoteBlock` (which only
-    checks points with 6 < y < 15).
+def note_block_hit(trajectory, stadium=None) -> Optional[dict]:
+    """First Peach Garden block (note/random/brick) the trajectory passes within
+    range of, or None. Only points in the block height band (6 < y < 15) count.
+
+    ``stadium`` (a StatObj.stadium() name) gates the check: the blocks only exist
+    in Peach Garden, so any other stadium returns None. Pass None to skip the
+    gate (e.g. when the trajectory is already known to be a Peach Garden hit).
     """
+    if stadium is not None and stadium != NOTE_BLOCK_STADIUM:
+        return None
     for x, y, z in trajectory:
         if not (6 < y < 15):
             continue
