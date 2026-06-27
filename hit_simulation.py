@@ -1108,6 +1108,17 @@ def _mod_flags_from_tags(active_tags) -> dict:
     return {flag: (tag in active_tags) for tag, flag in TAG_TO_FLAG.items()}
 
 
+def _batter_is_off_captain(event: EventObj) -> bool:
+    """True if the batter is a captain-class character (has a captain star hit)
+    who is NOT this game's designated captain -- so a lone star can't be spent on
+    their captain swing (see the Walu-tech check in _inputs_from_event)."""
+    if BatterAttributes.from_name(event.batter()).captain_star_hit_pitch == 0:
+        return False
+    stat = event.rioStat
+    team_str = stat.getTeamString(event.batting_team(), event.batter_roster_loc())
+    return stat.statJson["Character Game Stats"][team_str].get("Captain") != 1
+
+
 def _inputs_from_event(event: EventObj, active_tags=frozenset()) -> HitInputs:
     """Build HitInputs from a stat-file contact event.
 
@@ -1126,6 +1137,22 @@ def _inputs_from_event(event: EventObj, active_tags=frozenset()) -> HitInputs:
         raise ValueError(
             f"Unsupported swing type {pitch.get('Type of Swing')!r} (bunts not supported)"
         )
+
+    charge_up = float(contact.get("Charge Power Up", 0.0))
+    charge_down = float(contact.get("Charge Power Down", 0.0))
+
+    # "Walu tech": an old-game bug where a star swing attempted without enough
+    # stars to spend silently becomes a regular swing (charge if the batter was
+    # charging, else slap) with charge-down forced to 0. The event is still
+    # recorded as Type of Swing "Star" though no star is used, so detect it here.
+    # Insufficient stars = the batting team has none, or has exactly one but the
+    # batter is a captain-class character who isn't this game's captain (their
+    # captain swing can't be fueled by that lone star). Fixed in newer games.
+    if swing_code == 3:
+        stars = event.team_stars(event.batting_team())
+        if stars == 0 or (stars == 1 and _batter_is_off_captain(event)):
+            swing_code = 2  # regular Charge swing...
+            charge_down = 0.0  # ...with charge-down forced to 0 (the power benefit)
 
     pitch_code = G.to_encoded(G.PITCH_TYPE, pitch.get("Pitch Type"))  # 0 Curve/1 Charge/2 ChangeUp
     if pitch_code == 0:
@@ -1158,8 +1185,8 @@ def _inputs_from_event(event: EventObj, active_tags=frozenset()) -> HitInputs:
         batter_hand=G.to_encoded(G.HAND, event.batter_hand()),  # 0 Right/1 Left == T.Righty/T.Lefty
         swing=T.Charge if swing_code == 2 else T.Slap,
         is_star=swing_code == 3,
-        charge_up=float(contact.get("Charge Power Up", 0.0)),
-        charge_down=float(contact.get("Charge Power Down", 0.0)),
+        charge_up=charge_up,
+        charge_down=charge_down,
         chem_links=event.chem_links_on_base(),
         frame=_int_no_commas(contact.get("Frame of Swing Upon Contact")),
         input_up=up,
