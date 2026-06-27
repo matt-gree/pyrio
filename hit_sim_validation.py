@@ -28,6 +28,7 @@ CLI:
 from __future__ import annotations
 
 import json
+import math
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Iterable, Optional
@@ -61,6 +62,8 @@ class _FieldSpec:
         com = self.computed(result)
         if self.tol is None:
             ok = rec == com
+        elif isinstance(rec, tuple):           # point: compare by euclidean distance
+            ok = math.dist(rec, com) <= self.tol
         else:
             ok = abs(float(rec) - float(com)) <= self.tol
         return ok, rec, com
@@ -99,13 +102,15 @@ def _contact_field_specs(vel_tol: float, float_tol: float) -> list[_FieldSpec]:
 
 
 def _landing_field_specs(landing_tol: float) -> list[_FieldSpec]:
+    # Single 3D field: euclidean distance between the recorded (X, Y, Z) landing
+    # and the simulated landing (ground/bounce for in-park balls, the field-
+    # boundary crossing for balls that left the park). Height is included.
     return [
-        _FieldSpec("landing_x",
-                   lambda c: c["Ball Landing Position - X"],
-                   lambda r: r.landing[0], tol=landing_tol),
-        _FieldSpec("landing_z",
-                   lambda c: c["Ball Landing Position - Z"],
-                   lambda r: r.landing[2], tol=landing_tol),
+        _FieldSpec("landing",
+                   lambda c: (float(c["Ball Landing Position - X"]),
+                              float(c["Ball Landing Position - Y"]),
+                              float(c["Ball Landing Position - Z"])),
+                   lambda r: tuple(r.landing), tol=landing_tol),
     ]
 
 
@@ -166,12 +171,12 @@ class ValidationReport:
         """True if the deterministic contact-stage fields all match.
 
         Known-mod exceptions (e.g. Remove slice) are counted as expected, not
-        failures. Excludes the informational 'landing_*' fields, which are
-        expected to diverge (the JS trajectory model was never verified).
+        failures. Excludes the informational 'landing' field, which is expected
+        to diverge (the trajectory flight model was never verified).
         """
         return all(st.failures == 0
                    for name, st in self.fields.items()
-                   if not name.startswith("landing_"))
+                   if not name.startswith("landing"))
 
     def summary(self, max_mismatches: int = 8) -> str:
         lines = []
@@ -299,17 +304,18 @@ def validate_statobj(stat: StatObj, *, include_landing: bool = False,
     are counted as expected rather than failures. If None, the match's tags are
     resolved automatically from its TagSetID (cached); pass an empty set to skip.
 
-    ``walls`` clips the landing comparison to the outfield wall: for a ball whose
-    (wall-free) trajectory reaches the wall plane, the recorded landing is
-    compared against the wall-collision point (see stadiums.wall_collision_point)
-    instead of the free-flight landing. The simulated trajectory itself is never
-    modified.
+    Landing is compared in 3D (X, Y, Z) against the simulated landing. For a ball
+    that leaves the park (home run / off the wall / foul into the netting) the
+    recorded landing is the point where the ball crosses the field-boundary plane,
+    so it is compared against stadiums.boundary_intersection (the field-boundary
+    polygons in constants/stadiums); this is always on. The simulated trajectory
+    itself is never modified.
 
-    ``bounces`` compares grounders/liners that stayed in the park against the
-    bounce-physics trajectory walked to the recorded "Ball Hang Time" (where the
-    skidding ball actually is when the game records its landing), rather than the
-    aerial first-contact landing. ``walls`` takes precedence when the ball leaves
-    the park.
+    ``bounces`` compares in-park grounders/liners against the bounce-physics
+    trajectory walked to the recorded "Ball Hang Time" (where the skidding ball
+    actually is when the game records its landing), rather than the aerial first-
+    contact landing. The boundary crossing takes precedence when the ball leaves
+    the park. ``walls`` is deprecated (the boundary check is now the default).
     """
     report = report or ValidationReport()
     report.files += 1
@@ -317,7 +323,7 @@ def validate_statobj(stat: StatObj, *, include_landing: bool = False,
         game_id = stat.gameID()
     except Exception:
         game_id = "?"
-    stadium = stat.stadium() if walls else None
+    stadium = stat.stadium()
 
     if active_tags is None:
         active_tags = rio_tags.active_tags_for_stat(stat)
@@ -350,13 +356,25 @@ def validate_statobj(stat: StatObj, *, include_landing: bool = False,
             continue
 
         report.simulated += 1
-        if walls or bounces:
-            wp = stadiums.wall_collision_point(result.trajectory, stadium) if walls else None
-            if wp is not None:
-                result.landing = wp            # left the park: compare against the wall
+        if include_landing:
+            left_park = stadiums.boundary_crossing(result.trajectory, stadium) is not None
+            if left_park:
+                # Left the park (HR / off the wall / foul into the netting): the
+                # recorded landing is where the ball struck something, which lies
+                # on the wall-free flight path (a few frames past the boundary for
+                # a ball that clears the fence). Compare to the nearest 3D point.
+                try:
+                    rec = (float(contact["Ball Landing Position - X"]),
+                           float(contact["Ball Landing Position - Y"]),
+                           float(contact["Ball Landing Position - Z"]))
+                except (KeyError, TypeError, ValueError):
+                    rec = None
+                near = stadiums.nearest_trajectory_point(result.trajectory, rec) if rec else None
+                if near is not None:
+                    result.landing = near[2]
             elif bounces:
-                # Recorded landing for a grounder/liner is where the skidding
-                # ball is at "Ball Hang Time"; walk the bounce trajectory there.
+                # Recorded landing for an in-park grounder/liner is where the
+                # skidding ball is at "Ball Hang Time"; walk the bounce there.
                 try:
                     hang = _ci(contact.get("Ball Hang Time"))
                 except (TypeError, ValueError):
@@ -366,7 +384,7 @@ def validate_statobj(stat: StatObj, *, include_landing: bool = False,
                         event, hang, active_tags)[-1]
         skip_landing = landing_exclude_caught and not _is_natural_landing(contact)
         for spec in specs:
-            if skip_landing and spec.name.startswith("landing_"):
+            if skip_landing and spec.name.startswith("landing"):
                 continue
             try:
                 ok, rec, com = spec.matches(contact, result)
@@ -424,17 +442,18 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description="Validate the hit simulator against stat files")
     parser.add_argument("path", help="decoded stat file or a directory of them")
     parser.add_argument("--landing", action="store_true",
-                        help="also compare landing position (informational; the JS "
-                             "trajectory model is unverified, so misses are expected)")
+                        help="also compare landing position in 3D (informational; the "
+                             "trajectory flight model is unverified, so misses are "
+                             "expected). Balls that leave the park are compared against "
+                             "the field-boundary crossing (constants/stadiums geometry).")
     parser.add_argument("--include-caught-landing", action="store_true",
                         help="include fielder-determined landings in the comparison "
                              "(caught-for-out balls and any ball a fielder reached "
                              "with a Sliding/Walljump action store the fielder "
                              "contact point, not the natural landing)")
     parser.add_argument("--walls", action="store_true",
-                        help="clip the landing comparison to the outfield wall "
-                             "(compare balls that reach the wall against the wall "
-                             "collision point); the trajectory itself is unchanged")
+                        help="deprecated/no-op: fence-ball landings are now compared "
+                             "against the field-boundary crossing by default")
     parser.add_argument("--bounces", action="store_true",
                         help="compare in-park grounders/liners against the bounce "
                              "trajectory walked to the recorded hang time (where "
