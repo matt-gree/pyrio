@@ -270,57 +270,11 @@ class KnownModException:
     predicate: Callable             # (event, contact, result) -> bool
 
 
-def _is_slice_event(event, contact, result) -> bool:
-    """A non-line-drive star swing hit on frame 2 or 10 (the "slice").
-
-    Vanilla sends these straight up the middle (raw horizontal angle 0x400);
-    the "Remove slice" mod replaces them with foul balls, so the recorded
-    horizontal trajectory diverges from the sim.
-    """
-    swing = event.pitch_dict().get("Type of Swing")
-    if swing is None or G.to_encoded(G.TYPE_OF_SWING, swing) != 3:  # 3 = Star
-        return False
-    try:
-        frame = _ci(contact.get("Frame of Swing Upon Contact"))
-    except (TypeError, ValueError):
-        return False
-    if frame not in (2, 10):
-        return False
-    # Line-drive star swings (non-captain star type 3) don't slice.
-    batter = hs.BatterAttributes.from_name(event.batter())
-    is_line_drive_star = (batter.captain_star_hit_pitch == 0
-                          and batter.non_captain_star_swing == 3)
-    return not is_line_drive_star
-
-
-# All deterministic contact-stage field names (the toad bat-reach fix shifts the
-# whole contact, so it can affect any of them).
-_CONTACT_FIELD_NAMES = frozenset(s.name for s in _contact_field_specs(0.0, 0.0))
-
-# Non-red Toad color variants; the "Fix Non-red Toad Hitboxes and Bat Reach" mod
-# gives these Red Toad's bat reach, changing where/whether contact lands.
-_NON_RED_TOADS = frozenset({"Toad(B)", "Toad(Y)", "Toad(G)", "Toad(P)"})
-
-
-def _is_non_red_toad_batter(event, contact, result) -> bool:
-    # from_name normalizes either a name or an encoded char id to the canonical name.
-    return hs.BatterAttributes.from_name(event.batter()).name in _NON_RED_TOADS
-
-
-KNOWN_MOD_EXCEPTIONS = [
-    KnownModException(
-        name="Slice (up-the-middle star swing)",
-        tag="Remove slice",
-        fields=frozenset({"horizontal_angle", "velocity_x", "velocity_z"}),
-        predicate=_is_slice_event,
-    ),
-    KnownModException(
-        name="Non-red toad bat reach",
-        tag="Fix Non-red Toad Hitboxes and Bat Reach",
-        fields=_CONTACT_FIELD_NAMES,
-        predicate=_is_non_red_toad_batter,
-    ),
-]
+# Both previously-listed mods ("Remove slice" and "Fix Non-red Toad Hitboxes and
+# Bat Reach") are now modeled directly by the simulator from the match's active
+# tags (hit_simulation.TAG_TO_FLAG), so they no longer need exceptions here. The
+# framework below is retained for any future mod the simulator can't reproduce.
+KNOWN_MOD_EXCEPTIONS: list = []
 
 
 def _excused(field_name, event, contact, result, active_tags):
@@ -387,7 +341,7 @@ def validate_statobj(stat: StatObj, *, include_landing: bool = False,
             continue
 
         try:
-            result = hs.simulate_hit_from_event(event)
+            result = hs.simulate_hit_from_event(event, active_tags)
         except ValueError as ex:
             report.skipped.append((game_id, i, f"value error: {ex}"))
             continue
@@ -408,7 +362,8 @@ def validate_statobj(stat: StatObj, *, include_landing: bool = False,
                 except (TypeError, ValueError):
                     hang = None
                 if hang and hang > 0:
-                    result.landing = hs.simulate_hit_trajectory_from_event(event, hang)[-1]
+                    result.landing = hs.simulate_hit_trajectory_from_event(
+                        event, hang, active_tags)[-1]
         skip_landing = landing_exclude_caught and not _is_natural_landing(contact)
         for spec in specs:
             if skip_landing and spec.name.startswith("landing_"):

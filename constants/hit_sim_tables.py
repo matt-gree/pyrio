@@ -110,6 +110,22 @@ RandomBattingFactors_ChemLinkMult0 = [1.0, 1.1, 1.25, 1.5]
 # Horizontal angle ranges, indexed [inputDirection][isCharge][frameOfContact] -> [low, high].
 BattingAngleRanges = [[[[0, 0], [0, 0], [-700, -500], [-500, -350], [-400, -250], [-350, -100], [-150, 250], [200, 300], [250, 400], [350, 550], [550, 700], [0, 0], [0, 0], [0, 0], [0, 0]], [[0, 0], [0, 0], [0, 0], [-600, -400], [-400, -200], [-300, -100], [-200, 200], [100, 400], [300, 450], [350, 600], [0, 0], [0, 0], [0, 0], [0, 0], [0, 0]]], [[[0, 0], [0, 0], [-750, -500], [-500, -300], [-300, -150], [-150, 200], [200, 400], [300, 450], [400, 600], [500, 600], [600, 700], [0, 0], [0, 0], [0, 0], [0, 0]], [[0, 0], [0, 0], [0, 0], [-600, -400], [-400, -200], [-300, 100], [100, 400], [100, 400], [200, 500], [500, 700], [0, 0], [0, 0], [0, 0], [0, 0], [0, 0]]], [[[0, 0], [0, 0], [-700, -600], [-600, -400], [-450, -350], [-400, -300], [-350, -200], [-200, 150], [150, 300], [300, 700], [0, 0], [0, 0], [0, 0], [0, 0], [0, 0]], [[0, 0], [0, 0], [0, 0], [-550, -300], [-400, -200], [-300, -100], [-300, -100], [-100, 200], [200, 450], [450, 650], [0, 0], [0, 0], [0, 0], [0, 0], [0, 0]]]]
 
+# "Remove slice" gecko mod: vanilla leaves these [inputDirection][isCharge][frame]
+# cells as [0,0], which forces the hit dead up the middle (raw angle 0x400 -- the
+# unrealistic "slice") whenever contact lands on the earliest/latest valid frame.
+# The mod replaces them with the proper extreme pull (frame 2) / push (frame 10)
+# ranges so the ball goes foul instead. Values are zero-span (low == high), so the
+# angle is deterministic and no RNG index is drawn. See hit_simulation.remove_slice.
+REMOVE_SLICE_ANGLE_OVERRIDES = {
+    (PushPullNone, 1, 2): [-600, -600],
+    (PushPullNone, 1, 10): [600, 600],
+    (PullStickTowardsHitting, 1, 2): [-600, -600],
+    (PullStickTowardsHitting, 1, 10): [700, 700],
+    (PushStickAway, 1, 2): [-550, -550],
+    (PushStickAway, 1, 10): [650, 650],
+    (PushStickAway, 0, 10): [700, 700],
+}
+
 # Vertical zone weights, indexed [hitTrajectoryLow][slapOrCharge][easyBatting][contactType] -> 5 weights.
 BattingVerticalAngleWeights = [[[[[0, 10, 20, 30, 40], [20, 20, 20, 20, 20], [10, 25, 30, 25, 10], [20, 20, 20, 20, 20], [40, 30, 20, 10, 0]], [[0, 10, 20, 30, 40], [20, 20, 20, 20, 20], [10, 25, 30, 25, 10], [20, 20, 20, 20, 20], [40, 30, 20, 10, 0]]], [[[10, 0, 20, 30, 40], [20, 22, 22, 28, 8], [20, 25, 25, 25, 5], [20, 22, 22, 28, 8], [10, 0, 20, 30, 40]], [[10, 0, 20, 30, 40], [20, 22, 22, 28, 8], [20, 25, 25, 25, 5], [20, 22, 22, 28, 8], [10, 0, 20, 30, 40]]]], [[[[0, 10, 20, 30, 40], [5, 5, 15, 40, 35], [5, 5, 20, 40, 35], [5, 5, 15, 40, 35], [40, 30, 20, 10, 0]], [[0, 10, 20, 30, 40], [5, 5, 15, 40, 35], [5, 5, 20, 40, 35], [5, 5, 15, 40, 35], [40, 30, 20, 10, 0]]], [[[5, 0, 10, 40, 45], [5, 21, 12, 29, 33], [5, 23, 15, 27, 30], [5, 21, 12, 29, 33], [5, 0, 10, 40, 45]], [[5, 0, 10, 40, 45], [5, 21, 12, 29, 33], [5, 23, 15, 27, 30], [5, 21, 12, 29, 33], [5, 0, 10, 40, 45]]]], [[[[10, 20, 20, 20, 30], [35, 40, 15, 5, 5], [30, 40, 20, 5, 5], [35, 40, 15, 5, 5], [40, 30, 20, 5, 5]], [[10, 20, 20, 20, 30], [35, 40, 15, 5, 5], [30, 40, 20, 5, 5], [35, 40, 15, 5, 5], [40, 30, 20, 5, 5]]], [[[10, 0, 20, 30, 40], [35, 30, 22, 10, 3], [30, 30, 25, 15, 0], [35, 30, 22, 10, 3], [10, 0, 20, 30, 40]], [[10, 0, 20, 30, 40], [35, 30, 22, 10, 3], [30, 30, 25, 15, 0], [35, 30, 22, 10, 3], [10, 0, 20, 30, 40]]]]]
 
@@ -150,3 +166,52 @@ FLOAT_ARRAY_ARRAY_807b72bc = [[0.5, 0.001, 0.003], [0.25, 0.006, 0.008]]
 # now live pre-encoded in the "Captain Star Hit" / "Non-Captain Star Hit" columns
 # of constants/character_attributes.csv; their name<->code maps are
 # constants.game_constants.CAPTAIN_STAR_BALL / NON_CAPTAIN_STAR_HIT.
+
+# --- DK / Diddy "banana" captain star hit ---
+# The "Captain Star Hit" column encodes a per-captain code (1 Mario .. 12 Daisy),
+# stored at contact in AtBat_Mystery_CaptainStarSwing. DK (5) and Diddy (6) both
+# throw the banana star hit: while it is active, liveBallHitPhysics rotates the
+# ball's HORIZONTAL velocity by a fixed angle each frame (the horizontal speed is
+# preserved -- only the direction turns), producing the wide banana arc.
+CaptainStar_DK = 5
+CaptainStar_Diddy = 6
+BANANA_CAPTAIN_STARS = frozenset({CaptainStar_DK, CaptainStar_Diddy})
+
+# Per-frame horizontal turn applied during the banana hit, in radians
+# (const_hitFloats.0.008_DKStarAngleDelta).
+DK_DIDDY_STAR_ANGLE_DELTA = 0.008
+
+# The banana curve is active over the middle of the flight: CalculateHitVariables
+# sets bananaHitStartFrame = trunc(hangtimeOfHit * 0.25) and bananaHitEndFrame =
+# trunc(hangtimeOfHit * 0.95), where hangtimeOfHit is the straight-flight hang
+# time (the curve turns on after a quarter of the flight and off near the end).
+DK_DIDDY_STAR_HANGTIME_START = 0.25
+DK_DIDDY_STAR_HANGTIME_END = 0.95
+
+# --- Other captain star hit codes ("Captain Star Hit" column) ---
+CaptainStar_Wario = 3
+CaptainStar_Waluigi = 4
+CaptainStar_Bowser = 7
+CaptainStar_BowserJr = 8
+
+# Bowser / Bowser Jr "bullet" star: BallEnergy = 4x the hit power
+# (const_hitFloats.4.0_bulletStarEnergyMultiplier). Energy drives how hard the
+# ball plows through fielders, NOT the aerial flight, so it is exposed as
+# HitResult metadata only -- the bullet's flat trajectory already comes from the
+# captain-star exit-velocity table.
+BULLET_CAPTAIN_STARS = frozenset({CaptainStar_Bowser, CaptainStar_BowserJr})
+BULLET_STAR_ENERGY_MULT = 4.0
+
+# Wario / Waluigi "garlic" star (warioWaluStarHit): the hit flies normally until
+# GARLIC_SPLIT_FRAMES_BEFORE_GROUND frames before it would reach the ground
+# (hitShortConst.120_framesBeforeGroundWhenGarlicSplits), then SPLITS into two
+# balls -- one "real", one garlic -- that start at the split point keeping the
+# pre-split horizontal speed and Y velocity, but with headings offset to either
+# side of the pre-split heading. warioWaluStarHitDirection (RandomInt_Game(2),
+# set in CalculateHitVariables) picks which side is the real ball.
+GARLIC_CAPTAIN_STARS = frozenset({CaptainStar_Wario, CaptainStar_Waluigi})
+GARLIC_SPLIT_FRAMES_BEFORE_GROUND = 120
+# Per-side heading offset (radians) from the pre-split heading: the game rolls an
+# independent randomInRange(0.2, 0.3) for each ball (ported in _random_in_range).
+GARLIC_SPREAD_LOWER = 0.2
+GARLIC_SPREAD_UPPER = 0.3

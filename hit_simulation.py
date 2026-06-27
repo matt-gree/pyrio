@@ -55,6 +55,7 @@ from __future__ import annotations
 
 import csv
 import math
+import struct
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -80,6 +81,12 @@ def _jfloor(x: float) -> int:
 def _to_int32(x: int) -> int:
     x &= 0xFFFFFFFF
     return x - 0x100000000 if x & 0x80000000 else x
+
+
+def _f32(x: float) -> float:
+    """Narrow a Python double to 32-bit float, as the game's single-precision
+    arithmetic does (needed where an intermediate (float) cast changes a result)."""
+    return struct.unpack("f", struct.pack("f", x))[0]
 
 
 def _adjust_ball_angle(a: int) -> int:
@@ -132,6 +139,17 @@ def _load_attr_rows() -> dict:
     return _attr_rows
 
 
+# Non-red Toad color variants. The "Fix Non-red Toad Hitboxes and Bat Reach" mod
+# gives these Red Toad's bat reach (Horizontal Range Near/Far); see HitInputs.
+_NON_RED_TOADS = frozenset({"Toad(B)", "Toad(Y)", "Toad(G)", "Toad(P)"})
+
+
+def _red_toad_reach() -> tuple:
+    """Red Toad's (Horizontal Range Near, Far), read from the attribute CSV."""
+    row = _load_attr_rows()["Toad(R)"]
+    return float(row["Horizontal Range Near"]), float(row["Horizontal Range Far"])
+
+
 def _stat(row, col, stars_on):
     """Read an integer stat, applying the superstar conversion when stars_on."""
     value = int(row[col])
@@ -164,9 +182,9 @@ class BatterAttributes:
             name=row["Character"],
             slap_hit_power=_stat(row, "Slap Hit Power", stars_on),
             charge_power=_stat(row, "Charge Hit Power", stars_on),
-            slap_contact_size=int(row["Slap Contact Size Multiplier"]),
-            charge_contact_size=int(row["Charge Contact Size Multiplier"]),
-            bunting=int(row["Bunting"]),
+            slap_contact_size=_stat(row, "Slap Contact Size Multiplier", stars_on),
+            charge_contact_size=_stat(row, "Charge Contact Size Multiplier", stars_on),
+            bunting=_stat(row, "Bunting", stars_on),
             horizontal_trajectory=int(row["Horizontal Hit Trajectory"]),
             vertical_trajectory=int(row["Vertical Hit Trajectory"]),
             captain_star_hit_pitch=int(row["Captain Star Hit"]),
@@ -219,6 +237,33 @@ class HitInputs:
     ball_z: float = 0.0                     # ball Z at contact (world Z start of trajectory)
     ground_y: float = T.GROUND_Y_DEFAULT   # landing/bounce plane (0.35 on Toy Field)
     bounce: bool = True                     # ground bounces elastically (False = skid; Bowser Castle / Toy Field)
+    # Gecko-mod toggles (off = vanilla). The validator turns these on from a
+    # match's active tags; see TAG_TO_FLAG and _inputs_from_event.
+    # "Fix Non-red Toad Hitboxes and Bat Reach": give the non-red Toad color
+    # variants Red Toad's bat reach (Horizontal Range Near/Far). No other effect.
+    fix_non_red_toad_reach: bool = False
+    # "Remove slice": patch the [0,0] holes in BattingAngleRanges (an early/late
+    # contact otherwise goes dead up the middle) so frame-2/10 hits go foul; see
+    # T.REMOVE_SLICE_ANGLE_OVERRIDES.
+    remove_slice: bool = False
+    # DK/Diddy "banana" captain star hit (auto-applied when the captain star is
+    # DK or Diddy): while active, the horizontal velocity is rotated
+    # T.DK_DIDDY_STAR_ANGLE_DELTA rad/frame (speed preserved), making the wide
+    # horizontal arc. CalculateHitVariables derives all three from the hit, so
+    # None means "use the game's rule": the window is 0.25x..0.95x of the
+    # straight-flight hang time, and the direction is the batter's hand. Set
+    # explicit values only to override.
+    banana_hit_start_frame: Optional[int] = None   # active while start < framesSinceLiveBall < end
+    banana_hit_end_frame: Optional[int] = None
+    banana_direction: Optional[int] = None         # 0 (Righty) subtracts, 1 (Lefty) adds the delta
+    # Wario/Waluigi "garlic" captain star hit (auto-applied for Wario/Waluigi). The
+    # ball splits in two near the ground; each ball's heading is offset from the
+    # pre-split heading by a per-side spread. None -> the game's RNG
+    # (randomInRange(0.2, 0.3) per side); a float forces one symmetric spread (rad).
+    # The game rolls warioWaluStarHitDirection via RandomInt_Game(2); None
+    # reproduces that, 0/1 forces which side the real ball takes.
+    garlic_spread: Optional[float] = None
+    garlic_direction: Optional[int] = None
     rng1: int = T.DEFAULT_STATIC_RANDOM_INT1
     rng2: int = T.DEFAULT_STATIC_RANDOM_INT2
     rng3: int = T.DEFAULT_USHORT_8089269c
@@ -241,7 +286,11 @@ class HitResult:
     landing: tuple                           # (x, y, z) last airborne point
     distance: float                          # sqrt(x^2 + z^2) of landing
     hang_frames: int
-    trajectory: list = field(repr=False)     # list of (x, y, z) per frame
+    ball_energy: float                       # BallEnergy (Bowser/BJ bullet = 4x power; else charge energy)
+    trajectory: list = field(repr=False)     # list of (x, y, z) per frame -- the real ball
+    # Wario/Waluigi garlic ball's (x, y, z) per frame from the split onward; None
+    # for non-garlic hits. The main `trajectory` follows the real ball.
+    garlic_trajectory: Optional[list] = field(default=None, repr=False)
 
 
 # ---------------------------------------------------------------- simulator
@@ -294,6 +343,14 @@ class _HitSim:
         self.Batter_Bunting = batter.bunting
         self.BatterAtPlate_TrajectoryNearFar = batter.horizontal_trajectory
         self.AtBat_HitTrajectoryLow = batter.vertical_trajectory
+
+        # Bat reach (Horizontal Range Near/Far). "Fix Non-red Toad Hitboxes and
+        # Bat Reach" gives the non-red Toads Red Toad's reach.
+        self.horizontalRangeNear = batter.horizontal_range_near
+        self.horizontalRangeFar = batter.horizontal_range_far
+        if inp.fix_non_red_toad_reach and batter.name in _NON_RED_TOADS:
+            self.horizontalRangeNear, self.horizontalRangeFar = _red_toad_reach()
+        self.removeSlice = inp.remove_slice
         self.RandomBattingFactors_ChemLinksOnBase = inp.chem_links
         self.Frame_SwingContact1 = int(inp.frame)
         self.EasyBatting = 1 if inp.easy_batting else 0
@@ -308,6 +365,15 @@ class _HitSim:
         self.nonCaptainStarSwingContact = 0
         self.AtBat_Mystery_CaptainStarSwing = 0
         self.AtBat_Mystery_DidPopFlyOrGrounderConnect = False
+
+        # DK/Diddy banana star hit window/direction (see HitInputs).
+        self.bananaHitStartFrame = inp.banana_hit_start_frame
+        self.bananaHitEndFrame = inp.banana_hit_end_frame
+        self.directionOfBananaHit = inp.banana_direction
+
+        # Wario/Waluigi garlic star hit spread/direction (see HitInputs).
+        self.garlicSpread = inp.garlic_spread
+        self.warioWaluStarHitDirection = inp.garlic_direction
 
         self._resolve_star_swing()
 
@@ -326,7 +392,9 @@ class _HitSim:
         self.AddedContactGravity = 0.0
         self.ballVelocity = [0.0, 0.0, 0.0]
         self.ballAcceleration = [0.0, 0.0, 0.0]
+        self.BallEnergy = 0.0
         self.trajectory: list = []
+        self._garlic_trajectory: Optional[list] = None
 
     # -- parseValues star resolution (starsForBatter hardcoded 4) --
     def _resolve_star_swing(self):
@@ -388,6 +456,25 @@ class _HitSim:
             i += 1
         return 0
 
+    def _random_int_game(self, max_num: int) -> int:
+        """Port of RandomInt_Game: a uniform int in [0, |max_num|) drawn from the
+        same StaticRandomInt1/2 + TotalframesAtPlay RNG as _weighted_random_index
+        (and mutating s1 the same way)."""
+        n = -max_num if max_num < 0 else max_num
+        if n < 2:
+            return 0
+        self.s1 = (self.s1 - (self.s2 & 0xFF)) + _jfloor(self.s2 / n) + self.ushort
+        rr = _to_int32(self.s1 - _jfloor(self.s1 / n) * n)
+        result = ((rr >> 31) ^ rr) - (rr >> 31)  # abs(int32)
+        return -result if max_num < 0 else result
+
+    def _random_in_range(self, lower: float, upper: float) -> float:
+        """Port of randomInRange: a uniform float in [lower, upper] quantized to
+        0.001, drawn from the same RNG as _random_int_game. The (float) casts on
+        the step count are reproduced so the quantization matches the game."""
+        steps = _jfloor(_f32(1000.0 * _f32(upper - lower))) + 1
+        return _f32(0.001 * self._random_int_game(steps) + lower)
+
     # -- hitBall: is contact even possible? --
     def hit_ball(self) -> bool:
         ext = T.BattingExtensions[self.AtBat_TrimmedBat]
@@ -417,9 +504,9 @@ class _HitSim:
         if self.AtBat_BatterHand == T.Lefty:
             diff = -diff
         if diff >= 0.0:
-            cbp = 100.0 * (diff / self.b.horizontal_range_far) + 100.0
+            cbp = 100.0 * (diff / self.horizontalRangeFar) + 100.0
         else:
-            cbp = -(100.0 * (diff / self.b.horizontal_range_near) - 100.0)
+            cbp = -(100.0 * (diff / self.horizontalRangeNear) - 100.0)
         cbp = max(0.0, min(200.0, cbp))
         self.CalculatedBallPos = cbp
 
@@ -491,6 +578,8 @@ class _HitSim:
 
         frame = self.Frame_SwingContact1
         rng = T.BattingAngleRanges[input_direction][is_charge][frame]
+        if self.removeSlice:
+            rng = T.REMOVE_SLICE_ANGLE_OVERRIDES.get((input_direction, is_charge, frame), rng)
         i_low = rng[0]
         i_span = rng[1] - rng[0]
         if i_span < 0:
@@ -751,8 +840,81 @@ class _HitSim:
             if self.AtBat_BatterHand != T.Righty:
                 self.ballAcceleration[0] = -self.ballAcceleration[0]
 
+    # -- CalculateHitVariables tail (runs after CalculateBallVelocityAcceleration) --
+    def _calculate_star_state(self):
+        """Derive BallEnergy and the Wario/Waluigi garlic direction, mirroring the
+        captain-star tail of CalculateHitVariables. Called after
+        convert_power_to_velocity so any RNG draw lands in the game's order."""
+        cap = self.AtBat_Mystery_CaptainStarSwing
+        # Regular charge energy: a fully-charged, non-captain-star, non-sour
+        # contact arms the ball (BallEnergy = hit power). The Ghidra sour test
+        # rendered oddly; "not sour" (Nice/Perfect) is the intent.
+        if (cap == 0
+                and self.Batter_ContactType not in (T.LeftSour, T.RightSour)
+                and self.BatterAtPlate_BatterCharge_Up >= 1.0):
+            self.BallEnergy = float(self.Hit_HorizontalPower)
+        # Bowser / Bowser Jr bullet star: 4x energy (metadata only -- the flat
+        # flight already comes from the captain-star exit-velocity table).
+        if cap in T.BULLET_CAPTAIN_STARS:
+            self.BallEnergy = self.Hit_HorizontalPower * T.BULLET_STAR_ENERGY_MULT
+        # Wario / Waluigi: warioWaluStarHitDirection = RandomInt_Game(2) unless the
+        # caller forced it (drawn here to match the game's RNG consumption order).
+        if cap in T.GARLIC_CAPTAIN_STARS and self.warioWaluStarHitDirection is None:
+            self.warioWaluStarHitDirection = self._random_int_game(2)
+
     # -- calculateHitGround (per-frame loop of liveBallHitPhysics) --
-    def _build_trajectory(self, max_frames=None):
+    def _straight_hangtime(self) -> int:
+        """Frames to first ground contact with no star modifiers applied -- the
+        game's hangtimeOfHit / framesUntilBallHitsGround, which both the banana
+        window and the garlic split are scheduled against (they are computed from
+        the un-curved flight)."""
+        self._build_trajectory(_apply_specials=False)
+        return self._landed_at if self._landed_at is not None else 0
+
+    def _banana_active(self) -> bool:
+        return self.AtBat_Mystery_CaptainStarSwing in T.BANANA_CAPTAIN_STARS
+
+    def _banana_window(self):
+        """Resolve (start_frame, end_frame, direction) for the DK/Diddy banana
+        hit, applying the game's rules (CalculateHitVariables) for any field left
+        as None: the window is 0.25x..0.95x of the straight-flight hang time and
+        the direction is the batter's hand."""
+        direction = self.directionOfBananaHit
+        if direction is None:
+            direction = self.AtBat_BatterHand
+        start = self.bananaHitStartFrame
+        end = self.bananaHitEndFrame
+        if start is None or end is None:
+            hangtime = self._straight_hangtime()
+            if start is None:
+                start = math.trunc(hangtime * T.DK_DIDDY_STAR_HANGTIME_START)
+            if end is None:
+                end = math.trunc(hangtime * T.DK_DIDDY_STAR_HANGTIME_END)
+        return start, end, direction
+
+    def _garlic_active(self) -> bool:
+        return self.AtBat_Mystery_CaptainStarSwing in T.GARLIC_CAPTAIN_STARS
+
+    def _garlic_params(self):
+        """Resolve (split_frame, spread_plus, spread_minus, direction) for the
+        Wario/Waluigi garlic hit. The ball splits GARLIC_SPLIT_FRAMES_BEFORE_GROUND
+        frames before it would land (warioWaluStarHit fires on
+        framesUntilBallHitsGround == that), i.e. at straight_hangtime - 120. Each
+        side's heading offset is an independent randomInRange(0.2, 0.3) draw (the
+        +side first, matching warioWaluStarHit's RNG order); a forced garlic_spread
+        overrides both with one symmetric value."""
+        direction = self.warioWaluStarHitDirection
+        if direction is None:
+            direction = 0
+        if self.garlicSpread is None:
+            spread_plus = self._random_in_range(T.GARLIC_SPREAD_LOWER, T.GARLIC_SPREAD_UPPER)
+            spread_minus = self._random_in_range(T.GARLIC_SPREAD_LOWER, T.GARLIC_SPREAD_UPPER)
+        else:
+            spread_plus = spread_minus = self.garlicSpread
+        split_frame = self._straight_hangtime() - T.GARLIC_SPLIT_FRAMES_BEFORE_GROUND
+        return split_frame, spread_plus, spread_minus, direction
+
+    def _build_trajectory(self, max_frames=None, _apply_specials=True):
         """Integrate the flight, semi-implicit Euler as in liveBallHitPhysics.
 
         Aerial mode (``max_frames`` None): fly until the first ground contact,
@@ -785,16 +947,79 @@ class _HitSim:
         points = [(px, py, pz)]
         landed_at = None
         f = 0
+        # Star modifiers resolve their timing from the straight flight, so they
+        # are skipped on the internal straight pass (_apply_specials=False).
+        # DK (5) / Diddy (6) banana: curve the horizontal velocity below.
+        banana = _apply_specials and self._banana_active()
+        if banana:
+            banana_start, banana_end, banana_dir = self._banana_window()
+        # Wario (3) / Waluigi (4) garlic: split into two balls near the ground.
+        garlic = _apply_specials and self._garlic_active()
+        if garlic:
+            garlic_split_frame, garlic_spread_plus, garlic_spread_minus, garlic_dir = self._garlic_params()
+            garlic_split_done = False
+            garlic_pts = None
+            gx = gy = gz = gvx = gvy = gvz = 0.0
         while True:
+            # framesSinceLiveBall for this tick (the game increments it at the top
+            # of liveBallHitPhysics, before the physics).
+            f += 1
             # Decay velocity and add acceleration FIRST, then step the position
             # (and only then resolve the ground).
             vx = vx * air + ax
             vy = (vy - grav) * air + ay
             vz = vz * air + az
+            # DK/Diddy banana star hit: while the window is open, rotate the
+            # horizontal velocity by a fixed angle each frame (horizontal speed
+            # preserved) -> the wide banana arc. Mirrors the DK/Diddy branch of
+            # liveBallHitPhysics, inserted between the acceleration and position
+            # steps. radianAngleToPoint(vx, vz) == atan2(vz, vx) so that
+            # vx == cos(angle)*speed and vz == sin(angle)*speed.
+            if banana and banana_start < f < banana_end:
+                ground_speed = math.hypot(vx, vz)
+                angle = math.atan2(vz, vx)
+                if banana_dir == 0:   # Righty
+                    angle -= T.DK_DIDDY_STAR_ANGLE_DELTA
+                else:                 # Lefty
+                    angle += T.DK_DIDDY_STAR_ANGLE_DELTA
+                vx = math.cos(angle) * ground_speed
+                vz = math.sin(angle) * ground_speed
             px += vx
             py += vy
             pz += vz
-            f += 1
+            # Wario/Waluigi garlic star hit. At the split frame the ball forks
+            # into the real ball (kept as the main px/py/pz) and a garlic ball,
+            # both starting here with the pre-split horizontal speed and vy but
+            # headings offset +/- garlic_spread from the pre-split heading; which
+            # side is real is warioWaluStarHitDirection. After the split both fly
+            # under plain air+gravity (acceleration zeroed), per warioWaluStarHit.
+            if garlic and not garlic_split_done and f == garlic_split_frame:
+                speed = math.hypot(vx, vz)
+                heading = math.atan2(vz, vx)
+                plus_a = heading + garlic_spread_plus
+                minus_a = heading - garlic_spread_minus
+                if garlic_dir == 0:
+                    real_a, garlic_a = minus_a, plus_a
+                else:
+                    real_a, garlic_a = plus_a, minus_a
+                vx, vz = math.cos(real_a) * speed, math.sin(real_a) * speed
+                ax = ay = az = 0.0
+                gx, gy, gz = px, py, pz
+                gvx, gvy, gvz = math.cos(garlic_a) * speed, vy, math.sin(garlic_a) * speed
+                garlic_pts = [(gx, gy, gz)]
+                garlic_split_done = True
+            elif garlic and garlic_split_done:
+                gvx = gvx * air
+                gvy = (gvy - grav) * air
+                gvz = gvz * air
+                gx += gvx
+                gy += gvy
+                gz += gvz
+                if gy < ground_y:
+                    gy = ground_y
+                    if gvy < 0.0:
+                        gvy = -gvy if bounce else 0.0
+                garlic_pts.append((gx, gy, gz))
             if py < ground_y:
                 py = ground_y
                 if vy < 0.0:
@@ -811,6 +1036,8 @@ class _HitSim:
             elif f >= max_frames:
                 break
         self._landed_at = landed_at
+        if garlic:
+            self._garlic_trajectory = garlic_pts
         return points
 
     def calculate_hit_ground(self):
@@ -825,6 +1052,7 @@ class _HitSim:
         self.calculate_vertical_angle()
         self.calculate_hit_power()
         self.convert_power_to_velocity()
+        self._calculate_star_state()
 
     # -- run the whole pipeline --
     def run(self) -> HitResult:
@@ -848,7 +1076,9 @@ class _HitSim:
             landing=landing,
             distance=math.sqrt(landing[0] ** 2 + landing[2] ** 2),
             hang_frames=len(self.trajectory),
+            ball_energy=self.BallEnergy,
             trajectory=self.trajectory,
+            garlic_trajectory=self._garlic_trajectory,
         )
 
 
@@ -865,7 +1095,20 @@ def _int_no_commas(value) -> int:
     return int(str(value).replace(",", "")) if value is not None else 0
 
 
-def _inputs_from_event(event: EventObj) -> HitInputs:
+# Maps a ProjectRio gecko tag name to the HitInputs flag that models it, so the
+# simulator reproduces a modded match's behavior rather than diverging from it.
+TAG_TO_FLAG = {
+    "Fix Non-red Toad Hitboxes and Bat Reach": "fix_non_red_toad_reach",
+    "Remove slice": "remove_slice",
+}
+
+
+def _mod_flags_from_tags(active_tags) -> dict:
+    """HitInputs mod-flag kwargs for the gecko tags active in a match."""
+    return {flag: (tag in active_tags) for tag, flag in TAG_TO_FLAG.items()}
+
+
+def _inputs_from_event(event: EventObj, active_tags=frozenset()) -> HitInputs:
     """Build HitInputs from a stat-file contact event.
 
     Mirrors the JS `useStatFileValues`. Requires the event to have contact
@@ -931,12 +1174,17 @@ def _inputs_from_event(event: EventObj) -> HitInputs:
         rng1=_int_no_commas(contact.get("RNG1")),
         rng2=_int_no_commas(contact.get("RNG2")),
         rng3=_int_no_commas(contact.get("RNG3")),
+        **_mod_flags_from_tags(active_tags),
     )
 
 
-def simulate_hit_from_event(event: EventObj) -> HitResult:
-    """Build HitInputs from a stat-file contact event and simulate it."""
-    return simulate_hit(_inputs_from_event(event))
+def simulate_hit_from_event(event: EventObj, active_tags=frozenset()) -> HitResult:
+    """Build HitInputs from a stat-file contact event and simulate it.
+
+    ``active_tags`` is the set of gecko-mod tag names active for the match (see
+    rio_tags); recognized mods (TAG_TO_FLAG) are modeled instead of diverging.
+    """
+    return simulate_hit(_inputs_from_event(event, active_tags))
 
 
 def simulate_hit_trajectory(inputs: HitInputs, frames: int) -> list:
@@ -956,6 +1204,7 @@ def simulate_hit_trajectory(inputs: HitInputs, frames: int) -> list:
     return sim._build_trajectory(max_frames=frames)
 
 
-def simulate_hit_trajectory_from_event(event: EventObj, frames: int) -> list:
+def simulate_hit_trajectory_from_event(event: EventObj, frames: int,
+                                       active_tags=frozenset()) -> list:
     """``simulate_hit_trajectory`` for a stat-file contact event."""
-    return simulate_hit_trajectory(_inputs_from_event(event), frames)
+    return simulate_hit_trajectory(_inputs_from_event(event, active_tags), frames)
