@@ -383,6 +383,12 @@ def validate_statobj(stat: StatObj, *, include_landing: bool = False,
                     result.landing = hs.simulate_hit_trajectory_from_event(
                         event, hang, active_tags)[-1]
         skip_landing = landing_exclude_caught and not _is_natural_landing(contact)
+        # Peach Garden note blocks deflect/kill balls that fly through them; the
+        # air-only sim can't model that, so exclude landings whose flight path
+        # passes through a block (like fielder-determined landings).
+        if (include_landing and not skip_landing
+                and stadiums.note_block_hit(result.trajectory, stadium) is not None):
+            skip_landing = True
         for spec in specs:
             if skip_landing and spec.name.startswith("landing"):
                 continue
