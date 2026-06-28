@@ -25,7 +25,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
-from . import hit_analysis as ha
+from .hit_simulator import hit_analysis as ha
 from .stat_file_parser import StatObj
 from .draw import draw_stadium
 
