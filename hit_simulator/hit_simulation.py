@@ -233,6 +233,19 @@ class HitOverrides:
     # Moonshots, or forced pop-fly/grounder hits).
     vertical_zone: Optional[int] = None
 
+    # Force the final raw horizontal angle (0-4096), bypassing
+    # calculate_horizontal_angle's RNG draw and hand mirroring. Applied at the end
+    # of that step, so the value is used verbatim by convert_power_to_velocity.
+    horizontal_angle: Optional[int] = None
+
+    # Force the raw vertical angle (0-4096) before the wrap/flip that folds angles
+    # above 0x400 back down (and mirrors the horizontal angle). The RNG draw still
+    # happens so downstream state is consumed as in-game; only the angle changes.
+    vertical_angle: Optional[int] = None
+
+    # Force the final hit power, bypassing the contact/field/charge power math.
+    power: Optional[int] = None
+
 
 @dataclass
 class HitInputs:
@@ -651,6 +664,8 @@ class _HitSim:
         if self.AtBat_BatterHand != T.Righty:
             i_low = (0x800 - i_low) if i_low < 0x801 else (0x1800 - i_low)
         self.Hit_HorizontalAngle = _adjust_ball_angle(i_low)
+        if self.overrides.horizontal_angle is not None:
+            self.Hit_HorizontalAngle = self.overrides.horizontal_angle
 
     # -- calculateVerticalAngle --
     def calculate_vertical_angle(self):
@@ -755,6 +770,8 @@ class _HitSim:
         else:
             s_var3 = lower + (self.s1 - _jfloor(self.s1 / span) * span)
         self.Hit_VerticalAngle = s_var3
+        if self.overrides.vertical_angle is not None:
+            self.Hit_VerticalAngle = self.overrides.vertical_angle
 
         if self.Hit_VerticalAngle < 0x401:
             if self.Hit_VerticalAngle < -0x400:
@@ -849,6 +866,8 @@ class _HitSim:
             f = f * _MOONSHOT_MULTIPLIER
 
         self.Hit_HorizontalPower = _jfloor(f)
+        if self.overrides.power is not None:
+            self.Hit_HorizontalPower = _jfloor(self.overrides.power)
 
     # -- convertPowerToVelocity --
     def convert_power_to_velocity(self):
