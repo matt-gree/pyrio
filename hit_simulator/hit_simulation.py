@@ -16,9 +16,14 @@ per stat) is applied to slap/charge power (batter) and cursed ball (pitcher) --
 the same stats the JS calculator buffed, now clamped to the in-game caps.
 
 Notes / known JS quirks carried over:
-  - Moonshot (`AtBat_MoonShot`) is unreachable here: the JS hardcodes
-    starsForBatter = 4, so the moonshot branch (needs >= 5) never runs. Its
-    undefined `AtBat_MoonShotMultiplier` therefore never matters.
+  - Moonshot (5-star dinger): a fully-charged star swing with 5 stars. The game
+    triggers it on stars + full charge, but a star swing's charge is zeroed in the
+    recording, so a Moonshot attempt can't be told from a regular 5-star swing
+    there -- except a *connected* dinger sets the "Star Swing Five-Star" flag. So we
+    detect the dinger via that flag (HitInputs.five_star_dinger) and model it as a
+    Star swing carrying AtBat_MoonShot (power override + _MOONSHOT_MULTIPLIER). A
+    failed Moonshot (Texas Leaguer, flag 0) is indistinguishable from a regular
+    5-star swing and is left unmodeled for now.
   - Super curve is read from the "Super Curve" column of the character attribute
     CSV (derived from the "Curved Hits" Extra tag) instead of the JS's hardcoded
     char ids.
@@ -59,14 +64,14 @@ import struct
 from dataclasses import dataclass, field
 from typing import Optional
 
-from .constants import hit_sim_tables as T
-from .constants import CHARACTER_ATTRIBUTES_CSV
-from .constants import game_constants as G
-from .stat_file_parser import EventObj
+from ..constants import hit_sim_tables as T
+from ..constants import CHARACTER_ATTRIBUTES_CSV
+from ..constants import game_constants as G
+from ..stat_file_parser import EventObj
 
-# JS leaves AtBat_MoonShotMultiplier undefined; the branch is unreachable here
-# (starsForBatter is hardcoded 4), so this value is never actually used.
-_MOONSHOT_MULTIPLIER = 1.0
+# Moonshot (5-star dinger) power multiplier, from the decomp. Applied in
+# calculate_hit_power when AtBat_MoonShot survives to a Perfect contact.
+_MOONSHOT_MULTIPLIER = 1.5
 
 _CONTACT_TYPE_NAMES = ["Left Sour", "Left Nice", "Perfect", "Right Nice", "Right Sour"]
 
@@ -234,6 +239,11 @@ class HitInputs:
     easy_batting: bool = False
     batter_stars_on: bool = False
     pitcher_stars_on: bool = False
+    # A connected 5-star dinger (the recorded "Star Swing Five-Star" flag). This is
+    # how a Moonshot is detected (see _resolve_star_swing): a 5-star swing's charge
+    # is zeroed in the recording, so a failed Moonshot (Texas Leaguer) can't be told
+    # from a regular 5-star swing -- only the connected dinger is modeled.
+    five_star_dinger: bool = False
     ball_z: float = 0.0                     # ball Z at contact (world Z start of trajectory)
     ground_y: float = T.GROUND_Y_DEFAULT   # landing/bounce plane (0.35 on Toy Field)
     bounce: bool = True                     # ground bounces elastically (False = skid; Bowser Castle / Toy Field)
@@ -381,6 +391,9 @@ class _HitSim:
         self.garlicSpread = inp.garlic_spread
         self.warioWaluStarHitDirection = inp.garlic_direction
 
+        # Moonshot detection (see _resolve_star_swing).
+        self.fiveStarDinger = inp.five_star_dinger
+
         self._resolve_star_swing()
 
         # outputs filled during the pipeline
@@ -402,18 +415,26 @@ class _HitSim:
         self.trajectory: list = []
         self._garlic_trajectory: Optional[list] = None
 
-    # -- parseValues star resolution (starsForBatter hardcoded 4) --
+    # -- parseValues star resolution (the decomp's Moonshot determination) --
     def _resolve_star_swing(self):
-        stars_for_batter = 4
         if not self.isStar:
             return
         if self.Batter_IsBunting:
             self.Batter_Contact_SlapChargeBuntStar = T.Bunt
             self.AtBat_MoonShot = False
             return
-        # starsForBatter != 0  -> True
-        # (not fullyCharged) or (starsForBatter < 5) -> always True here
-        if self.AtBat_CaptainStarHitPitch == 0:
+        # Moonshot first, ahead of the captain/non-captain split (hitGeneralType =
+        # captainStar/Moonshot). The game triggers it on a fully-charged 5-star
+        # swing, but that's indistinguishable from a regular 5-star swing in the
+        # recording (the star swing zeroes the charge) -- except a connected dinger
+        # sets "Star Swing Five-Star", surfaced here as five_star_dinger. It only
+        # fires on the Perfect-contact dinger; a failed Moonshot (Texas Leaguer) is
+        # left as a regular star swing. AtBat_MoonShot carries the power override and
+        # _MOONSHOT_MULTIPLIER.
+        if self.fiveStarDinger:
+            self.Batter_Contact_SlapChargeBuntStar = T.Star
+            self.AtBat_MoonShot = True
+        elif self.AtBat_CaptainStarHitPitch == 0:
             if self.AtBat_NonCaptainStarSwing == 0:
                 self.isStar = False
             else:
@@ -429,8 +450,9 @@ class _HitSim:
                 elif self.AtBat_NonCaptainStarSwing < 4:  # == 3
                     self.Batter_Contact_SlapChargeBuntStar = T.Slap
         else:
-            # JS captain-at-roster-loc branch is `else if (false)`; falls through
-            # to: else if (starsForBatter < 2) -> False, else -> Star
+            # Captain-class character. Under-starred captain swings (Walu tech) are
+            # converted to a regular swing upstream (see _inputs_from_event), so by
+            # here the captain has enough stars -> captain star swing.
             self.Batter_Contact_SlapChargeBuntStar = T.Star
 
         if (self.Batter_Contact_SlapChargeBuntStar == T.Star
@@ -551,7 +573,15 @@ class _HitSim:
         else:
             self.ContactQuality = 1.0 - (cbp - self.RightNiceThreshold) / (200.0 - self.RightNiceThreshold)
 
-        # (AtBat_MoonShot is always False here, so its block is skipped.)
+        # Moonshot resolves at contact (the decomp's calculateContactAndHitType): a
+        # Perfect connect is the 5-star dinger and clears captainStarSwingActivated
+        # (so it uses the charge angles); any other contact downgrades it to a Texas
+        # Leaguer -- the flag clears, the charge-modeled swing stays.
+        if self.AtBat_MoonShot:
+            if self.Batter_ContactType == T.Perfect:
+                self.AtBat_Mystery_CaptainStarSwing = 0
+            else:
+                self.AtBat_MoonShot = False
 
         swing = self.Batter_Contact_SlapChargeBuntStar
         if swing in (T.Slap, T.Charge):
@@ -607,76 +637,84 @@ class _HitSim:
 
         captain_star = self.AtBat_Mystery_CaptainStarSwing
         if captain_star == 0:
-            if not self.AtBat_MoonShot:
-                noncap = self.nonCaptainStarSwingContact
-                if noncap == 0:
-                    if self.AtBat_Mystery_BatDirection == 0:
-                        if not self.input_up:
-                            if self.input_down:
-                                up_down = 2
-                        else:
-                            up_down = 1
-
-                    weights = T.BattingVerticalAngleWeights[self.AtBat_HitTrajectoryLow][slap_or_charge][self.EasyBatting][self.Batter_ContactType]
-                    w0, w1, w2, w3, w4 = weights
-
-                    u4 = T.UINT_ARRAY_ARRAY_807b7134[self.Batter_HitType][3 - self.EasyBatting]
-                    u6 = T.UINT_ARRAY_ARRAY_807b7134[self.Batter_HitType][4]
-                    u5 = u4 & 0xF000000
-                    if u5 == 0:
-                        u16 = u4 & 0xF
-                        if u16 != 0:
-                            i_var5 = 2
-                            if u16 == 2:
-                                if up_down == 2:
-                                    i_var5 = 0
-                                    u6 = 2
-                            elif u16 == 3 and up_down == 1:
-                                i_var5 = 0
-                                u6 = 2
+            noncap = self.nonCaptainStarSwingContact
+            if self.AtBat_MoonShot:
+                # Moonshot dinger (survives to Perfect contact): the charge-column
+                # moonshot zone -- "the charge angles".
+                zone = T.SHORT_ARRAY_ARRAY_ARRAY_ARRAY_807b67cc[1][self.Batter_ContactType][2]
+                lower, higher = zone[0], zone[1]
+            elif noncap == 0:
+                if self.AtBat_Mystery_BatDirection == 0:
+                    if not self.input_up:
+                        if self.input_down:
+                            up_down = 2
                     else:
-                        i_var5 = 1
-                        if u5 == 0x2000000:
+                        up_down = 1
+
+                weights = T.BattingVerticalAngleWeights[self.AtBat_HitTrajectoryLow][slap_or_charge][self.EasyBatting][self.Batter_ContactType]
+                w0, w1, w2, w3, w4 = weights
+
+                # A Star swing leaves Batter_HitType unset at -1; the game then
+                # reads one row *before* the table (an OOB read of a float table),
+                # not Python's negative wrap to the last row. See the constant.
+                if self.Batter_HitType < 0:
+                    ht_row = T.UINT_ARRAY_807b7120_HITTYPE_UNSET
+                else:
+                    ht_row = T.UINT_ARRAY_ARRAY_807b7134[self.Batter_HitType]
+                u4 = ht_row[3 - self.EasyBatting]
+                u6 = ht_row[4]
+                u5 = u4 & 0xF000000
+                if u5 == 0:
+                    u16 = u4 & 0xF
+                    if u16 != 0:
+                        i_var5 = 2
+                        if u16 == 2:
                             if up_down == 2:
                                 i_var5 = 0
                                 u6 = 2
-                        elif u5 == 0x3000000 and up_down == 1:
+                        elif u16 == 3 and up_down == 1:
                             i_var5 = 0
                             u6 = 2
-
-                    if i_var5 == 0:
-                        if (u4 & 0x1E0) == 0:
-                            w0 = 0
-                        if (u4 & 0xF0) == 0:
-                            w1 = 0
-                        if (u4 & 0x78) == 0:
-                            w2 = 0
-                        if (u4 & 0x3C) == 0:
-                            w3 = 0
-                        if (u4 & 0x1E) == 0:
-                            w4 = 0
-                        if up_down == 2:
-                            w4 += w0
-                            w0 = 0
-                        elif up_down == 1:
-                            tmp = w4 + w0
-                            w4 = 0
-                            w0 = w3 + tmp
-                            w3 = 0
-
-                    if i_var5 == 0:
-                        idx = self._weighted_random_index([w0, w1, w2, w3, w4], 5)
-                        zone = T.SHORT_ARRAY_ARRAY_ARRAY_ARRAY_807b67cc[slap_or_charge][self.Batter_ContactType][idx]
-                        lower, higher = zone[0], zone[1]
-                        handled_zones = True
-                    else:
-                        lower, higher = T.SHORT_ARRAY_ARRAY_807b6af4[i_var5]
                 else:
-                    rng = T.NonCaptainStarSwingBattingVerticalAngleRanges[noncap - 1][self.Batter_ContactType]
-                    lower, higher = rng[0], rng[1]
+                    i_var5 = 1
+                    if u5 == 0x2000000:
+                        if up_down == 2:
+                            i_var5 = 0
+                            u6 = 2
+                    elif u5 == 0x3000000 and up_down == 1:
+                        i_var5 = 0
+                        u6 = 2
+
+                if i_var5 == 0:
+                    if (u4 & 0x1E0) == 0:
+                        w0 = 0
+                    if (u4 & 0xF0) == 0:
+                        w1 = 0
+                    if (u4 & 0x78) == 0:
+                        w2 = 0
+                    if (u4 & 0x3C) == 0:
+                        w3 = 0
+                    if (u4 & 0x1E) == 0:
+                        w4 = 0
+                    if up_down == 2:
+                        w4 += w0
+                        w0 = 0
+                    elif up_down == 1:
+                        tmp = w4 + w0
+                        w4 = 0
+                        w0 = w3 + tmp
+                        w3 = 0
+
+                if i_var5 == 0:
+                    idx = self._weighted_random_index([w0, w1, w2, w3, w4], 5)
+                    zone = T.SHORT_ARRAY_ARRAY_ARRAY_ARRAY_807b67cc[slap_or_charge][self.Batter_ContactType][idx]
+                    lower, higher = zone[0], zone[1]
+                    handled_zones = True
+                else:
+                    lower, higher = T.SHORT_ARRAY_ARRAY_807b6af4[i_var5]
             else:
-                zone = T.SHORT_ARRAY_ARRAY_ARRAY_ARRAY_807b67cc[1][self.Batter_ContactType][2]
-                lower, higher = zone[0], zone[1]
+                rng = T.NonCaptainStarSwingBattingVerticalAngleRanges[noncap - 1][self.Batter_ContactType]
+                lower, higher = rng[0], rng[1]
         else:
             rng = T.CaptainStarSwingBattingVerticalAngleRanges[captain_star - 1][self.Batter_ContactType]
             lower, higher = rng[0], rng[1]
@@ -1155,8 +1193,8 @@ def _inputs_from_event(event: EventObj, active_tags=frozenset()) -> HitInputs:
     # batter is a captain-class character who isn't this game's captain (their
     # captain swing can't be fueled by that lone star). Fixed in newer games.
     if swing_code == 3:
-        stars = event.team_stars(event.batting_team())
-        if stars == 0 or (stars == 1 and _batter_is_off_captain(event)):
+        team_stars = event.team_stars(event.batting_team())  # Walu tech check
+        if team_stars == 0 or (team_stars == 1 and _batter_is_off_captain(event)):
             swing_code = 2  # regular Charge swing...
             charge_down = 0.0  # ...with charge-down forced to 0 (the power benefit)
 
@@ -1212,6 +1250,7 @@ def _inputs_from_event(event: EventObj, active_tags=frozenset()) -> HitInputs:
         easy_batting=False,  # not recorded in stat files
         batter_stars_on=batter_starred,
         pitcher_stars_on=pitcher_starred,
+        five_star_dinger=_int_no_commas(contact.get("Star Swing Five-Star") or 0) == 1,
         ground_y=ground_y,
         bounce=bounce,
         rng1=_int_no_commas(contact.get("RNG1")),

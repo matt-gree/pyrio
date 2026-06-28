@@ -28,212 +28,110 @@ CLI:
 from __future__ import annotations
 
 import json
-import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Iterable, Optional
 
-from . import hit_simulation as hs
-from . import rio_tags
-from . import stadiums
-from .constants import game_constants as G
-from .stat_file_parser import StatObj, EventObj
+from .. import hit_simulation as hs
+from .. import rio_tags
+from ..constants import game_constants as G
+from .hit_sim_report import (FieldSpec, ValidationReport, ci,
+                             note_block_deflected, resolve_landing)
+from ..stat_file_parser import StatObj, EventObj
 
 # game Type of Swing codes that the simulator supports: 1 Slap, 2 Charge, 3 Star.
 _SUPPORTED_SWING_CODES = (1, 2, 3)
 
-
-def _ci(value) -> int:
-    """Parse a possibly comma-grouped integer string, e.g. '1,181' -> 1181."""
-    return int(str(value).replace(",", ""))
+# Backwards-compatible aliases (the comparison core moved to hit_sim_report).
+_ci = ci
+_FieldSpec = FieldSpec
 
 
 # ---------------------------------------------------------------- field specs
+# Stat-file flavor: recorded values come from a decoded event's contact dict.
 
-@dataclass(frozen=True)
-class _FieldSpec:
-    name: str
-    recorded: Callable[[dict], object]      # from the contact dict
-    computed: Callable[[hs.HitResult], object]
-    tol: Optional[float] = None             # None -> exact equality
-
-    def matches(self, contact: dict, result: hs.HitResult) -> tuple[bool, object, object]:
-        rec = self.recorded(contact)
-        com = self.computed(result)
-        if self.tol is None:
-            ok = rec == com
-        elif isinstance(rec, tuple):           # point: compare by euclidean distance
-            ok = math.dist(rec, com) <= self.tol
-        else:
-            ok = abs(float(rec) - float(com)) <= self.tol
-        return ok, rec, com
-
-
-def _contact_field_specs(vel_tol: float, float_tol: float) -> list[_FieldSpec]:
+def _contact_field_specs(vel_tol: float, float_tol: float) -> list[FieldSpec]:
     return [
-        _FieldSpec("contact_type",
-                   lambda c: G.to_encoded(G.TYPE_OF_CONTACT, c["Type of Contact"]),
-                   lambda r: r.contact_type),
-        _FieldSpec("contact_absolute",
-                   lambda c: float(c["Contact Absolute"]),
-                   lambda r: r.contact_absolute, tol=float_tol),
-        _FieldSpec("contact_quality",
-                   lambda c: float(c["Contact Quality"]),
-                   lambda r: r.contact_quality, tol=float_tol),
-        _FieldSpec("horizontal_angle",
-                   lambda c: _ci(c["Horiz Angle"]),
-                   lambda r: r.horizontal_angle),
-        _FieldSpec("vertical_angle",
-                   lambda c: _ci(c["Vert Angle"]),
-                   lambda r: r.vertical_angle),
-        _FieldSpec("power",
-                   lambda c: _ci(c["Ball Power"]),
-                   lambda r: r.power),
-        _FieldSpec("velocity_x",
-                   lambda c: c["Ball Velocity - X"],
-                   lambda r: r.velocity[0], tol=vel_tol),
-        _FieldSpec("velocity_y",
-                   lambda c: c["Ball Velocity - Y"],
-                   lambda r: r.velocity[1], tol=vel_tol),
-        _FieldSpec("velocity_z",
-                   lambda c: c["Ball Velocity - Z"],
-                   lambda r: r.velocity[2], tol=vel_tol),
+        FieldSpec("contact_type",
+                  lambda c: G.to_encoded(G.TYPE_OF_CONTACT, c["Type of Contact"]),
+                  lambda r: r.contact_type),
+        FieldSpec("contact_absolute",
+                  lambda c: float(c["Contact Absolute"]),
+                  lambda r: r.contact_absolute, tol=float_tol),
+        FieldSpec("contact_quality",
+                  lambda c: float(c["Contact Quality"]),
+                  lambda r: r.contact_quality, tol=float_tol),
+        FieldSpec("horizontal_angle",
+                  lambda c: ci(c["Horiz Angle"]),
+                  lambda r: r.horizontal_angle),
+        FieldSpec("vertical_angle",
+                  lambda c: ci(c["Vert Angle"]),
+                  lambda r: r.vertical_angle),
+        FieldSpec("power",
+                  lambda c: ci(c["Ball Power"]),
+                  lambda r: r.power),
+        FieldSpec("velocity_x",
+                  lambda c: c["Ball Velocity - X"],
+                  lambda r: r.velocity[0], tol=vel_tol),
+        FieldSpec("velocity_y",
+                  lambda c: c["Ball Velocity - Y"],
+                  lambda r: r.velocity[1], tol=vel_tol),
+        FieldSpec("velocity_z",
+                  lambda c: c["Ball Velocity - Z"],
+                  lambda r: r.velocity[2], tol=vel_tol),
     ]
 
 
-def _landing_field_specs(landing_tol: float) -> list[_FieldSpec]:
+def _landing_field_specs(landing_tol: float) -> list[FieldSpec]:
     # Single 3D field: euclidean distance between the recorded (X, Y, Z) landing
     # and the simulated landing (ground/bounce for in-park balls, the field-
     # boundary crossing for balls that left the park). Height is included.
     return [
-        _FieldSpec("landing",
-                   lambda c: (float(c["Ball Landing Position - X"]),
-                              float(c["Ball Landing Position - Y"]),
-                              float(c["Ball Landing Position - Z"])),
-                   lambda r: tuple(r.landing), tol=landing_tol),
+        FieldSpec("landing",
+                  lambda c: (float(c["Ball Landing Position - X"]),
+                             float(c["Ball Landing Position - Y"]),
+                             float(c["Ball Landing Position - Z"])),
+                  lambda r: tuple(r.landing), tol=landing_tol),
     ]
 
 
-# ---------------------------------------------------------------- report types
-
-@dataclass
-class FieldStat:
-    name: str
-    matches: int = 0
-    total: int = 0
-    expected: int = 0                                # known-mod exceptions (see KNOWN_MOD_EXCEPTIONS)
-    mismatches: list = field(default_factory=list)   # (game_id, event_num, recorded, computed)
-    expected_examples: list = field(default_factory=list)  # (game_id, event_num, exception_name)
-
-    @property
-    def rate(self) -> float:
-        # Expected exceptions count as accounted-for, not failures.
-        return (self.matches + self.expected) / self.total if self.total else 1.0
-
-    @property
-    def failures(self) -> int:
-        return self.total - self.matches - self.expected
-
-
-@dataclass
-class ValidationReport:
-    fields: dict = field(default_factory=dict)         # name -> FieldStat
-    total_events: int = 0
-    contact_events: int = 0
-    simulated: int = 0
-    skipped: list = field(default_factory=list)        # (game_id, event_num, reason)
-    errors: list = field(default_factory=list)         # (game_id, event_num, message)
-    files: int = 0
-
-    def _stat(self, name: str) -> FieldStat:
-        return self.fields.setdefault(name, FieldStat(name))
-
-    def merge(self, other: "ValidationReport") -> "ValidationReport":
-        self.total_events += other.total_events
-        self.contact_events += other.contact_events
-        self.simulated += other.simulated
-        self.skipped += other.skipped
-        self.errors += other.errors
-        self.files += other.files
-        for name, st in other.fields.items():
-            mine = self._stat(name)
-            mine.matches += st.matches
-            mine.total += st.total
-            mine.expected += st.expected
-            mine.mismatches += st.mismatches
-            mine.expected_examples += st.expected_examples
-        return self
-
-    def all_fields_perfect(self) -> bool:
-        return all(st.failures == 0 for st in self.fields.values())
-
-    def contact_fields_perfect(self) -> bool:
-        """True if the deterministic contact-stage fields all match.
-
-        Known-mod exceptions (e.g. Remove slice) are counted as expected, not
-        failures. Excludes the informational 'landing' field, which is expected
-        to diverge (the trajectory flight model was never verified).
-        """
-        return all(st.failures == 0
-                   for name, st in self.fields.items()
-                   if not name.startswith("landing"))
-
-    def summary(self, max_mismatches: int = 8) -> str:
-        lines = []
-        lines.append(
-            f"Files: {self.files} | events: {self.total_events} | "
-            f"with contact: {self.contact_events} | simulated: {self.simulated} | "
-            f"skipped: {len(self.skipped)} | errors: {len(self.errors)}"
-        )
-        lines.append("")
-        lines.append(f"{'field':18} {'match':>12} {'exp':>5} {'fail':>5}   rate")
-        lines.append("-" * 56)
-        for name, st in self.fields.items():
-            lines.append(f"{name:18} {st.matches:>6}/{st.total:<5} {st.expected:>5} "
-                         f"{st.failures:>5} {st.rate * 100:6.2f}%")
-
-        # group skip reasons
-        if self.skipped:
-            reasons: dict[str, int] = {}
-            for _, _, reason in self.skipped:
-                key = reason.split(":")[0] if ":" in reason else reason
-                reasons[key] = reasons.get(key, 0) + 1
-            lines.append("")
-            lines.append("Skipped reasons:")
-            for reason, n in sorted(reasons.items(), key=lambda kv: -kv[1]):
-                lines.append(f"  {n:>4}  {reason}")
-
-        # known-mod exceptions, grouped by exception name
-        exc_counts: dict[str, int] = {}
-        for st in self.fields.values():
-            for _, _, exc_name in st.expected_examples:
-                exc_counts[exc_name] = exc_counts.get(exc_name, 0) + 1
-        if exc_counts:
-            lines.append("")
-            lines.append("Expected (known mod exceptions):")
-            for exc_name, n in sorted(exc_counts.items(), key=lambda kv: -kv[1]):
-                lines.append(f"  {n:>4}  {exc_name}")
-
-        # mismatch examples per field
-        flagged = [st for st in self.fields.values() if st.mismatches]
-        if flagged:
-            lines.append("")
-            lines.append("Example mismatches:")
-            for st in flagged:
-                lines.append(f"  [{st.name}] {len(st.mismatches)} total")
-                for gid, ev, rec, com in st.mismatches[:max_mismatches]:
-                    lines.append(f"      game {gid} ev{ev}: recorded={rec} computed={com}")
-
-        if self.errors:
-            lines.append("")
-            lines.append("Errors:")
-            for gid, ev, msg in self.errors[:max_mismatches]:
-                lines.append(f"  game {gid} ev{ev}: {msg}")
-
-        return "\n".join(lines)
+# FieldStat and ValidationReport now live in hit_sim_report (shared with the API
+# validator) and are imported at the top of this module.
 
 
 # ---------------------------------------------------------------- core driver
+
+# A failed Moonshot (Texas Leaguer) pops up into this raw vertical-angle band
+# (hit_simulation: the forced pop-fly zone SHORT_ARRAY_ARRAY_807b6af4).
+_TEXAS_LEAGUER_VERT_BAND = (500, 550)
+
+
+def _is_texas_leaguer(event: EventObj, contact: dict, swing_code: int) -> bool:
+    """True for a likely Texas Leaguer -- a failed 5-star Moonshot the simulator
+    can't model.
+
+    A Moonshot fires on a fully-charged 5-star swing; a Perfect connect is the
+    dinger (recorded "Star Swing Five-Star" = 1, which hit_simulation DOES model),
+    and any other contact pops weakly up the middle. But a star swing zeroes its
+    charge in the recording, so a *failed* Moonshot is indistinguishable from a
+    regular 5-star swing on inputs alone -- except its launch lands in the forced
+    pop-fly vertical band. So flag it after the fact: a 5-star, non-dinger Star
+    swing whose recorded Vert Angle is in that band, and exclude it from validation
+    (the sim mis-handles it as a regular star swing).
+    """
+    if swing_code != 3:  # Star
+        return False
+    if _ci(contact.get("Star Swing Five-Star") or 0) == 1:
+        return False  # connected dinger -- modeled
+    if event.team_stars(event.batting_team()) < 5:
+        return False
+    try:
+        vert = _ci(contact.get("Vert Angle"))
+    except (TypeError, ValueError):
+        return False
+    lo, hi = _TEXAS_LEAGUER_VERT_BAND
+    return lo <= vert <= hi
+
 
 def _is_natural_landing(contact: dict) -> bool:
     """True if 'Ball Landing Position' is where the ball naturally came down,
@@ -346,6 +244,10 @@ def validate_statobj(stat: StatObj, *, include_landing: bool = False,
             report.skipped.append((game_id, i, f"unsupported swing: {swing!r}"))
             continue
 
+        if _is_texas_leaguer(event, contact, swing_code):
+            report.skipped.append((game_id, i, "texas leaguer (unmodeled failed moonshot)"))
+            continue
+
         try:
             result = hs.simulate_hit_from_event(event, active_tags)
         except ValueError as ex:
@@ -357,37 +259,26 @@ def validate_statobj(stat: StatObj, *, include_landing: bool = False,
 
         report.simulated += 1
         if include_landing:
-            left_park = stadiums.boundary_crossing(result.trajectory, stadium) is not None
-            if left_park:
-                # Left the park (HR / off the wall / foul into the netting): the
-                # recorded landing is where the ball struck something, which lies
-                # on the wall-free flight path (a few frames past the boundary for
-                # a ball that clears the fence). Compare to the nearest 3D point.
-                try:
-                    rec = (float(contact["Ball Landing Position - X"]),
-                           float(contact["Ball Landing Position - Y"]),
-                           float(contact["Ball Landing Position - Z"]))
-                except (KeyError, TypeError, ValueError):
-                    rec = None
-                near = stadiums.nearest_trajectory_point(result.trajectory, rec) if rec else None
-                if near is not None:
-                    result.landing = near[2]
-            elif bounces:
-                # Recorded landing for an in-park grounder/liner is where the
-                # skidding ball is at "Ball Hang Time"; walk the bounce there.
-                try:
-                    hang = _ci(contact.get("Ball Hang Time"))
-                except (TypeError, ValueError):
-                    hang = None
-                if hang and hang > 0:
-                    result.landing = hs.simulate_hit_trajectory_from_event(
-                        event, hang, active_tags)[-1]
+            try:
+                rec_pt = (float(contact["Ball Landing Position - X"]),
+                          float(contact["Ball Landing Position - Y"]),
+                          float(contact["Ball Landing Position - Z"]))
+            except (KeyError, TypeError, ValueError):
+                rec_pt = None
+            try:
+                hang = _ci(contact.get("Ball Hang Time"))
+            except (TypeError, ValueError):
+                hang = None
+            # Snap result.landing to the point the recorded landing represents
+            # (fence boundary nearest-point, or the in-park ball at hang time).
+            resolve_landing(result, stadium, rec_pt, bounces=bounces, hang_time=hang,
+                            walk_to_hang=lambda f: hs.simulate_hit_trajectory_from_event(
+                                event, f, active_tags))
         skip_landing = landing_exclude_caught and not _is_natural_landing(contact)
         # Peach Garden note blocks deflect/kill balls that fly through them; the
         # air-only sim can't model that, so exclude landings whose flight path
         # passes through a block (like fielder-determined landings).
-        if (include_landing and not skip_landing
-                and stadiums.note_block_hit(result.trajectory, stadium) is not None):
+        if include_landing and not skip_landing and note_block_deflected(result, stadium):
             skip_landing = True
         for spec in specs:
             if skip_landing and spec.name.startswith("landing"):
