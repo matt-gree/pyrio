@@ -61,7 +61,7 @@ from __future__ import annotations
 import csv
 import math
 import struct
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Optional
 
 from ..constants import hit_sim_tables as T
@@ -217,6 +217,23 @@ class PitcherAttributes:
 # ---------------------------------------------------------------- I/O structs
 
 @dataclass
+class HitOverrides:
+    """Optional overrides that force specific internal decisions in the hit
+    pipeline, bypassing the corresponding RNG/derivation. Each field defaults to
+    None (no override -> the game's normal behavior), so an unset override is a
+    no-op. Add new override knobs here as the need arises; the simulator reads
+    each one at the point it would otherwise compute that value.
+    """
+    # Force which of the 5 vertical trajectory cones (zones) calculate_vertical_angle
+    # picks, replacing the weighted-RNG choice. 0-4. The RNG draw still happens (so
+    # downstream state -- including the within-cone angle draw -- is consumed exactly
+    # as in-game); only the selected zone changes. No effect on events whose vertical
+    # angle isn't chosen from the cone table (captain/non-captain star swings,
+    # Moonshots, or forced pop-fly/grounder hits).
+    vertical_zone: Optional[int] = None
+
+
+@dataclass
 class HitInputs:
     batter_name: str
     pitcher_name: str
@@ -277,6 +294,9 @@ class HitInputs:
     rng1: int = T.DEFAULT_STATIC_RANDOM_INT1
     rng2: int = T.DEFAULT_STATIC_RANDOM_INT2
     rng3: int = T.DEFAULT_USHORT_8089269c
+    # Force-specific internal pipeline decisions (see HitOverrides). Defaults to an
+    # all-None HitOverrides, i.e. the unmodified game behavior.
+    overrides: HitOverrides = field(default_factory=HitOverrides)
 
 
 @dataclass
@@ -393,6 +413,10 @@ class _HitSim:
 
         # Moonshot detection (see _resolve_star_swing).
         self.fiveStarDinger = inp.five_star_dinger
+
+        # Force-specific pipeline decisions (see HitOverrides). Always a
+        # HitOverrides (defaulted to all-None), so fields can be read unguarded.
+        self.overrides = inp.overrides
 
         self._resolve_star_swing()
 
@@ -707,6 +731,11 @@ class _HitSim:
 
                 if i_var5 == 0:
                     idx = self._weighted_random_index([w0, w1, w2, w3, w4], 5)
+                    # Override the cone choice if requested, but only after the RNG
+                    # draw above so downstream state is consumed exactly as in-game
+                    # (see HitOverrides.vertical_zone).
+                    if self.overrides.vertical_zone is not None:
+                        idx = self.overrides.vertical_zone
                     zone = T.SHORT_ARRAY_ARRAY_ARRAY_ARRAY_807b67cc[slap_or_charge][self.Batter_ContactType][idx]
                     lower, higher = zone[0], zone[1]
                     handled_zones = True
@@ -1133,6 +1162,28 @@ def simulate_hit(inputs: HitInputs) -> HitResult:
     batter = BatterAttributes.from_name(inputs.batter_name, inputs.batter_stars_on)
     pitcher = PitcherAttributes.from_name(inputs.pitcher_name, inputs.pitcher_stars_on)
     return _HitSim(batter, pitcher, inputs).run()
+
+
+def simulate_hit_all_vertical_zones(inputs: HitInputs) -> list:
+    """Simulate the same inputs once per vertical trajectory cone (zone 0-4),
+    returning the five HitResults in zone order.
+
+    Each run forces HitOverrides.vertical_zone; every other input is identical, so
+    the list isolates how the cone choice alone moves the hit. Events whose vertical
+    angle isn't picked from the cone table (captain/non-captain star swings,
+    Moonshots, or forced pop-fly/grounder hits) ignore the override and yield five
+    identical results.
+    """
+    return [
+        simulate_hit(replace(inputs, overrides=replace(inputs.overrides, vertical_zone=zone)))
+        for zone in range(5)
+    ]
+
+
+def simulate_hit_all_vertical_zones_from_event(event: EventObj,
+                                               active_tags=frozenset()) -> list:
+    """simulate_hit_all_vertical_zones for a stat-file contact event."""
+    return simulate_hit_all_vertical_zones(_inputs_from_event(event, active_tags))
 
 
 def _int_no_commas(value) -> int:
