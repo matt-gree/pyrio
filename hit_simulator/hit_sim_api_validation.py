@@ -40,6 +40,7 @@ from .. import hit_simulation as hs
 from .. import rio_tags
 from ..api_manager import APIManager
 from ..constants import game_constants as G
+from ..lookup import LookupDicts
 from .hit_sim_report import (FieldSpec, ValidationReport, note_block_deflected,
                              resolve_landing)
 
@@ -176,7 +177,7 @@ def validate_api(*, tag=None, games=None, username=None, limit_games=None,
         report.contact_events += 1          # a landing row always carries contact
         gid, ev = r["game_id"], r.get("event_num")
         stadium_id, active_tags, stars_on = ctx[gid]
-        stadium_name = G.STADIUM_ID_TO_NAME[stadium_id]
+        stadium_name = LookupDicts.STADIUM[stadium_id]
 
         swing_code = int(r["type_of_swing"])
         if swing_code not in _SUPPORTED_SWING_CODES:

@@ -22,19 +22,8 @@ CHARACTER_ATTRIBUTES_CSV = _DIR / "character_attributes.csv"
 # Directory of per-stadium boundary coordinate files.
 STADIUMS_DIR = _DIR / "stadiums"
 
-
-def stadium_coord_path(stadium_id):
-    """Path to a stadium's boundary-coordinate file by encoded stadium id.
-
-    Returns None for stadiums without a boundary file (e.g. Toy Field).
-    """
-    fname = game_constants.STADIUM_ID_TO_COORD_FILE.get(stadium_id)
-    return STADIUMS_DIR / fname if fname else None
-
-
 __all__ = [
     "game_constants",
     "CHARACTER_ATTRIBUTES_CSV",
     "STADIUMS_DIR",
-    "stadium_coord_path",
 ]

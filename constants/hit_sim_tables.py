@@ -174,7 +174,7 @@ FLOAT_ARRAY_ARRAY_807b72bc = [[0.5, 0.001, 0.003], [0.25, 0.006, 0.008]]
 # Star-swing codes (captain_star_hit_pitch 1-12 / 0, non_captain_star_swing 1-3)
 # now live pre-encoded in the "Captain Star Hit" / "Non-Captain Star Hit" columns
 # of constants/character_attributes.csv; their name<->code maps are
-# constants.game_constants.CAPTAIN_STAR_BALL / NON_CAPTAIN_STAR_HIT.
+# LookupDicts.CAPTAIN_STAR_BALL / NON_CAPTAIN_STAR_HIT.
 
 # --- DK / Diddy "banana" captain star hit ---
 # The "Captain Star Hit" column encodes a per-captain code (1 Mario .. 12 Daisy),

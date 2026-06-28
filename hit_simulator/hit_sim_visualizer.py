@@ -45,6 +45,7 @@ if __package__:
     from .. import rio_tags
     from .. import stadiums
     from ..constants import game_constants as G
+    from ..lookup import LookupDicts
     from ..stat_file_parser import StatObj, EventObj
 else:
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -55,13 +56,14 @@ else:
     import rio_tags
     import stadiums
     from ..constants import game_constants as G
+    from ..lookup import LookupDicts
     from ..stat_file_parser import StatObj, EventObj
 
 _HERE = Path(__file__).resolve().parent
 _STADIUMS_DIR = _HERE / "constants" / "stadiums"
 _DEFAULT_DIR = _HERE / "data" / "starHitExamples"
 
-# Encoded StadiumID (G.STADIUM_ID_TO_NAME) -> stadium boundary file stem.
+# Encoded StadiumID (LookupDicts.STADIUM) -> stadium boundary file stem.
 _STADIUM_FILE = {
     0x0: "mario_stadium",
     0x1: "bowser_castle",
@@ -128,7 +130,7 @@ def _collect_events(paths):
             stat = StatObj(json.load(f))
         stadium_name = stat.stadium()
         try:
-            stadium_code = G.to_encoded(G.STADIUM_ID_TO_NAME, stadium_name)
+            stadium_code = G.to_encoded(LookupDicts.STADIUM, stadium_name)
         except (KeyError, TypeError):
             stadium_code = None
         try:
@@ -226,7 +228,7 @@ def _plot_stadium(ax, stadium_code, rows):
             ax.annotate(tag, (sx, sz), textcoords="offset points", xytext=(4, 4),
                         fontsize=7, color=color, zorder=z + 1)
 
-    name = G.STADIUM_ID_TO_NAME.get(stadium_code, "Unknown stadium")
+    name = LookupDicts.STADIUM.get(stadium_code, "Unknown stadium")
     ax.set_title(name)
     ax.set_xlabel("X")
     ax.set_ylabel("Z")
@@ -330,7 +332,7 @@ def visualize_api(tag=None, games=None, limit_games=None, threshold=1.0,
     n_ok = n_total = 0
     for r in rows:
         stadium_id, tags, stars_on = ctx[r["game_id"]]
-        stadium_name = G.STADIUM_ID_TO_NAME[stadium_id]
+        stadium_name = LookupDicts.STADIUM[stadium_id]
         if int(r["type_of_swing"]) not in av._SUPPORTED_SWING_CODES:
             continue
         try:

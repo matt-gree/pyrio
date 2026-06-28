@@ -35,6 +35,7 @@ from typing import Callable, Iterable, Optional
 from .. import hit_simulation as hs
 from .. import rio_tags
 from ..constants import game_constants as G
+from ..lookup import LookupDicts
 from .hit_sim_report import (FieldSpec, ValidationReport, ci,
                              note_block_deflected, resolve_landing)
 from ..stat_file_parser import StatObj, EventObj
@@ -53,7 +54,7 @@ _FieldSpec = FieldSpec
 def _contact_field_specs(vel_tol: float, float_tol: float) -> list[FieldSpec]:
     return [
         FieldSpec("contact_type",
-                  lambda c: G.to_encoded(G.TYPE_OF_CONTACT, c["Type of Contact"]),
+                  lambda c: G.to_encoded(LookupDicts.CONTACT_TYPE, c["Type of Contact"]),
                   lambda r: r.contact_type),
         FieldSpec("contact_absolute",
                   lambda c: float(c["Contact Absolute"]),
@@ -147,11 +148,11 @@ def _is_natural_landing(contact: dict) -> bool:
         hit. Only First Fielder Action 'None' is a clean natural landing.
     """
     sec = contact.get("Contact Result - Secondary")
-    if sec is not None and G.to_encoded(G.SECONDARY_CONTACT_RESULT, sec) == 0:
+    if sec is not None and G.to_encoded(LookupDicts.SECONDARY_CONTACT_RESULT, sec) == 0:
         return False  # caught for an out
     action = (contact.get("First Fielder") or {}).get("Fielder Action", 0)
     try:
-        if G.to_encoded(G.FIELDER_ACTIONS, action) != 0:  # 0 = None
+        if G.to_encoded(LookupDicts.FIELDER_ACTIONS, action) != 0:  # 0 = None
             return False  # a fielder reached the ball before it landed
     except KeyError:
         pass
@@ -239,7 +240,7 @@ def validate_statobj(stat: StatObj, *, include_landing: bool = False,
         report.contact_events += 1
 
         swing = event.pitch_dict().get("Type of Swing")
-        swing_code = G.to_encoded(G.TYPE_OF_SWING, swing) if swing is not None else None
+        swing_code = G.to_encoded(LookupDicts.TYPE_OF_SWING, swing) if swing is not None else None
         if swing_code not in _SUPPORTED_SWING_CODES:
             report.skipped.append((game_id, i, f"unsupported swing: {swing!r}"))
             continue

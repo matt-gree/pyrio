@@ -162,8 +162,8 @@ class LookupDicts:
     }
 
     HAND = {
-        0: "Left",
-        1: "Right"
+        0: "Right",
+        1: "Left"
     }
 
     HAND_BOOL = {
@@ -171,7 +171,7 @@ class LookupDicts:
         False: "Right"
     }
 
-    INPUT_DIRECTION = {
+    STICK_DIRECTION = {
         0: "",
         1: "Left",
         2: "Right",
@@ -197,6 +197,7 @@ class LookupDicts:
 
     CHARGE_TYPE = {
         0: "N/A",
+        1: "ChargedStar",
         2: "Slider",
         3: "Perfect"
     }
@@ -252,7 +253,7 @@ class LookupDicts:
         1: "Ready",
         2: "Normal",
         3: "Perfect",
-        55: "None"
+        255: "None"
     }
 
     OUT_TYPE = {
@@ -287,7 +288,8 @@ class LookupDicts:
         0: "Out-caught",
         1: "Out-force",
         2: "Out-tag",
-        3: "foul",
+        3: "Foul",
+        4: "Batter safe, runner out",
         7: "Single",
         8: "Double",
         9: "Triple",
@@ -322,9 +324,10 @@ class LookupDicts:
 
     MANUAL_SELECT = {
         0: "No Selected Char",
-        1: "Selected Other Char",
-        2: "Selected This Char",
-        None: "None"
+        1: "Pitcher",
+        2: "Catcher",
+        3: "Closest to Ball",
+        4: "Closest to Drop",
     }
 
     SIMPLIFIED_NAME = {
@@ -382,6 +385,62 @@ class LookupDicts:
         'Dry Bones(B)': 'Dry Bones',
         'Bro(F)': 'Bro',
         'Bro(B)': 'Bro',
+    }
+
+    # Encoded->decoded maps for categorical columns of character_attributes.csv.
+    # Right/Left columns (Fielding Arm, Batting Stance) reuse HAND above.
+    HORIZONTAL_HIT_TRAJECTORY = {
+        0: "Mid",
+        1: "Pull",
+        2: "Push",
+    }
+
+    VERTICAL_HIT_TRAJECTORY = {
+        0: "Mid",
+        1: "High",
+        2: "Low",
+    }
+
+    # Captain Star Pitch and Captain Star Hit columns share the same ball.
+    # 0 = none (non-captain rows). Codes 1-12 index the captain-star hit sim tables.
+    CAPTAIN_STAR_BALL = {
+        0: "",
+        1: "Fireball",
+        2: "Green Fireball",
+        3: "Phony Ball",
+        4: "Liar Ball",
+        5: "Banana Ball",
+        6: "Boomerang Ball",
+        7: "Killer Ball",
+        8: "Killer Jr. Ball",
+        9: "Egg Ball",
+        10: "Weird Ball",
+        11: "Heart Ball",
+        12: "Flower Ball",
+    }
+
+    # Non-Captain Star Hit column. Codes 1-3 index the non-captain-star hit sim tables.
+    NON_CAPTAIN_STAR_HIT = {
+        1: "Pop Fly",
+        2: "Grounder",
+        3: "Line Drive",
+    }
+
+    # Integer class code -> class name (for the Character Class column).
+    # CHAR_CLASS below maps character names -> class name for name-based lookups.
+    CHARACTER_CLASS = {
+        0: "Balance",
+        1: "Power",
+        2: "Speed",
+        3: "Technique",
+    }
+
+    # Non-Captain Star Pitch column. Note the attribute data labels code 1
+    # "Breaking Ball"; both spellings map to "Curve".
+    NON_CAPTAIN_STAR_PITCH_TYPE = {
+        1: "Curve",
+        2: "Fastball",
+        3: "Change-Up",
     }
 
     CHAR_CLASS = {
@@ -541,7 +600,7 @@ class Lookup:
             'fielding_hand': LookupDicts.HAND_BOOL,
             'final_result': LookupDicts.FINAL_RESULT,
             'manual_select_state': LookupDicts.MANUAL_SELECT,
-            'stick_input': LookupDicts.INPUT_DIRECTION,
+            'stick_input': LookupDicts.STICK_DIRECTION,
             'type_of_contact': LookupDicts.CONTACT_TYPE,
             'type_of_swing': LookupDicts.TYPE_OF_SWING,
             'stadium': LookupDicts.STADIUM,

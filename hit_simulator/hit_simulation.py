@@ -67,6 +67,7 @@ from typing import Optional
 from ..constants import hit_sim_tables as T
 from ..constants import CHARACTER_ATTRIBUTES_CSV
 from ..constants import game_constants as G
+from ..lookup import LookupDicts
 from ..stat_file_parser import EventObj
 
 # Moonshot (5-star dinger) power multiplier, from the decomp. Applied in
@@ -1227,7 +1228,7 @@ def _inputs_from_event(event: EventObj, active_tags=frozenset()) -> HitInputs:
 
     # Categorical fields may be decoded strings or encoded ints; coerce to codes
     # so the simulator works against either stat-file flavor.
-    swing_code = G.to_encoded(G.TYPE_OF_SWING, pitch.get("Type of Swing"))
+    swing_code = G.to_encoded(LookupDicts.TYPE_OF_SWING, pitch.get("Type of Swing"))
     if swing_code not in (1, 2, 3):  # 1 Slap, 2 Charge, 3 Star (0 None / 4 Bunt unsupported)
         raise ValueError(
             f"Unsupported swing type {pitch.get('Type of Swing')!r} (bunts not supported)"
@@ -1249,7 +1250,7 @@ def _inputs_from_event(event: EventObj, active_tags=frozenset()) -> HitInputs:
             swing_code = 2  # regular Charge swing...
             charge_down = 0.0  # ...with charge-down forced to 0 (the power benefit)
 
-    pitch_code = G.to_encoded(G.PITCH_TYPE, pitch.get("Pitch Type"))  # 0 Curve/1 Charge/2 ChangeUp
+    pitch_code = G.to_encoded(LookupDicts.PITCH_TYPE, pitch.get("Pitch Type"))  # 0 Curve/1 Charge/2 ChangeUp
     if pitch_code == 0:
         pitch_type_val = 0
     elif pitch_code == 1:
@@ -1257,7 +1258,7 @@ def _inputs_from_event(event: EventObj, active_tags=frozenset()) -> HitInputs:
         # couldn't decode ChargedStar and log "Unable to Decode. Invalid Value
         # (1)." instead -- map that legacy string back to 1.
         try:
-            charge_code = G.to_encoded(G.CHARGE_PITCH_TYPE, pitch.get("Charge Type"))
+            charge_code = G.to_encoded(LookupDicts.CHARGE_TYPE, pitch.get("Charge Type"))
         except KeyError:
             if "(1)" in str(pitch.get("Charge Type")):
                 charge_code = 1  # ChargedStar
@@ -1276,7 +1277,7 @@ def _inputs_from_event(event: EventObj, active_tags=frozenset()) -> HitInputs:
     up, down, left, right = G.stick_directions(contact.get("Input Direction - Stick"))
 
     # Toy Field's ground plane sits higher; Bowser Castle / Toy Field skid.
-    stadium_code = G.to_encoded(G.STADIUM_ID_TO_NAME, event.rioStat.stadium())
+    stadium_code = G.to_encoded(LookupDicts.STADIUM, event.rioStat.stadium())
     ground_y = T.GROUND_Y_TOY_FIELD if stadium_code == 0x6 else T.GROUND_Y_DEFAULT
     bounce = stadium_code in T.BOUNCING_STADIUM_IDS
 
