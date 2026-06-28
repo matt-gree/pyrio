@@ -1,33 +1,15 @@
-# def lookup(dictionary):
-#     def decorator(func):
-#         def wrapper(search_term, auto_print=False):
-#             def single_lookup(term):
-#                 str_term = str(term).lower()
-#                 adjusted = {str(k).lower(): str(v).lower() for k, v in dictionary.items()}
-#
-#                 if str_term in adjusted:
-#                     return dictionary[int(term)] if isinstance(term, int) else dictionary[term]
-#                 elif str_term in adjusted.values():
-#                     return [key for key, value in dictionary.items() if value.lower() == str_term][0]
-#                 else:
-#                     return f"Invalid ID or Name: {term}"
-#
-#             result = [single_lookup(term) for term in search_term] if isinstance(search_term, list) else single_lookup(
-#                 search_term)
-#
-#             if auto_print:
-#                 print(result)
-#             else:
-#                 return result
-#
-#         return wrapper
-#
-#     return decorator
-"""Refactoring of RioStatConverter to a class. The lookup class allows for bidirectional conversion
-(argument of 0 returns Mario; argument of "Mario" returns 0)."""
-# should try to standardize the string version of these names if possible to match with dataframe(s)
+"""Bidirectional lookup for Project Rio ID/name mappings.
 
-# DO NOT IMPORT PANDAS HERE. WILL CAUSE OBS SCRIPTS TO FAIL
+    lookup("char_name", 0)          -> "Mario"
+    lookup("char_name", "Mario")    -> 0
+    lookup(LookupDicts.CHAR_NAME, 0) -> "Mario"   # also works
+
+    list_dicts()  # prints all available dictionary names
+"""
+import csv
+import os
+import sys
+
 import pandas as pd
 
 CAPTAINS = [
@@ -45,7 +27,8 @@ CAPTAINS = [
     'Bowser Jr'
 ]
 
-class LookupDicts():
+
+class LookupDicts:
     CHAR_NAME = {
         0: "Mario",
         1: "Luigi",
@@ -111,6 +94,62 @@ class LookupDicts():
         4: "Peach Garden",
         5: "DK Jungle",
         6: "Toy Field"
+    }
+
+    # Team logo id -> in-game team name. The logo is the team-banner art chosen
+    # in-game; it is independent of the roster-derived team name (which the
+    # team_name_algo computes) because players can deliberately pick a banner
+    # that doesn't match their roster. HUD files store the name string directly;
+    # the API ongoing-games feed stores this integer id.
+    LOGO = {
+        0:  "Mario Sunshines",
+        1:  "Mario All Stars",
+        2:  "Mario Fireballs",
+        3:  "Mario Heroes",
+        4:  "Luigi Mansioneers",
+        5:  "Luigi Leapers",
+        6:  "Luigi Vacuums",
+        7:  "Luigi Gentlemen",
+        8:  "Peach Monarchs",
+        9:  "Peach Princesses",
+        10: "Peach Dynasties",
+        11: "Peach Roses",
+        12: "Daisy Queen Bees",
+        13: "Daisy Petals",
+        14: "Daisy Cupids",
+        15: "Daisy Lillies",
+        16: "Yoshi Islanders",
+        17: "Yoshi Flutters",
+        18: "Yoshi Speed Stars",
+        19: "Yoshi Eggs",
+        20: "Birdo Bows",
+        21: "Birdo Fans",
+        22: "Birdo Models",
+        23: "Birdo Beauties",
+        24: "Wario Greats",
+        25: "Wario Beasts",
+        26: "Wario Steakheads",
+        27: "Wario Garlics",
+        28: "Waluigi Flankers",
+        29: "Waluigi Mashers",
+        30: "Waluigi Smart Alecks",
+        31: "Waluigi Mystiques",
+        32: "DK Kongs",
+        33: "DK Animals",
+        34: "DK Wild Ones",
+        35: "DK Explorers",
+        36: "Diddy Tails",
+        37: "Diddy Red Caps",
+        38: "Diddy Ninjas",
+        39: "Diddy Survivors",
+        40: "Bowser Monsters",
+        41: "Bowser Black Stars",
+        42: "Bowser Blue Shells",
+        43: "Bowser Flames",
+        44: "Jr Pixies",
+        45: "Jr Rookies",
+        46: "Jr Bombers",
+        47: "Jr Fangs",
     }
 
     CONTACT_TYPE = {
@@ -182,6 +221,14 @@ class LookupDicts():
         8: "RF",
         255: "Inv",
         None: "None"
+    }
+
+    # Inverse of the nine real fielding positions: abbreviation -> diamond
+    # index (0=P .. 8=RF). Excludes the sentinel "Inv"/"None" entries so callers
+    # building a position-indexed diamond only see the playable nine.
+    POSITION_INDEX = {
+        "P": 0, "C": 1, "1B": 2, "2B": 3, "3B": 4,
+        "SS": 5, "LF": 6, "CF": 7, "RF": 8,
     }
 
     FIELDER_ACTIONS = {
@@ -280,49 +327,210 @@ class LookupDicts():
         None: "None"
     }
 
-# todo - more complete error handling
+    SIMPLIFIED_NAME = {
+        'Mario': 'Mario',
+        'Luigi': 'Luigi',
+        'DK': 'DK',
+        'Diddy': 'Diddy',
+        'Peach': 'Peach',
+        'Daisy': 'Daisy',
+        'Yoshi': 'Yoshi',
+        'Baby Mario': 'Baby Mario',
+        'Baby Luigi': 'Baby Luigi',
+        'Bowser': 'Bowser',
+        'Wario': 'Wario',
+        'Waluigi': 'Waluigi',
+        'Koopa(G)': 'Koopa',
+        'Toad(R)': 'Toad',
+        'Boo': 'Boo',
+        'Toadette': 'Toadette',
+        'Shy Guy(R)': 'Shy Guy',
+        'Birdo': 'Birdo',
+        'Monty': 'Monty',
+        'Bowser Jr': 'Bowser Jr',
+        'Paratroopa(R)': 'Paratroopa',
+        'Pianta(B)': 'Pianta',
+        'Pianta(R)': 'Pianta',
+        'Pianta(Y)': 'Pianta',
+        'Noki(B)': 'Noki',
+        'Noki(R)': 'Noki',
+        'Noki(G)': 'Noki',
+        'Bro(H)': 'Bro',
+        'Toadsworth': 'Toadsworth',
+        'Toad(B)': 'Toad',
+        'Toad(Y)': 'Toad',
+        'Toad(G)': 'Toad',
+        'Toad(P)': 'Toad',
+        'Magikoopa(B)': 'Magikoopa',
+        'Magikoopa(R)': 'Magikoopa',
+        'Magikoopa(G)': 'Magikoopa',
+        'Magikoopa(Y)': 'Magikoopa',
+        'King Boo': 'King Boo',
+        'Petey': 'Petey',
+        'Dixie': 'Dixie',
+        'Goomba': 'Goomba',
+        'Paragoomba': 'Paragoomba',
+        'Koopa(R)': 'Koopa',
+        'Paratroopa(G)': 'Paratroopa',
+        'Shy Guy(B)': 'Shy Guy',
+        'Shy Guy(Y)': 'Shy Guy',
+        'Shy Guy(G)': 'Shy Guy',
+        'Shy Guy(Bk)': 'Shy Guy',
+        'Dry Bones(Gy)': 'Dry Bones',
+        'Dry Bones(G)': 'Dry Bones',
+        'Dry Bones(R)': 'Dry Bones',
+        'Dry Bones(B)': 'Dry Bones',
+        'Bro(F)': 'Bro',
+        'Bro(B)': 'Bro',
+    }
+
+    CHAR_CLASS = {
+        'Mario': 'Balance',
+        'Luigi': 'Balance',
+        'DK': 'Power',
+        'Diddy': 'Speed',
+        'Peach': 'Technique',
+        'Daisy': 'Balance',
+        'Yoshi': 'Speed',
+        'Baby Mario': 'Speed',
+        'Baby Luigi': 'Speed',
+        'Bowser': 'Power',
+        'Wario': 'Power',
+        'Waluigi': 'Technique',
+        'Koopa': 'Balance',
+        'Toad': 'Balance',
+        'Boo': 'Technique',
+        'Toadette': 'Speed',
+        'Shy Guy': 'Balance',
+        'Birdo': 'Balance',
+        'Monty': 'Speed',
+        'Bowser Jr': 'Power',
+        'Paratroopa': 'Technique',
+        'Pianta': 'Power',
+        'Noki': 'Speed',
+        'Bro': 'Power',
+        'Toadsworth': 'Technique',
+        'Magikoopa': 'Technique',
+        'King Boo': 'Power',
+        'Petey': 'Power',
+        'Dixie': 'Technique',
+        'Goomba': 'Balance',
+        'Paragoomba': 'Speed',
+        'Dry Bones': 'Technique',
+    }
+
+
+# -------------------------------------------------------------------------
+# String-name registry: maps friendly names -> LookupDicts attributes
+# -------------------------------------------------------------------------
+
+_DICT_REGISTRY: dict[str, dict] = {}
+
+
+def _build_registry():
+    """Build the string-name -> dict mapping from LookupDicts attributes."""
+    for attr_name in dir(LookupDicts):
+        if attr_name.startswith('_'):
+            continue
+        val = getattr(LookupDicts, attr_name)
+        if isinstance(val, dict):
+            _DICT_REGISTRY[attr_name.lower()] = val
+
+
+_build_registry()
+
+
+def _resolve_dict(dictionary) -> dict:
+    """Accept a dict directly or a string name like 'char_name'."""
+    if isinstance(dictionary, dict):
+        return dictionary
+    if isinstance(dictionary, str):
+        key = dictionary.lower()
+        if key in _DICT_REGISTRY:
+            return _DICT_REGISTRY[key]
+        raise ValueError(
+            f"Unknown dictionary name: '{dictionary}'. "
+            f"Use list_dicts() to see available names."
+        )
+    raise TypeError(f"Expected a dict or string name, got {type(dictionary).__name__}")
+
+
+def list_dicts():
+    """Print all available lookup dictionary names and a sample of their contents."""
+    for name, d in sorted(_DICT_REGISTRY.items()):
+        items = list(d.items())
+        sample = items[:3]
+        sample_str = ", ".join(f"{k} -> {v}" for k, v in sample)
+        if len(items) > 3:
+            sample_str += f", ... ({len(items)} total)"
+        print(f"  {name:<30} {sample_str}")
+
+
+def simplified_name_groups() -> dict[str, list[str]]:
+    """Return a dict mapping simplified names to lists of character variant names.
+    e.g., {'Toad': ['Toad(R)', 'Toad(B)', 'Toad(Y)', 'Toad(G)', 'Toad(P)'], ...}
+    """
+    groups = {}
+    for char, sn in LookupDicts.SIMPLIFIED_NAME.items():
+        groups.setdefault(sn, []).append(char)
+    return groups
+
+
+# -------------------------------------------------------------------------
+# Lookup class and module-level function
+# -------------------------------------------------------------------------
 
 class Lookup:
-    def __init__(self):
-        pass
+    """Bidirectional lookup between IDs and names. All methods are static."""
 
-    def _lookup(self, dictionary, search_term):
-        def single_lookup(term):
-            original_term = term
-            if isinstance(term, str) and term.isdigit():
-                term = int(term)
-            if isinstance(term, float) and term.is_integer():
-                term = int(term)
+    @staticmethod
+    def _single_lookup(dictionary: dict, term):
+        original_term = term
+        if isinstance(term, str) and term.isdigit():
+            term = int(term)
+        if isinstance(term, float) and term.is_integer():
+            term = int(term)
 
-            str_term = str(term).lower()
-            adjusted_dict = {str(k).lower(): str(v).lower() for k, v in dictionary.items()}
+        str_term = str(term).lower()
+        adjusted_dict = {str(k).lower(): str(v).lower() for k, v in dictionary.items()}
 
-            if str_term in adjusted_dict:
-                return dictionary.get(term, f"Invalid ID or Name: {original_term}")
-            elif str_term in adjusted_dict.values():
-                return [key for key, value in dictionary.items() if value.lower() == str_term][0]
-            else:
-                return f"Invalid ID or Name: {original_term}"
+        if str_term in adjusted_dict:
+            return dictionary.get(term, f"Invalid ID or Name: {original_term}")
+        elif str_term in adjusted_dict.values():
+            return [key for key, value in dictionary.items() if value.lower() == str_term][0]
+        else:
+            return f"Invalid ID or Name: {original_term}"
+
+    @staticmethod
+    def lookup(dictionary, search_term, auto_print: bool = False):
+        """Look up a value in a dictionary bidirectionally.
+
+        dictionary: a dict, or a string name like 'char_name', 'stadium', etc.
+        search_term: int ID, string name, list, pd.Series, or pd.DataFrame.
+        """
+        d = _resolve_dict(dictionary)
+        sl = Lookup._single_lookup
 
         if isinstance(search_term, pd.Series):
-            return search_term.apply(single_lookup)
+            result = search_term.apply(lambda t: sl(d, t))
         elif isinstance(search_term, pd.DataFrame):
-            return search_term.applymap(single_lookup)
+            result = search_term.map(lambda t: sl(d, t))
         elif isinstance(search_term, list):
-            return [single_lookup(term) for term in search_term]
+            result = [sl(d, term) for term in search_term]
         else:
-            return single_lookup(search_term)
+            result = sl(d, search_term)
 
-    def lookup(self, dictionary, search_term, auto_print=False):
-        result = self._lookup(dictionary, search_term)
         if auto_print:
             print(result)
         return result
 
-    def translate_values(self, dictionary, values):
-        return self._lookup(dictionary, values)
+    @staticmethod
+    def translate_values(dictionary, values):
+        return Lookup.lookup(dictionary, values)
 
-    def create_translated_columns(self, df):
+    @staticmethod
+    def create_translated_columns(df: pd.DataFrame) -> pd.DataFrame:
+        """Add _str columns with human-readable translations for known columns."""
         column_to_dict_map = {
             'batter_char_id': LookupDicts.CHAR_NAME,
             'pitcher_char_id': LookupDicts.CHAR_NAME,
@@ -336,19 +544,60 @@ class Lookup:
             'stick_input': LookupDicts.INPUT_DIRECTION,
             'type_of_contact': LookupDicts.CONTACT_TYPE,
             'type_of_swing': LookupDicts.TYPE_OF_SWING,
-            'stadium': LookupDicts.STADIUM
+            'stadium': LookupDicts.STADIUM,
         }
 
         for column, dict_name in column_to_dict_map.items():
             if column in df.columns:
-                translated_values = self.lookup(dict_name, df[column])
+                translated_values = Lookup.lookup(dict_name, df[column])
                 df[f'{column}_str'] = translated_values.astype('category')
 
         return df
 
-# lookup_instance = Lookup()
 
-# sample usage
-"""
-print(lookup_instance.lookup(LookupDicts.CHAR_NAME, 'mario'))
-"""
+# Module-level convenience alias
+lookup = Lookup.lookup
+
+
+# -------------------------------------------------------------------------
+# Character name resolution (merged from characters.py)
+# -------------------------------------------------------------------------
+
+def _resource_path(relative_path: str) -> str:
+    """Get absolute path to resource, works for dev and for PyInstaller bundle."""
+    if hasattr(sys, '_MEIPASS'):
+        return os.path.join(sys._MEIPASS, relative_path)
+    return os.path.join(os.path.abspath("."), relative_path)
+
+
+def _load_char_aliases() -> dict[str, int]:
+    """Load CharNames.csv and build a mapping of all aliases -> char ID."""
+    aliases = {}
+    csv_path = _resource_path(os.path.join(os.path.dirname(__file__), "CharNames.csv"))
+    with open(csv_path, "r") as f:
+        for char_id, row in enumerate(csv.reader(f)):
+            for name in row:
+                aliases[name] = char_id
+    return aliases
+
+
+_CHAR_ALIASES = _load_char_aliases()
+
+
+def userInputToCharacter(user_input: str) -> str:
+    """Convert user input (nickname, abbreviation, etc.) to canonical character name.
+
+    Case-insensitive, space-insensitive.
+    Raises ValueError for unrecognized input.
+    """
+    cleaned = user_input.replace(' ', '').lower()
+    if cleaned not in _CHAR_ALIASES:
+        raise ValueError(f'{user_input} is an invalid character name')
+    return lookup(LookupDicts.CHAR_NAME, _CHAR_ALIASES[cleaned])
+
+
+def is_captain(character: str) -> bool:
+    """Check if a character (by any name/alias) is a captain."""
+    return userInputToCharacter(character) in CAPTAINS
+
+

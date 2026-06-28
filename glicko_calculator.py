@@ -3,11 +3,11 @@ import math
 SCALE = 173.7178
 BASE = 1500.0
 
-def g(phi):
+def g(phi: float) -> float:
     """Glicko-2 g(phi) function."""
     return 1 / math.sqrt(1 + (3 * phi**2) / (math.pi**2))
 
-def glicko2_win_probability(rating_1, rating_2, rd_2):
+def glicko2_win_probability(rating_1: float, rating_2: float, rd_2: float) -> float:
     """
     Calculate the win probability of Player 1 against Player 2
     using the Glicko-2 system (expected score).

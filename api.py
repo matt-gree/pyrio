@@ -1,19 +1,6 @@
-from dataclasses import dataclass, fields, asdict
+from dataclasses import dataclass, fields
 from typing import Optional, List, Union
-from lookup import Lookup
-# @dataclass
-# class StatsEndpoint:
-#     # todo: some way to readily retrieve and manipulate params for requests, such as a parameter/query builder
-#     params: StatsParameterList
-
-
-def serialize_parameters(parameters):
-    if isinstance(parameters, (GamesParameterList, EventsParameterList, LandingDataParameterList, StarChancesParameterList, StatsParameterList)):
-        return {k: v for k, v in asdict(parameters).items() if v is not None}
-    elif isinstance(parameters, dict):
-        return {k: v for k, v in parameters.items() if v is not None}
-    else:
-        return {}
+from .lookup import Lookup
 
 
 class Endpoint:
@@ -23,29 +10,6 @@ class Endpoint:
     GAMES = "/games/"
     EVENTS = "/events/"
     STAR_CHANCES = "/star_chances/"
-
-
-@dataclass
-class RequestInfo:
-    endpoint: Endpoint
-    parameters: dict
-
-
-class RequestBuilder:
-    def __init__(self, params=None):
-        self.requests = []
-        self.params = params
-
-    def add(self, endpoint: Endpoint, params=None):
-        if params is None:
-            params = self.params
-        serialized_params = serialize_parameters(params)
-        request_info = RequestInfo(endpoint, serialized_params)
-        self.requests.append(request_info)
-        return self
-
-    def build(self):
-        return [(request.endpoint, request.parameters) for request in self.requests if request is not None]
 
 
 @dataclass
@@ -69,6 +33,7 @@ class GamesParameterList(ParameterList):
     limit_games: Optional[Union[int, bool]] = None
     include_teams: Optional[bool] = None
     stadium: Optional[int] = None
+    include_linescore: Optional[int] = None
 
 
 @dataclass
@@ -103,7 +68,8 @@ class LandingDataParameterList(EventsParameterList):
 
 
 @dataclass
-class StarChancesParameterList:
+class StarChancesParameterList(EventsParameterList):
+    events: Optional[List[int]] = None
     by_inning: Optional[bool] = None
 
 
@@ -112,15 +78,22 @@ class StatsParameterList(EventsParameterList):
     char_id: Optional[int] = None
     by_user: Optional[bool] = None
     by_char: Optional[bool] = None
+    by_game: Optional[bool] = None
+    by_roster_order: Optional[bool] = None
     by_swing: Optional[bool] = None
+    by_batting_hand: Optional[bool] = None
+    by_fielding_hand: Optional[bool] = None
     exclude_nonfair: Optional[bool] = None
     exclude_batting: Optional[bool] = None
     exclude_pitching: Optional[bool] = None
     exclude_misc: Optional[bool] = None
     exclude_fielding: Optional[bool] = None
+    include_pitcher_wins: Optional[bool] = None
+    include_runs_scored: Optional[bool] = None
 
 
 def get_parameter_list(parameter_list_class, include_parent=False):
+    """Get the list of (name, type) tuples for a ParameterList class."""
     param_list = []
     for field in fields(parameter_list_class):
         param_name = field.name
@@ -131,16 +104,17 @@ def get_parameter_list(parameter_list_class, include_parent=False):
 
 
 def print_parameter_list(parameter_list_class, full_type_str=False, include_parent=True):
+    """Print the parameters for a ParameterList class in a readable format."""
     param_list = get_parameter_list(parameter_list_class, include_parent)
     for name, param_type in param_list:
         if full_type_str:
             print(f"{name} ({param_type})")
         else:
-            simplified_type_str = simplify_parameter_type(param_type)
+            simplified_type_str = _simplify_parameter_type(param_type)
             print(f"{name}: {simplified_type_str}")
 
 
-def simplify_parameter_type(param_type):
+def _simplify_parameter_type(param_type):
     type_str = str(param_type) \
         .replace('typing.', '') \
         .replace('Optional[', '') \
@@ -148,16 +122,13 @@ def simplify_parameter_type(param_type):
         .replace('Union[', '') \
         .replace(']', '') \
         .replace(', NoneType', '')
-
     return type_str
 
 
 class LandingData:
 
     def __init__(self, df):
-        # I don't like this current setup at all, so I need to think through how I want to handle it.
-        self.lookup = Lookup()
-        self.data = self.lookup.create_translated_columns(df)
+        self.data = Lookup.create_translated_columns(df)
         self.coords = self.get_coordinates()
         self.hits = self.get_hits()
         self.outs = self.get_outs()
@@ -178,13 +149,13 @@ class LandingData:
         return self.data[self.data['final_result'].isin([5, 6, 14, 15, 16])]
 
     def get_sour(self):
-        return self.data[self.data['type_of_contact'].isin([7, 8, 9, 10])]
+        return self.data[self.data['type_of_contact'].isin([0, 4])]
 
     def get_nice(self):
-        return self.data[self.data['type_of_contact'].isin([7, 8, 9, 10])]
+        return self.data[self.data['type_of_contact'].isin([1, 3])]
 
     def get_perfect(self):
-        return self.data[self.data['type_of_contact'].isin([7, 8, 9, 10])]
+        return self.data[self.data['type_of_contact'] == 2]
 
     def get_numeric_data(self):
         return self.data.select_dtypes(include=['int64', 'float64'])
