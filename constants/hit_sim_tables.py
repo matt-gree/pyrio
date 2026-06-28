@@ -98,6 +98,15 @@ BallContactArray_807b6294 = [[[[50, 98, 106, 150, 30, 95, 109, 170], [40, 98, 10
 # Per hit-type flags, indexed [Batter_HitType]: [v0, v1, mask3, mask4, idx5].
 UINT_ARRAY_ARRAY_807b7134 = [[100, 100, 0x00111110, 0x00111110, 0], [100, 100, 0x00111110, 0x00111110, 2], [101, 102, 0x00111110, 0x00111110, 1], [90, 90, 0x00111110, 0x00111110, 0], [94, 95, 0x00111110, 0x00111110, 0], [102, 103, 0x00111110, 0x00111110, 1], [90, 90, 0x00111110, 0x01100000, 0], [85, 90, 0x00111110, 0x00111110, 0], [102, 103, 0x00111110, 0x00111110, 1], [100, 100, 0x00111110, 0x00111110, 0], [95, 100, 0x00111110, 0x00111110, 2], [104, 105, 0x00111110, 0x00111110, 1], [60, 60, 0x00111110, 0x00111110, 0], [70, 75, 0x00111110, 0x00111110, 0], [87, 90, 0x00111110, 0x00111110, 1], [70, 70, 0x00111110, 0x00111110, 0], [80, 85, 0x00111110, 0x00111110, 0], [105, 110, 0x00111110, 0x00111110, 1], [50, 50, 0x00110110, 0x00110110, 0]]
 
+# A Star swing leaves Batter_HitType unset at -1 (0xff) -- the contact code only
+# assigns it for Slap/Charge. The game then reads UINT_ARRAY_ARRAY_807b7134[-1],
+# which is out of bounds: it picks up the 20 bytes *before* the table (0x807b7120),
+# the tail of a float table ([1.02, 1.05, 1.0, 0.95, 0.85]) reinterpreted as a uint
+# row. Only mask3 (u4 = 0x3f733333) matters downstream -- its 0x3000000 bits force
+# i_var5 = 1 (the pop-fly vertical zone -> the Texas Leaguer of a failed Moonshot).
+# Modeled explicitly because Python's table[-1] would wrap to the last valid row.
+UINT_ARRAY_807b7120_HITTYPE_UNSET = [0x3f828f5c, 0x3f866666, 0x3f800000, 0x3f733333, 0x3f59999a]
+
 # "Most perfect" contact window per swing kind: [lowerBound, upperBound, _].
 ContactPerfectThresholds = [[99.1, 100.9, 100.5], [99.7, 100.3, 1.1], [99.7, 100.3, 1.0]]
 
