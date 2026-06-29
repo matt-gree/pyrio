@@ -36,7 +36,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from .. import hit_simulation as hs
+from . import hit_simulation as hs
 from .. import rio_tags
 from ..api_manager import APIManager
 from ..constants import game_constants as G

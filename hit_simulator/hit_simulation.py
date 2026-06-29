@@ -1288,7 +1288,7 @@ def _inputs_from_event(event: EventObj, active_tags=frozenset()) -> HitInputs:
         pos_x=pitch.get("Bat Contact Pos - X"),
         ball_x=contact.get("Ball Contact Pos - X"),
         ball_z=float(contact.get("Ball Contact Pos - Z", 0.0)),
-        batter_hand=G.to_encoded(G.HAND, event.batter_hand()),  # 0 Right/1 Left == T.Righty/T.Lefty
+        batter_hand=G.to_encoded(LookupDicts.HAND, event.batter_hand()),  # 0 Right/1 Left == T.Righty/T.Lefty
         swing=T.Charge if swing_code == 2 else T.Slap,
         is_star=swing_code == 3,
         charge_up=charge_up,

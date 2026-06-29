@@ -32,7 +32,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Iterable, Optional
 
-from .. import hit_simulation as hs
+from . import hit_simulation as hs
 from .. import rio_tags
 from ..constants import game_constants as G
 from ..lookup import LookupDicts

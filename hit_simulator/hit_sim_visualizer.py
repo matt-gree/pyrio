@@ -38,10 +38,10 @@ import matplotlib.pyplot as plt
 # script / IDE "Run" (`python pyrio/hit_sim_visualizer.py`), where there is no
 # parent package for relative imports.
 if __package__:
-    from .. import hit_simulation as hs
-    from .. import hit_sim_validation as v
-    from .. import hit_sim_api_validation as av
-    from .. import hit_sim_report as hr
+    from . import hit_simulation as hs
+    from . import hit_sim_validation as v
+    from . import hit_sim_api_validation as av
+    from . import hit_sim_report as hr
     from .. import rio_tags
     from .. import stadiums
     from ..constants import game_constants as G
