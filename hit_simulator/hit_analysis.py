@@ -20,9 +20,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Optional
 
-from hit_simulator import hit_simulation as hs
+from . import hit_simulation as hs
 from .. import stadiums
-from hit_simulation import HitResult
+from .hit_simulation import HitResult
 from ..stat_file_parser import StatObj, EventObj
 
 _SUPPORTED_SWINGS = ("Slap", "Charge", "Star")
