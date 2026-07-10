@@ -125,6 +125,9 @@ class StatObj:
     def gameID(self) -> int:
         # returns it in int form
         return int(self.statJson["GameID"].replace(',', ''), 16)
+    
+    def gameMode(self):
+        return self.statJson["TagSetID"]
 
     # should look to convert to unix or some other standard date fmt
     def startDate(self) -> datetime:
@@ -762,7 +765,7 @@ class EventSearch():
         self._charge_type_dict: dict[str, set[int]] = {value: set() for value in LookupDicts.CHARGE_TYPE.values()}
         self._swing_type_dict: dict[str, set[int]] = {value: set() for value in LookupDicts.TYPE_OF_SWING.values()}
         self._contact_type_dict: dict[str, set[int]] = {value: set() for value in LookupDicts.CONTACT_TYPE.values()}
-        self._input_direction_dict: dict[str, set[int]] = {value: set() for value in LookupDicts.INPUT_DIRECTION.values()}
+        self._input_direction_dict: dict[str, set[int]] = {value: set() for value in LookupDicts.STICK_DIRECTION.values()}
 
         self._rbi_dict: dict[int, set[int]] = {i: set() for i in range(5)}
         self._inning_dict: dict[int, set[int]] = {i: set() for i in range(1, self.rioStat.inningsPlayed()+1)}

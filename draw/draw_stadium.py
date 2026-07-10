@@ -1,10 +1,18 @@
 import matplotlib.pyplot as plt
 import numpy as np
+from pathlib import Path
+
+# Stadium boundary-coordinate files live in the constants package.
+_STADIUMS_DIR = Path(__file__).resolve().parent.parent / "constants" / "stadiums"
+
+
+def _stadium_path(stadium):
+    return _STADIUMS_DIR / f"{stadium}.txt"
 
 
 def draw_stad_3d(stadium, add_label=False):
     # Open the file for reading
-    with open(f'{stadium}.txt', 'r') as file:
+    with open(_stadium_path(stadium), 'r') as file:
         # Initialize empty lists to store x, y, and z coordinates
         x_coords = []
         y_coords = []
@@ -45,7 +53,7 @@ def draw_stad_3d(stadium, add_label=False):
 
 def draw_stad(stadium, add_label=False, ax=None):
     # Open the file for reading
-    with open(f'{stadium}.txt', 'r') as file:
+    with open(_stadium_path(stadium), 'r') as file:
         # Initialize empty lists to store x and y coordinates
         x_coords = []
         y_coords = []
@@ -62,7 +70,7 @@ def draw_stad(stadium, add_label=False, ax=None):
 
 def draw_stad_part(stadium, add_label=False):
     # Open the file for reading
-    with open(f'{stadium}.txt', 'r') as file:
+    with open(_stadium_path(stadium), 'r') as file:
         # Initialize empty lists to store x and y coordinates
         x_coords = []
         y_coords = []
@@ -161,7 +169,7 @@ def draw_fielder_positions(draw_label=False, color='black', marker="s", ax=None)
 
 def calculate_stadium_area(stadium):
     # Read stadium coordinates from the file
-    with open(f'{stadium}.txt', 'r') as file:
+    with open(_stadium_path(stadium), 'r') as file:
         x_coords = []
         y_coords = []
         for line in file:
@@ -207,4 +215,3 @@ def draw_bases():
 
 def draw_hazards():
     pass
-
