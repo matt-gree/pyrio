@@ -416,7 +416,7 @@ def list_users(api_manager: APIManager):
   
 
 @include_rio_key(RIO_KEY)
-def delete_game(api_manager: APIManager, game_id_dec):
+def delete_game(api_manager: APIManager, game_id_dec, data=None):
     
     ENDPOINT = "/delete_game/"
 
@@ -541,6 +541,7 @@ def games_endpoint(api_manager: APIManager, tag=None, exclude_tag=None, username
 
     return api_manager.send_request(ENDPOINT, method='GET', data=data)
 
+
 def stats_endpoint(api_manager: APIManager, params: dict):
 
     ENDPOINT = '/stats'
@@ -561,11 +562,24 @@ def stats_endpoint(api_manager: APIManager, params: dict):
 
     return api_manager.send_request(ENDPOINT, method='GET', data=params)
 
+
 def live_games_endpoint(api_manager: APIManager):
 
     ENDPOINT = '/populate_db/ongoing_game/'        
 
     return api_manager.send_request(ENDPOINT, method='GET')
+
+
+def recalc_elo(api_manager: APIManager, tag_set_id):
+
+    ENDPOINT = '/recalc_elo/'
+
+    data = {}
+
+    data['tag_set_id'] = tag_set_id
+    data['log'] = True
+
+    return api_manager.send_request(ENDPOINT, method='POST', data=data)
 
 
 if __name__ == '__main__':
