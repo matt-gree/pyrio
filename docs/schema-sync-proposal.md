@@ -14,7 +14,7 @@ currently re-encoded by hand in at least three places:
 |---|---|---|
 | **ProjectRio** (C++ `MSB_StatTracker`) | *writes* the files | field names + enum maps (`cCharIdToCharName`, `cManualSelectDecode`, …) — the real source |
 | **ProjectRio-web** | *ingests* → DB, *recreates* files | `consts.py` enums/aliases, `models.py` columns, `populate_db.py` field reads |
-| **pyrio** | *reads* the files | `LookupDicts` enum tables + field-name literals in accessors |
+| **pyrio** | *reads* the files | `Tables` enum tables + field-name literals in accessors |
 
 Because these are maintained independently, **a change in the C++ client
 silently makes the consumers wrong.** Rename a field or add a character in
@@ -27,7 +27,7 @@ pyrio treats `MSB_StatTracker.h/.cpp` as the **source of truth** and validates
 against it at test time (no runtime coupling — the library stays standalone):
 
 - **Table parity** — `tests/test_canonical_parity.py` parses every
-  `std::map` in the header and asserts pyrio's `LookupDicts` match. This already
+  `std::map` in the header and asserts pyrio's `Tables` match. This already
   caught real bugs (inverted `HAND`, a `STEAL_TYPE` typo, `MANUAL_SELECT`).
 - **Field parity** — the same test parses the field names the tracker emits and
   asserts every field pyrio reads exists in canonical, catching renames.

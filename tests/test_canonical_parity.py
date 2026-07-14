@@ -1,4 +1,4 @@
-"""Parity check: pyrio's LookupDicts vs Project Rio's canonical C++ maps.
+"""Parity check: pyrio's Tables vs Project Rio's canonical C++ maps.
 
 The canonical id/name mappings live in the Project Rio repo at
 ``Source/Core/Core/MSB_StatTracker.h``. This test parses those C++ maps and
@@ -14,9 +14,9 @@ import pathlib
 
 import pytest
 
-from pyrio.lookup import LookupDicts
+from pyrio.rio_value import Tables
 
-# canonical C++ map name -> LookupDicts attribute. Only maps describing the
+# canonical C++ map name -> Tables attribute. Only maps describing the
 # SAME field are listed here.
 CANON_TO_PYRIO = {
     "cCharIdToCharName": "CHAR_NAME",
@@ -80,7 +80,7 @@ _CANON = _parse_canonical(HEADER) if HEADER else {}
 def test_lookupdict_matches_canonical(canon_name, pyrio_name):
     canon = _CANON.get(canon_name)
     assert canon, f"canonical map {canon_name} not found in {HEADER}"
-    pymap = getattr(LookupDicts, pyrio_name)
+    pymap = getattr(Tables, pyrio_name)
     # compare on int keys (skip pyrio-only non-int keys like None/bool)
     py_int = {k: v for k, v in pymap.items() if isinstance(k, int) and not isinstance(k, bool)}
     if py_int != canon:

@@ -1,7 +1,7 @@
 import pytest
 
 from pyrio import (
-    Character, LookupValue, Lookup, Stadium, LookupDicts,
+    Character, RioValue, Tables, Stadium,
     PitchType, ChargeType, SwingType, ContactType,
     FinalResult, PrimaryContactResult, SecondaryContactResult,
     OutType, StealType, PitchResult,
@@ -30,7 +30,7 @@ def test_explicit_conversions():
 
 def test_cross_type_inequality():
     # same id, different value-object type -> not equal
-    assert Character(0, "Mario") != LookupValue(0, "Mario")
+    assert Character(0, "Mario") != RioValue(0, "Mario")
 
 
 def test_hash_and_set_membership_are_value_based():
@@ -41,45 +41,46 @@ def test_hash_and_set_membership_are_value_based():
 
 
 def test_character_properties_variant():
-    pianta = Lookup.character(0x16)  # Pianta(R)
+    pianta = Character.from_raw(0x16)  # Pianta(R)
     assert pianta.name == "Pianta(R)"
     assert pianta.name_no_variant == "Pianta"
     assert pianta.hex == "0x16"
-    assert pianta.char_class == "Power"
-    assert pianta.is_captain is False
+    # char_class / is_captain now live on the attribute record.
+    assert pianta.attributes.char_class == "Power"
+    assert pianta.attributes.is_captain is False
 
 
 def test_character_properties_captain():
-    mario = Lookup.character("mario")
+    mario = Character.from_raw("mario")
     assert mario.id == 0
-    assert mario.char_class == "Balance"
-    assert mario.is_captain is True
+    assert mario.attributes.char_class == "Balance"
+    assert mario.attributes.is_captain is True
 
 
 def test_lookup_character_by_id_name_and_alias():
-    assert Lookup.character(5) == Lookup.character("Daisy")
-    assert Lookup.character("daisy").id == 5  # case-insensitive alias
+    assert Character.from_raw(5) == Character.from_raw("Daisy")
+    assert Character.from_raw("daisy").id == 5  # case-insensitive alias
 
 
 def test_lookup_character_rejects_unknown():
     with pytest.raises(ValueError):
-        Lookup.character("not a character")
+        Character.from_raw("not a character")
     with pytest.raises(ValueError):
-        Lookup.character(999)
+        Character.from_raw(999)
 
 
 def test_lookup_stadium_by_id_name_and_legacy():
-    s = Lookup.stadium(1)
+    s = Stadium.from_raw(1)
     assert isinstance(s, Stadium)
     assert s.id == 1 and s.name == "Bowser Castle"
-    assert Lookup.stadium("Bowser Castle") == s        # by name
-    assert Lookup.stadium("Bowser's Castle") == s      # legacy name alias
-    assert Lookup.stadium("1") == s                    # digit string
+    assert Stadium.from_raw("Bowser Castle") == s        # by name
+    assert Stadium.from_raw("Bowser's Castle") == s      # legacy name alias
+    assert Stadium.from_raw("1") == s                    # digit string
 
 
 def test_lookup_stadium_rejects_unknown():
     with pytest.raises(ValueError):
-        Lookup.stadium("Not A Stadium")
+        Stadium.from_raw("Not A Stadium")
 
 
 def test_input_direction_matches_stickvec_bitmask():
@@ -96,63 +97,63 @@ def test_input_direction_matches_stickvec_bitmask():
             parts.append("Up")
         return "+".join(parts)
 
-    assert LookupDicts.INPUT_DIRECTION == {v: stickvec(v) for v in range(16)}
+    assert Tables.INPUT_DIRECTION == {v: stickvec(v) for v in range(16)}
 
 
 def test_pitch_event_type_factories():
-    assert isinstance(Lookup.pitch_type(0), PitchType)
-    assert Lookup.pitch_type(0).name == "Curve"
-    assert Lookup.pitch_type(0) == Lookup.pitch_type("Curve")   # id == name input
-    assert Lookup.charge_type(0).name == "N/A"
-    assert Lookup.swing_type(1).name == "Slap"
-    assert Lookup.contact_type(255).name == "Miss"
-    assert Lookup.contact_type("Perfect").id == 2
+    assert isinstance(PitchType.from_raw(0), PitchType)
+    assert PitchType.from_raw(0).name == "Curve"
+    assert PitchType.from_raw(0) == PitchType.from_raw("Curve")   # id == name input
+    assert ChargeType.from_raw(0).name == "N/A"
+    assert SwingType.from_raw(1).name == "Slap"
+    assert ContactType.from_raw(255).name == "Miss"
+    assert ContactType.from_raw("Perfect").id == 2
 
 
 def test_value_factories_pass_through_none():
-    assert Lookup.pitch_type(None) is None
-    assert Lookup.charge_type(None) is None
-    assert Lookup.swing_type(None) is None
-    assert Lookup.contact_type(None) is None
+    assert PitchType.from_raw(None) is None
+    assert ChargeType.from_raw(None) is None
+    assert SwingType.from_raw(None) is None
+    assert ContactType.from_raw(None) is None
 
 
 def test_factories_tolerate_capitalization_drift():
     # Decoded client casing may drift; resolution is case-insensitive and the
     # value object always carries the canonical name.
-    assert Lookup.pitch_type("changeup").name == "ChangeUp"
-    assert Lookup.pitch_type("CURVE") == Lookup.pitch_type("Curve")
-    assert Lookup.contact_type("perfect").name == "Perfect"
-    assert Lookup.stadium("bowser CASTLE").name == "Bowser Castle"
+    assert PitchType.from_raw("changeup").name == "ChangeUp"
+    assert PitchType.from_raw("CURVE") == PitchType.from_raw("Curve")
+    assert ContactType.from_raw("perfect").name == "Perfect"
+    assert Stadium.from_raw("bowser CASTLE").name == "Bowser Castle"
 
 
 def test_result_type_factories():
-    assert isinstance(Lookup.out_type(1), OutType)
-    assert Lookup.final_result(7).name == "Single"
-    assert Lookup.final_result(7) == Lookup.final_result("Single")
-    assert Lookup.primary_contact_result(1).name == "Foul"
-    assert Lookup.secondary_contact_result(7).name == "Single"
-    assert Lookup.out_type(1).name == "Caught"
-    assert Lookup.steal_type(2).name == "Normal"
-    assert Lookup.pitch_result(0).name == "HBP"
-    assert Lookup.final_result(None) is None
+    assert isinstance(OutType.from_raw(1), OutType)
+    assert FinalResult.from_raw(7).name == "Single"
+    assert FinalResult.from_raw(7) == FinalResult.from_raw("Single")
+    assert PrimaryContactResult.from_raw(1).name == "Foul"
+    assert SecondaryContactResult.from_raw(7).name == "Single"
+    assert OutType.from_raw(1).name == "Caught"
+    assert StealType.from_raw(2).name == "Normal"
+    assert PitchResult.from_raw(0).name == "HBP"
+    assert FinalResult.from_raw(None) is None
 
 
 def test_roster_and_fielding_factories():
-    assert Lookup.hand(0).name == "Right"
-    assert Lookup.hand(1).name == "Left"
-    assert Lookup.hand("Left").id == 1            # canonical 0=Right, 1=Left
-    assert Lookup.position(0).name == "P"
-    assert Lookup.position("RF").id == 8
-    assert Lookup.manual_select(1).name == "Pitcher"
-    assert Lookup.team_name(2).name == "Mario Fireballs"
-    assert Lookup.team_name("Jr Fangs").id == 47
+    assert Hand.from_raw(0).name == "Right"
+    assert Hand.from_raw(1).name == "Left"
+    assert Hand.from_raw("Left").id == 1            # canonical 0=Right, 1=Left
+    assert Position.from_raw(0).name == "P"
+    assert Position.from_raw("RF").id == 8
+    assert ManualSelect.from_raw(1).name == "Pitcher"
+    assert TeamName.from_raw(2).name == "Mario Fireballs"
+    assert TeamName.from_raw("Jr Fangs").id == 47
     # round-trip without hardcoding ids for the action/bobble tables
-    assert isinstance(Lookup.fielder_action("Sliding"), FielderAction)
-    assert Lookup.fielder_action("Sliding").name == "Sliding"
-    assert isinstance(Lookup.fielder_bobble("Fumble"), FielderBobble)
-    assert Lookup.fielder_bobble("Fumble").name == "Fumble"
-    assert Lookup.hand(None) is None
-    assert isinstance(Lookup.dead_ball_reason(1), DeadBallReason)
-    assert Lookup.dead_ball_reason(1).name == "Home Run"
-    assert Lookup.dead_ball_reason("Foul Ball").id == 2
-    assert Lookup.dead_ball_reason(None) is None
+    assert isinstance(FielderAction.from_raw("Sliding"), FielderAction)
+    assert FielderAction.from_raw("Sliding").name == "Sliding"
+    assert isinstance(FielderBobble.from_raw("Fumble"), FielderBobble)
+    assert FielderBobble.from_raw("Fumble").name == "Fumble"
+    assert Hand.from_raw(None) is None
+    assert isinstance(DeadBallReason.from_raw(1), DeadBallReason)
+    assert DeadBallReason.from_raw(1).name == "Home Run"
+    assert DeadBallReason.from_raw("Foul Ball").id == 2
+    assert DeadBallReason.from_raw(None) is None

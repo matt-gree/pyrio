@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=75.6.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "projectrio"
+version = "1.0.0"
+description = "Library for interacting with Mario Superstar Baseball and Project Rio"
+authors = [{name = "MattGree", email = "MattGreeMSSB@gmail.com"}]
+requires-python = ">=3.10"
+dependencies = [
+    "matplotlib>=3.10.3",
+    "numpy>=2.2.0",
+    "pandas>=2.2.3",
+    "pytz>=2024.2",
+    "Requests>=2.29.0",
+    "requests_cache>=1.2.1",
+    "scipy>=1.15.0",
+    "SQLAlchemy>=2.0.36",
+]
+
+[project.urls]
+Repository = "https://github.com/matt-gree/pyrio"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"pyrio" = [
+    "CharNames.csv",
+    "constants/character_attributes.csv",
+    "constants/stadiums/*.txt",
+    "py.typed",
+]

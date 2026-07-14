@@ -1,6 +1,6 @@
 from dataclasses import dataclass, fields
 from typing import Optional, List, Union
-from .lookup import Lookup
+from .rio_value import create_translated_columns
 
 
 class Endpoint:
@@ -127,7 +127,7 @@ def _simplify_parameter_type(param_type):
 class LandingData:
 
     def __init__(self, df):
-        self.data = Lookup.create_translated_columns(df)
+        self.data = create_translated_columns(df)
         self.coords = self.get_coordinates()
         self.hits = self.get_hits()
         self.outs = self.get_outs()

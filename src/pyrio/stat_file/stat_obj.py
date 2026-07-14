@@ -4,8 +4,8 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Optional, Union
 
-from ..lookup import (
-    LookupDicts, Lookup, Character, Stadium,
+from ..rio_value import (
+    Tables, Character, Stadium,
     PitchType, ChargeType, SwingType, ContactType,
     FinalResult, PrimaryContactResult, SecondaryContactResult,
     OutType, StealType, PitchResult,
@@ -49,7 +49,7 @@ class StatObj:
 
     def stadium(self) -> Stadium:
         # returns the stadium that was played on
-        return Lookup.stadium(self.statJson["StadiumID"])
+        return Stadium.from_raw(self.statJson["StadiumID"])
     
     def teamNumVersionCorrection(self, teamNum: int) -> int:
         # For Project Rio versions pre 1.9.2
@@ -166,10 +166,10 @@ class StatObj:
         ErrorChecker.check_roster_num(rosterNum)
         if rosterNum == -1:
             return [
-                Lookup.character(self.statJson["Character Game Stats"][self.getTeamString(teamNum, x)]["CharID"])
+                Character.from_raw(self.statJson["Character Game Stats"][self.getTeamString(teamNum, x)]["CharID"])
                 for x in range(0, 9)
             ]
-        return Lookup.character(self.statJson["Character Game Stats"][self.getTeamString(teamNum, rosterNum)]["CharID"])
+        return Character.from_raw(self.statJson["Character Game Stats"][self.getTeamString(teamNum, rosterNum)]["CharID"])
 
     def characterName(self, teamNum: int, rosterNum: int = -1) -> Character | list[Character]:
         """Deprecated alias for character(); returns Character value object(s)."""
@@ -231,14 +231,14 @@ class StatObj:
         # rosterNum: 0 -> 8 for each of the 9 roster spots
         teamNum = self.teamNumVersionCorrection(teamNum)
         ErrorChecker.check_roster_num_no_neg(rosterNum)
-        return Lookup.hand(self.statJson["Character Game Stats"][self.getTeamString(teamNum, rosterNum)]["Fielding Hand"])
+        return Hand.from_raw(self.statJson["Character Game Stats"][self.getTeamString(teamNum, rosterNum)]["Fielding Hand"])
 
     def battingHand(self, teamNum: int, rosterNum: int) -> Hand:
         # returns batting handedness of character
         # rosterNum: 0 -> 8 for each of the 9 roster spots
         teamNum = self.teamNumVersionCorrection(teamNum)
         ErrorChecker.check_roster_num_no_neg(rosterNum)
-        return Lookup.hand(self.statJson["Character Game Stats"][self.getTeamString(teamNum, rosterNum)]["Batting Hand"])
+        return Hand.from_raw(self.statJson["Character Game Stats"][self.getTeamString(teamNum, rosterNum)]["Batting Hand"])
 
     # defensive stats
     def era(self, teamNum: int, rosterNum: int = -1) -> float:

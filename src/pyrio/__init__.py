@@ -4,12 +4,12 @@ from .stat_file_parser import (
     load_stat_file, iter_stat_files,
 )
 
-# Lookup tables and translation
-from .lookup import (
-    Lookup, LookupDicts, CAPTAINS,
-    lookup, list_dicts, simplified_name_groups,
+# Coded-value tables, value objects, and translation
+from .rio_value import (
+    Tables,
+    lookup, create_translated_columns, list_dicts, simplified_name_groups,
     userInputToCharacter, is_captain,
-    LookupValue, Character, Stadium,
+    RioValue, Character, BaseCharacter, Stadium,
     PitchType, ChargeType, SwingType, ContactType,
     FinalResult, PrimaryContactResult, SecondaryContactResult,
     OutType, StealType, PitchResult,

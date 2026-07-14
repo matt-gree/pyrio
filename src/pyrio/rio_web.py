@@ -17,7 +17,7 @@ from .api import (
     StatsParameterList,
 )
 from .exceptions import raise_for_status
-from .lookup import Lookup, LookupDicts
+from .rio_value import lookup, Tables
 
 BASE_URL = "https://api.projectrio.app"
 
@@ -411,7 +411,7 @@ class RioWeb:
         reversed_game_mode_dict = {v: k for k, v in self.cache.game_mode_dictionary().items()}
         df["game_mode"] = df["game_mode"].map(reversed_game_mode_dict)
 
-        df["stadium"] = Lookup.lookup(LookupDicts.STADIUM, df["stadium"].astype(int))
+        df["stadium"] = lookup(Tables.STADIUM, df["stadium"].astype(int))
 
         return df
 

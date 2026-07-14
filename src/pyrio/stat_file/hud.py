@@ -3,8 +3,8 @@ from __future__ import annotations
 
 from typing import Optional
 
-from ..lookup import (
-    LookupDicts, Lookup, Character, Stadium,
+from ..rio_value import (
+    Tables, Character, Stadium,
     PitchType, ChargeType, SwingType, ContactType,
     FinalResult, PrimaryContactResult, SecondaryContactResult,
     OutType, StealType, PitchResult,
@@ -125,13 +125,13 @@ class HudObj:
 
     # --- game settings ---
     def stadium(self) -> Stadium:
-        return Lookup.stadium(self.hud_json["StadiumID"])
+        return Stadium.from_raw(self.hud_json["StadiumID"])
 
     def logo(self, teamNum: int) -> TeamName:
         # the team's logo/team-name selection
         ErrorChecker.check_team_num(teamNum)
         team_string = "Away" if teamNum == 0 else "Home"
-        return Lookup.team_name(self.hud_json[f'{team_string} Logo'])
+        return TeamName.from_raw(self.hud_json[f'{team_string} Logo'])
 
     def first_batting_team(self) -> int:
         return self.hud_json['First Batting Team']
@@ -155,16 +155,16 @@ class HudObj:
         return self.hud_json[self.team_roster_str(teamNum, rosterNum)]
 
     def character(self, teamNum: int, rosterNum: int) -> Character:
-        return Lookup.character(self._player(teamNum, rosterNum)['CharID'])
+        return Character.from_raw(self._player(teamNum, rosterNum)['CharID'])
 
     def position(self, teamNum: int, rosterNum: int) -> Position:
-        return Lookup.position(self._player(teamNum, rosterNum)['Fielding Position'])
+        return Position.from_raw(self._player(teamNum, rosterNum)['Fielding Position'])
 
     def fielding_hand(self, teamNum: int, rosterNum: int) -> Hand:
-        return Lookup.hand(self._player(teamNum, rosterNum)['Fielding Hand'])
+        return Hand.from_raw(self._player(teamNum, rosterNum)['Fielding Hand'])
 
     def batting_hand(self, teamNum: int, rosterNum: int) -> Hand:
-        return Lookup.hand(self._player(teamNum, rosterNum)['Batting Hand'])
+        return Hand.from_raw(self._player(teamNum, rosterNum)['Batting Hand'])
 
     def is_superstar(self, teamNum: int, rosterNum: int) -> bool:
         return bool(self._player(teamNum, rosterNum)['Superstar'])
@@ -194,7 +194,7 @@ class HudObj:
         """Roster slot playing the given position (int 0-8 or a name like 'SS')."""
         ErrorChecker.check_team_num(teamNum)
         ErrorChecker.check_position(position)
-        pos_id = position if isinstance(position, int) else Lookup.position(position).id
+        pos_id = position if isinstance(position, int) else Position.from_raw(position).id
         return self.team_positions(teamNum)[pos_id]
 
     def runner(self, base: int) -> Optional[RunnerObj]:

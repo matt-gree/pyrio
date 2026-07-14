@@ -9,11 +9,11 @@ Public API:
     simulate_hit(HitInputs) -> HitResult            # pure core
     simulate_hit_from_event(EventObj) -> HitResult  # stat-file adapter
 
-Character attributes are loaded by NAME from constants/character_attributes.csv
-(the encoded star-OFF table == the JS `stats` base values). When stars_on, the
-superstar conversion (constants.game_constants.apply_superstar, a capped +50/+20
-per stat) is applied to slap/charge power (batter) and cursed ball (pitcher) --
-the same stats the JS calculator buffed, now clamped to the in-game caps.
+Character attributes come from the shared CharacterAttributes record
+(constants.character_data, the star-OFF base values == the JS `stats` base). When
+stars_on, the superstar conversion (each AttributeSpec's to_star_on, a capped
++50/+20 per stat) is applied to slap/charge power (batter) and cursed ball
+(pitcher) -- the same stats the JS calculator buffed, clamped to the in-game caps.
 
 Notes / known JS quirks carried over:
   - Moonshot (`AtBat_MoonShot`) is unreachable here: the JS hardcodes
@@ -30,14 +30,13 @@ Testing status (via hit_sim_validation.py):
 """
 from __future__ import annotations
 
-import csv
 import math
 from dataclasses import dataclass, field
 from typing import Optional
 
 from .constants import hit_sim_tables as T
-from .constants import CHARACTER_ATTRIBUTES_CSV
 from .constants import game_constants as G
+from .constants.character_data import character_attributes, ATTRIBUTES_BY_KEY
 from .stat_file_parser import EventObj
 
 # JS leaves AtBat_MoonShotMultiplier undefined; the branch is unreachable here
@@ -90,29 +89,17 @@ def _linear_interpolate(value, prev_min, prev_max, next_min, next_max):
 
 
 # ---------------------------------------------------------------- attributes
-
-_attr_rows: Optional[dict] = None
-
-
-def _load_attr_rows() -> dict:
-    """Character-attribute rows indexed by BOTH name (decoded files) and encoded
-    char id (encoded files), so a row resolves whichever identity a stat file uses.
-    """
-    global _attr_rows
-    if _attr_rows is None:
-        rows = {}
-        with open(CHARACTER_ATTRIBUTES_CSV, newline="") as f:
-            for row in csv.DictReader(f):
-                rows[row["Character"]] = row     # by name ("Boo")
-                rows[int(row["CharId"])] = row   # by encoded char id (0xe)
-        _attr_rows = rows
-    return _attr_rows
+# Attributes come from the shared CharacterAttributes record. The JS calculator
+# only buffs a subset of stats with stars (batter slap/charge power, pitcher
+# cursed ball), so we apply the superstar conversion selectively per stat via
+# the AttributeSpec rather than CharacterAttributes.with_superstar() (which would
+# boost every star-affected stat).
 
 
-def _stat(row, col, stars_on):
-    """Read an integer stat, applying the superstar conversion when stars_on."""
-    value = int(row[col])
-    return G.apply_superstar(col, value) if stars_on else value
+def _star(attrs, key, stars_on):
+    """A numeric attribute, star-converted when stars_on (via its AttributeSpec)."""
+    value = getattr(attrs, key)
+    return ATTRIBUTES_BY_KEY[key].to_star_on(value) if stars_on else value
 
 
 @dataclass
@@ -136,23 +123,23 @@ class BatterAttributes:
     @classmethod
     def from_name(cls, name, stars_on: bool = False) -> "BatterAttributes":
         # `name` may be a character name (decoded files) or an encoded char id.
-        row = _load_attr_rows()[name]
+        a = character_attributes(name)
         return cls(
-            name=row["Character"],
-            slap_hit_power=_stat(row, "Slap Hit Power", stars_on),
-            charge_power=_stat(row, "Charge Hit Power", stars_on),
-            slap_contact_size=int(row["Slap Contact Size Multiplier"]),
-            charge_contact_size=int(row["Charge Contact Size Multiplier"]),
-            bunting=int(row["Bunting"]),
-            horizontal_trajectory=int(row["Horizontal Hit Trajectory"]),
-            vertical_trajectory=int(row["Vertical Hit Trajectory"]),
-            captain_star_hit_pitch=int(row["Captain Star Hit"]),
-            non_captain_star_swing=int(row["Non-Captain Star Hit"]),
-            horizontal_range_near=float(row["Horizontal Range Near"]),
-            horizontal_range_far=float(row["Horizontal Range Far"]),
-            trimmed_bat=int(float(row["Trimmed Bat"])),
-            pitching_height=float(row["Pitching Height"]),
-            has_super_curve=bool(int(row["Super Curve"])),
+            name=a.name,
+            slap_hit_power=_star(a, "slap_hit_power", stars_on),
+            charge_power=_star(a, "charge_hit_power", stars_on),
+            slap_contact_size=a.slap_contact_size_multiplier,
+            charge_contact_size=a.charge_contact_size_multiplier,
+            bunting=a.bunting,
+            horizontal_trajectory=a.raw("horizontal_hit_trajectory"),
+            vertical_trajectory=a.raw("vertical_hit_trajectory"),
+            captain_star_hit_pitch=a.raw("captain_star_hit"),
+            non_captain_star_swing=a.raw("non_captain_star_hit"),
+            horizontal_range_near=a.horizontal_range_near,
+            horizontal_range_far=a.horizontal_range_far,
+            trimmed_bat=a.trimmed_bat,
+            pitching_height=a.pitching_height,
+            has_super_curve=a.super_curve,
         )
 
 
@@ -164,8 +151,8 @@ class PitcherAttributes:
     @classmethod
     def from_name(cls, name, stars_on: bool = False) -> "PitcherAttributes":
         # `name` may be a character name (decoded files) or an encoded char id.
-        row = _load_attr_rows()[name]
-        return cls(name=row["Character"], cursed_ball=_stat(row, "Cursed Ball", stars_on))
+        a = character_attributes(name)
+        return cls(name=a.name, cursed_ball=_star(a, "cursed_ball", stars_on))
 
 
 # ---------------------------------------------------------------- I/O structs

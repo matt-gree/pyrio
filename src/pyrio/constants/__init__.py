@@ -1,18 +1,23 @@
 """Static data and constants for the project.
 
 Contents:
-  - game_constants      : encoded->decoded lookup tables + superstar modifiers
+  - game_constants      : encoded->decoded lookup tables for the hit sim
   - hit_sim_tables      : character-independent lookup tables for the hit sim
-  - character_attributes: per-character base (star-OFF) attributes (CSV)
+  - character_data      : AttributeSpec registry + CharacterAttributes (CSV-backed)
+  - character_attributes.csv : per-character base (star-OFF) attributes
   - stadiums/           : per-stadium boundary coordinate files
 
-Apply ``game_constants.SUPERSTAR_STAT_MODIFIERS`` to the base attributes to get
-star-ON values, rather than keeping a separate star-ON table.
+Use ``character_data.character_attributes(char).with_superstar()`` for star-ON
+values rather than keeping a separate star-ON table.
 """
 
 from pathlib import Path
 
 from . import game_constants
+from . import character_data
+from .character_data import (
+    AttributeSpec, ATTRIBUTES, CharacterAttributes, character_attributes,
+)
 
 _DIR = Path(__file__).parent
 
@@ -34,6 +39,11 @@ def stadium_coord_path(stadium_id):
 
 __all__ = [
     "game_constants",
+    "character_data",
+    "AttributeSpec",
+    "ATTRIBUTES",
+    "CharacterAttributes",
+    "character_attributes",
     "CHARACTER_ATTRIBUTES_CSV",
     "STADIUMS_DIR",
     "stadium_coord_path",

@@ -1,14 +1,20 @@
-"""Bidirectional lookup for Project Rio ID/name mappings.
+"""Project Rio coded values: ID/name tables and the typed value objects on them.
 
-    lookup("char_name", 0)          -> "Mario"
-    lookup("char_name", "Mario")    -> 0
-    lookup(LookupDicts.CHAR_NAME, 0) -> "Mario"   # also works
+Typed resolution (preferred):
 
-    list_dicts()  # prints all available dictionary names
+    Character.from_raw(0)        -> Character(0, "Mario")
+    Stadium.from_raw("1")        -> Stadium(1, "Bowser Castle")
+
+Raw bidirectional translation:
+
+    lookup("char_name", 0)       -> "Mario"
+    lookup("char_name", "Mario") -> 0
+    lookup(Tables.CHAR_NAME, 0)  -> "Mario"   # also works
+    list_dicts()                 # prints all available table names
 
 pandas is an optional, lazily-imported dependency: only the Series/DataFrame
-helpers (Lookup.lookup on a Series/DataFrame, create_translated_columns) use it,
-so importing this module does not require pandas.
+helpers (lookup on a Series/DataFrame, create_translated_columns) use it, so
+importing this module does not require pandas.
 """
 from __future__ import annotations
 
@@ -16,24 +22,13 @@ import csv
 import os
 import sys
 from dataclasses import dataclass
+from typing import ClassVar, TYPE_CHECKING, TypeVar, overload
 
-CAPTAINS = [
-    'Mario',
-    'Luigi',
-    'DK',
-    'Diddy',
-    'Peach',
-    'Daisy',
-    'Yoshi',
-    'Bowser',
-    'Wario',
-    'Waluigi',
-    'Birdo',
-    'Bowser Jr'
-]
+if TYPE_CHECKING:
+    from .constants.character_data import CharacterAttributes
 
 
-class LookupDicts:
+class Tables:
     CHAR_NAME = {
         0: "Mario",
         1: "Luigi",
@@ -336,41 +331,6 @@ class LookupDicts:
         'Bro(B)': 'Bro',
     }
 
-    CHAR_CLASS = {
-        'Mario': 'Balance',
-        'Luigi': 'Balance',
-        'DK': 'Power',
-        'Diddy': 'Speed',
-        'Peach': 'Technique',
-        'Daisy': 'Balance',
-        'Yoshi': 'Speed',
-        'Baby Mario': 'Speed',
-        'Baby Luigi': 'Speed',
-        'Bowser': 'Power',
-        'Wario': 'Power',
-        'Waluigi': 'Technique',
-        'Koopa': 'Balance',
-        'Toad': 'Balance',
-        'Boo': 'Technique',
-        'Toadette': 'Speed',
-        'Shy Guy': 'Balance',
-        'Birdo': 'Balance',
-        'Monty': 'Speed',
-        'Bowser Jr': 'Power',
-        'Paratroopa': 'Technique',
-        'Pianta': 'Power',
-        'Noki': 'Speed',
-        'Bro': 'Power',
-        'Toadsworth': 'Technique',
-        'Magikoopa': 'Technique',
-        'King Boo': 'Power',
-        'Petey': 'Power',
-        'Dixie': 'Technique',
-        'Goomba': 'Balance',
-        'Paragoomba': 'Speed',
-        'Dry Bones': 'Technique',
-    }
-
     # Logo id -> team name (canonical cLogoIdToTeamName).
     TEAM_NAME = {
         0: "Mario Sunshines",
@@ -425,18 +385,18 @@ class LookupDicts:
 
 
 # -------------------------------------------------------------------------
-# String-name registry: maps friendly names -> LookupDicts attributes
+# String-name registry: maps friendly names -> Tables attributes
 # -------------------------------------------------------------------------
 
 _DICT_REGISTRY: dict[str, dict] = {}
 
 
 def _build_registry():
-    """Build the string-name -> dict mapping from LookupDicts attributes."""
-    for attr_name in dir(LookupDicts):
+    """Build the string-name -> dict mapping from Tables attributes."""
+    for attr_name in dir(Tables):
         if attr_name.startswith('_'):
             continue
-        val = getattr(LookupDicts, attr_name)
+        val = getattr(Tables, attr_name)
         if isinstance(val, dict):
             _DICT_REGISTRY[attr_name.lower()] = val
 
@@ -475,18 +435,48 @@ def simplified_name_groups() -> dict[str, list[str]]:
     e.g., {'Toad': ['Toad(R)', 'Toad(B)', 'Toad(Y)', 'Toad(G)', 'Toad(P)'], ...}
     """
     groups = {}
-    for char, sn in LookupDicts.SIMPLIFIED_NAME.items():
+    for char, sn in Tables.SIMPLIFIED_NAME.items():
         groups.setdefault(sn, []).append(char)
     return groups
+
+
+def _single_lookup(dictionary: dict, term):
+    """Bidirectional single-term translation: id -> name or name -> id.
+
+    Returns the matching value, or an ``"Invalid ID or Name: ..."`` string
+    sentinel when the term is in neither the keys nor the values.
+    """
+    original_term = term
+    if isinstance(term, str) and term.isdigit():
+        term = int(term)
+    if isinstance(term, float) and term.is_integer():
+        term = int(term)
+
+    str_term = str(term).lower()
+    adjusted_dict = {str(k).lower(): str(v).lower() for k, v in dictionary.items()}
+
+    if str_term in adjusted_dict:
+        return dictionary.get(term, f"Invalid ID or Name: {original_term}")
+    elif str_term in adjusted_dict.values():
+        return [key for key, value in dictionary.items() if value.lower() == str_term][0]
+    else:
+        return f"Invalid ID or Name: {original_term}"
 
 
 # -------------------------------------------------------------------------
 # Value objects
 # -------------------------------------------------------------------------
 
+_RV = TypeVar("_RV", bound="RioValue")
+
+
 @dataclass(frozen=True, eq=False, repr=False)
-class LookupValue:
-    """An id paired with its canonical name.
+class RioValue:
+    """A Project Rio coded value: an id paired with its canonical name.
+
+    Subclasses set ``_lookup`` to their :class:`Tables` mapping and inherit
+    :meth:`from_raw`, which resolves a raw id or name (the encoded-vs-decoded
+    difference) into a value object.
 
     Equality is value-to-value only: a value object equals another of the same
     type with the same id, and is never equal to a raw int or str. Compare
@@ -495,6 +485,9 @@ class LookupValue:
     """
     id: int
     name: str
+
+    # Subclasses point this at their Tables mapping.
+    _lookup: ClassVar[dict] = {}
 
     def __int__(self) -> int:
         return self.id
@@ -506,21 +499,76 @@ class LookupValue:
         return f"{type(self).__name__}({self.id!r}, {self.name!r})"
 
     def __eq__(self, other: object) -> bool:
-        if isinstance(other, LookupValue):
+        if isinstance(other, RioValue):
             return type(self) is type(other) and self.id == other.id
         return NotImplemented
 
     def __hash__(self) -> int:
         return hash((type(self).__name__, self.id))
 
+    @classmethod
+    @overload
+    def from_raw(cls: "type[_RV]", search_term: int | str) -> "_RV": ...
+    @classmethod
+    @overload
+    def from_raw(cls: "type[_RV]", search_term: None) -> None: ...
+    @classmethod
+    def from_raw(cls: "type[_RV]", search_term: int | str | None) -> "_RV | None":
+        """Resolve a raw id or name to a value object (``None`` -> ``None``).
 
-class Character(LookupValue):
+        Accepts the canonical int id, a digit string, or the name string, so it
+        absorbs the encoded-vs-decoded difference. Raises ``ValueError`` for an
+        id/name that is not in this type's mapping.
+        """
+        if search_term is None:
+            return None
+        if isinstance(search_term, bool):
+            raise ValueError(f"Unknown {cls.__name__}: {search_term!r}")
+        d = cls._lookup
+        if isinstance(search_term, int):
+            id_ = search_term
+        elif isinstance(search_term, str) and search_term.isdigit():
+            id_ = int(search_term)
+        else:
+            id_ = _single_lookup(d, search_term)
+            if not isinstance(id_, int):
+                raise ValueError(f"Unknown {cls.__name__}: {search_term!r}")
+        name = _single_lookup(d, id_)
+        if not isinstance(name, str) or name.startswith("Invalid"):
+            raise ValueError(f"Unknown {cls.__name__} id: {search_term!r}")
+        return cls(id_, name)
+
+
+class Character(RioValue):
     """A Mario Superstar Baseball character: char id plus canonical name."""
+
+    _lookup = Tables.CHAR_NAME
+
+    @classmethod
+    @overload
+    def from_raw(cls, search_term: int | str) -> "Character": ...
+    @classmethod
+    @overload
+    def from_raw(cls, search_term: None) -> None: ...
+    @classmethod
+    def from_raw(cls, search_term: int | str | None) -> "Character | None":
+        """Resolve a char id or name (any alias) to a Character (None -> None)."""
+        if search_term is None:
+            return None
+        if isinstance(search_term, str) and not search_term.isdigit():
+            name = userInputToCharacter(search_term)  # raises ValueError if unknown
+            return cls(_single_lookup(Tables.CHAR_NAME, name), name)
+        return super().from_raw(search_term)
 
     @property
     def name_no_variant(self) -> str:
         """Name without the colour/variant suffix, e.g. 'Pianta(R)' -> 'Pianta'."""
-        return LookupDicts.SIMPLIFIED_NAME.get(self.name, self.name)
+        return Tables.SIMPLIFIED_NAME.get(self.name, self.name)
+
+    @property
+    def base(self) -> "BaseCharacter":
+        """The variant-less identity of this character (e.g. 'Pianta(R)' -> Pianta)."""
+        return BaseCharacter(self.name_no_variant)
 
     @property
     def hex(self) -> str:
@@ -528,86 +576,79 @@ class Character(LookupValue):
         return hex(self.id)
 
     @property
-    def char_class(self) -> str | None:
-        """Class ('Balance', 'Power', 'Speed', 'Technique'), or None if unknown."""
-        return LookupDicts.CHAR_CLASS.get(self.name_no_variant)
+    def attributes(self) -> "CharacterAttributes":
+        """Base (star-OFF) attributes for this character, incl. ``char_class``
+        and ``is_captain``.
+
+        Use ``.attributes.with_superstar()`` for star-ON values -- a bare
+        Character has no game context to know whether it is starred.
+        """
+        from .constants.character_data import character_attributes
+        return character_attributes(self.id)
+
+
+# Simplified (variant-less) character names, and a representative variant id per
+# name for base-level attribute lookups.
+_SIMPLIFIED_NAMES = set(Tables.SIMPLIFIED_NAME.values())
+_BASE_REPRESENTATIVE_ID: dict[str, int] = {}
+for _cid, _full in Tables.CHAR_NAME.items():
+    _BASE_REPRESENTATIVE_ID.setdefault(Tables.SIMPLIFIED_NAME.get(_full, _full), _cid)
+
+
+@dataclass(frozen=True, eq=False, repr=False)
+class BaseCharacter:
+    """A character identity without its colour/variant suffix (e.g. 'Pianta').
+
+    Distinct from :class:`Character`, which is a single variant (id 0-53): all
+    Pianta variants share one ``BaseCharacter``. Equality and hashing are by
+    name, and never equal to a raw string. Class/captain are variant-invariant,
+    so they live here too.
+    """
+    name: str
+
+    def __str__(self) -> str:
+        return self.name
+
+    def __repr__(self) -> str:
+        return f"BaseCharacter({self.name!r})"
+
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, BaseCharacter):
+            return self.name == other.name
+        return NotImplemented
+
+    def __hash__(self) -> int:
+        return hash(("BaseCharacter", self.name))
+
+    @classmethod
+    @overload
+    def from_raw(cls, value: int | str) -> "BaseCharacter": ...
+    @classmethod
+    @overload
+    def from_raw(cls, value: None) -> None: ...
+    @classmethod
+    def from_raw(cls, value: int | str | None) -> "BaseCharacter | None":
+        """Resolve a simplified name, variant name, alias, or char id to a base
+        character (None -> None)."""
+        if value is None:
+            return None
+        if isinstance(value, str) and value in _SIMPLIFIED_NAMES:
+            return cls(value)
+        return Character.from_raw(value).base
+
+    @property
+    def attributes(self) -> "CharacterAttributes":
+        """Attributes of a representative variant (class/captain are shared)."""
+        from .constants.character_data import character_attributes
+        return character_attributes(_BASE_REPRESENTATIVE_ID[self.name])
+
+    @property
+    def char_class(self) -> str:
+        return self.attributes.char_class
 
     @property
     def is_captain(self) -> bool:
-        """Whether this character can captain a team."""
-        return self.name_no_variant in CAPTAINS
-
-
-class Stadium(LookupValue):
-    """A Mario Superstar Baseball stadium."""
-
-
-class PitchType(LookupValue):
-    """A pitch type: Curve / Charge / ChangeUp."""
-
-
-class ChargeType(LookupValue):
-    """A charge pitch type."""
-
-
-class SwingType(LookupValue):
-    """A type of swing: None / Slap / Charge / Star / Bunt."""
-
-
-class ContactType(LookupValue):
-    """A type of bat contact: Sour/Nice/Perfect/Miss."""
-
-
-class FinalResult(LookupValue):
-    """The final result of an at-bat (cAtBatResult)."""
-
-
-class PrimaryContactResult(LookupValue):
-    """Primary contact result: Out / Foul / Fair / Fielded."""
-
-
-class SecondaryContactResult(LookupValue):
-    """Secondary contact result: the detailed hit/out outcome."""
-
-
-class OutType(LookupValue):
-    """How an out was made: Caught / Force / Tag / ..."""
-
-
-class StealType(LookupValue):
-    """A steal type: None / Ready / Normal / Perfect."""
-
-
-class PitchResult(LookupValue):
-    """The result of a pitch: HBP / BB / Ball / Strike / Contact."""
-
-
-class Hand(LookupValue):
-    """Handedness: Right / Left."""
-
-
-class Position(LookupValue):
-    """A fielding position: P/C/1B/.../RF, or Inv."""
-
-
-class FielderAction(LookupValue):
-    """A fielder action: None / Sliding / Walljump / ..."""
-
-
-class FielderBobble(LookupValue):
-    """A fielder bobble: None / Bobble / Fireball / Fumble / ..."""
-
-
-class ManualSelect(LookupValue):
-    """Manual fielder selection: No Selected Char / Pitcher / Catcher / ..."""
-
-
-class TeamName(LookupValue):
-    """A team (logo) name, e.g. 'Mario Fireballs'."""
-
-
-class DeadBallReason(LookupValue):
-    """Why a ball was dead: N/A / Home Run / Foul Ball / Ground Rule Double / Ball Dead."""
+        return self.attributes.is_captain
 
 
 # Legacy decoded stadium names -> canonical names.
@@ -620,224 +661,185 @@ _OLD_STADIUM_NAMES = {
 }
 
 
-# -------------------------------------------------------------------------
-# Lookup class and module-level function
-# -------------------------------------------------------------------------
+class Stadium(RioValue):
+    """A Mario Superstar Baseball stadium."""
 
-class Lookup:
-    """Bidirectional lookup between IDs and names. All methods are static."""
+    _lookup = Tables.STADIUM
 
-    @staticmethod
-    def _single_lookup(dictionary: dict, term):
-        original_term = term
-        if isinstance(term, str) and term.isdigit():
-            term = int(term)
-        if isinstance(term, float) and term.is_integer():
-            term = int(term)
-
-        str_term = str(term).lower()
-        adjusted_dict = {str(k).lower(): str(v).lower() for k, v in dictionary.items()}
-
-        if str_term in adjusted_dict:
-            return dictionary.get(term, f"Invalid ID or Name: {original_term}")
-        elif str_term in adjusted_dict.values():
-            return [key for key, value in dictionary.items() if value.lower() == str_term][0]
-        else:
-            return f"Invalid ID or Name: {original_term}"
-
-    @staticmethod
-    def lookup(dictionary, search_term, auto_print: bool = False):
-        """Look up a value in a dictionary bidirectionally.
-
-        dictionary: a dict, or a string name like 'char_name', 'stadium', etc.
-        search_term: int ID, string name, list, pd.Series, or pd.DataFrame.
-        """
-        d = _resolve_dict(dictionary)
-        sl = Lookup._single_lookup
-
-        if isinstance(search_term, list):
-            result = [sl(d, term) for term in search_term]
-        elif type(search_term).__module__.split('.')[0] == 'pandas':
-            # Only import pandas when we were actually handed a pandas object.
-            import pandas as pd
-            if isinstance(search_term, pd.Series):
-                result = search_term.apply(lambda t: sl(d, t))
-            elif isinstance(search_term, pd.DataFrame):
-                result = search_term.map(lambda t: sl(d, t))
-            else:
-                result = sl(d, search_term)
-        else:
-            result = sl(d, search_term)
-
-        if auto_print:
-            print(result)
-        return result
-
-    @staticmethod
-    def translate_values(dictionary, values):
-        return Lookup.lookup(dictionary, values)
-
-    @staticmethod
-    def character(search_term: int | str | None) -> "Character | None":
-        """Resolve a char id or name (any alias) to a Character value object."""
-        if search_term is None:
-            return None
-        if isinstance(search_term, str) and not search_term.isdigit():
-            name = userInputToCharacter(search_term)  # raises ValueError if unknown
-            char_id = Lookup.lookup(LookupDicts.CHAR_NAME, name)
-        else:
-            char_id = int(search_term)
-            name = Lookup.lookup(LookupDicts.CHAR_NAME, char_id)
-            if not isinstance(name, str) or name.startswith("Invalid"):
-                raise ValueError(f"Unknown character id: {search_term!r}")
-        return Character(char_id, name)
-
-    @staticmethod
-    def _value(dictionary, search_term, value_cls):
-        """Resolve an id or name to a value_cls value object.
-
-        Accepts the canonical int id or the name string (so it absorbs the
-        encoded-vs-decoded difference). None passes through as None.
-        """
-        if search_term is None:
-            return None
-        if isinstance(search_term, bool):
-            raise ValueError(f"Unknown {value_cls.__name__}: {search_term!r}")
-        d = _resolve_dict(dictionary)
-        if isinstance(search_term, int):
-            id_ = search_term
-        elif isinstance(search_term, str) and search_term.isdigit():
-            id_ = int(search_term)
-        else:
-            id_ = Lookup._single_lookup(d, search_term)
-            if not isinstance(id_, int):
-                raise ValueError(f"Unknown {value_cls.__name__}: {search_term!r}")
-        name = Lookup._single_lookup(d, id_)
-        if not isinstance(name, str) or name.startswith("Invalid"):
-            raise ValueError(f"Unknown {value_cls.__name__} id: {search_term!r}")
-        return value_cls(id_, name)
-
-    @staticmethod
-    def stadium(search_term: int | str) -> "Stadium":
+    @classmethod
+    @overload
+    def from_raw(cls, search_term: int | str) -> "Stadium": ...
+    @classmethod
+    @overload
+    def from_raw(cls, search_term: None) -> None: ...
+    @classmethod
+    def from_raw(cls, search_term: int | str | None) -> "Stadium | None":
         """Resolve a stadium id or name (incl. legacy names) to a Stadium."""
         if isinstance(search_term, str):
             search_term = _OLD_STADIUM_NAMES.get(search_term, search_term)
-        return Lookup._value(LookupDicts.STADIUM, search_term, Stadium)
-
-    @staticmethod
-    def pitch_type(search_term: int | str | None) -> "PitchType | None":
-        """Resolve a pitch-type id or name to a PitchType (None -> None)."""
-        return Lookup._value(LookupDicts.PITCH_TYPE, search_term, PitchType)
-
-    @staticmethod
-    def charge_type(search_term: int | str | None) -> "ChargeType | None":
-        """Resolve a charge-pitch-type id or name to a ChargeType (None -> None)."""
-        return Lookup._value(LookupDicts.CHARGE_TYPE, search_term, ChargeType)
-
-    @staticmethod
-    def swing_type(search_term: int | str | None) -> "SwingType | None":
-        """Resolve a swing-type id or name to a SwingType (None -> None)."""
-        return Lookup._value(LookupDicts.TYPE_OF_SWING, search_term, SwingType)
-
-    @staticmethod
-    def contact_type(search_term: int | str | None) -> "ContactType | None":
-        """Resolve a contact-type id or name to a ContactType (None -> None)."""
-        return Lookup._value(LookupDicts.CONTACT_TYPE, search_term, ContactType)
-
-    @staticmethod
-    def final_result(search_term: int | str | None) -> "FinalResult | None":
-        """Resolve an at-bat final-result id or name to a FinalResult."""
-        return Lookup._value(LookupDicts.FINAL_RESULT, search_term, FinalResult)
-
-    @staticmethod
-    def primary_contact_result(search_term: int | str | None) -> "PrimaryContactResult | None":
-        """Resolve a primary-contact-result id or name to a value object."""
-        return Lookup._value(LookupDicts.PRIMARY_CONTACT_RESULT, search_term, PrimaryContactResult)
-
-    @staticmethod
-    def secondary_contact_result(search_term: int | str | None) -> "SecondaryContactResult | None":
-        """Resolve a secondary-contact-result id or name to a value object."""
-        return Lookup._value(LookupDicts.SECONDARY_CONTACT_RESULT, search_term, SecondaryContactResult)
-
-    @staticmethod
-    def out_type(search_term: int | str | None) -> "OutType | None":
-        """Resolve an out-type id or name to an OutType (None -> None)."""
-        return Lookup._value(LookupDicts.OUT_TYPE, search_term, OutType)
-
-    @staticmethod
-    def steal_type(search_term: int | str | None) -> "StealType | None":
-        """Resolve a steal-type id or name to a StealType (None -> None)."""
-        return Lookup._value(LookupDicts.STEAL_TYPE, search_term, StealType)
-
-    @staticmethod
-    def pitch_result(search_term: int | str | None) -> "PitchResult | None":
-        """Resolve a pitch-result id or name to a PitchResult (None -> None)."""
-        return Lookup._value(LookupDicts.PITCH_RESULT, search_term, PitchResult)
-
-    @staticmethod
-    def hand(search_term: int | str | None) -> "Hand | None":
-        """Resolve a handedness id or name to a Hand (None -> None)."""
-        return Lookup._value(LookupDicts.HAND, search_term, Hand)
-
-    @staticmethod
-    def position(search_term: int | str | None) -> "Position | None":
-        """Resolve a fielding-position id or name to a Position (None -> None)."""
-        return Lookup._value(LookupDicts.POSITION, search_term, Position)
-
-    @staticmethod
-    def fielder_action(search_term: int | str | None) -> "FielderAction | None":
-        """Resolve a fielder-action id or name to a FielderAction (None -> None)."""
-        return Lookup._value(LookupDicts.FIELDER_ACTIONS, search_term, FielderAction)
-
-    @staticmethod
-    def fielder_bobble(search_term: int | str | None) -> "FielderBobble | None":
-        """Resolve a fielder-bobble id or name to a FielderBobble (None -> None)."""
-        return Lookup._value(LookupDicts.FIELDER_BOBBLES, search_term, FielderBobble)
-
-    @staticmethod
-    def manual_select(search_term: int | str | None) -> "ManualSelect | None":
-        """Resolve a manual-select id or name to a ManualSelect (None -> None)."""
-        return Lookup._value(LookupDicts.MANUAL_SELECT, search_term, ManualSelect)
-
-    @staticmethod
-    def team_name(search_term: int | str | None) -> "TeamName | None":
-        """Resolve a team (logo) id or name to a TeamName (None -> None)."""
-        return Lookup._value(LookupDicts.TEAM_NAME, search_term, TeamName)
-
-    @staticmethod
-    def dead_ball_reason(search_term: int | str | None) -> "DeadBallReason | None":
-        """Resolve a dead-ball-reason id or name to a DeadBallReason (None -> None)."""
-        return Lookup._value(LookupDicts.DEAD_BALL_REASON, search_term, DeadBallReason)
-
-    @staticmethod
-    def create_translated_columns(df: pd.DataFrame) -> pd.DataFrame:
-        """Add _str columns with human-readable translations for known columns."""
-        column_to_dict_map = {
-            'batter_char_id': LookupDicts.CHAR_NAME,
-            'pitcher_char_id': LookupDicts.CHAR_NAME,
-            'fielder_char_id': LookupDicts.CHAR_NAME,
-            'batting_hand': LookupDicts.HAND_BOOL,
-            'fielder_jump': LookupDicts.FIELDER_ACTIONS,
-            'fielder_position': LookupDicts.POSITION,
-            'fielding_hand': LookupDicts.HAND_BOOL,
-            'final_result': LookupDicts.FINAL_RESULT,
-            'manual_select_state': LookupDicts.MANUAL_SELECT,
-            'stick_input': LookupDicts.INPUT_DIRECTION,
-            'type_of_contact': LookupDicts.CONTACT_TYPE,
-            'type_of_swing': LookupDicts.TYPE_OF_SWING,
-            'stadium': LookupDicts.STADIUM,
-        }
-
-        for column, dict_name in column_to_dict_map.items():
-            if column in df.columns:
-                translated_values = Lookup.lookup(dict_name, df[column])
-                df[f'{column}_str'] = translated_values.astype('category')
-
-        return df
+        return super().from_raw(search_term)
 
 
-# Module-level convenience alias
-lookup = Lookup.lookup
+class PitchType(RioValue):
+    """A pitch type: Curve / Charge / ChangeUp."""
+
+    _lookup = Tables.PITCH_TYPE
+
+
+class ChargeType(RioValue):
+    """A charge pitch type."""
+
+    _lookup = Tables.CHARGE_TYPE
+
+
+class SwingType(RioValue):
+    """A type of swing: None / Slap / Charge / Star / Bunt."""
+
+    _lookup = Tables.TYPE_OF_SWING
+
+
+class ContactType(RioValue):
+    """A type of bat contact: Sour/Nice/Perfect/Miss."""
+
+    _lookup = Tables.CONTACT_TYPE
+
+
+class FinalResult(RioValue):
+    """The final result of an at-bat (cAtBatResult)."""
+
+    _lookup = Tables.FINAL_RESULT
+
+
+class PrimaryContactResult(RioValue):
+    """Primary contact result: Out / Foul / Fair / Fielded."""
+
+    _lookup = Tables.PRIMARY_CONTACT_RESULT
+
+
+class SecondaryContactResult(RioValue):
+    """Secondary contact result: the detailed hit/out outcome."""
+
+    _lookup = Tables.SECONDARY_CONTACT_RESULT
+
+
+class OutType(RioValue):
+    """How an out was made: Caught / Force / Tag / ..."""
+
+    _lookup = Tables.OUT_TYPE
+
+
+class StealType(RioValue):
+    """A steal type: None / Ready / Normal / Perfect."""
+
+    _lookup = Tables.STEAL_TYPE
+
+
+class PitchResult(RioValue):
+    """The result of a pitch: HBP / BB / Ball / Strike / Contact."""
+
+    _lookup = Tables.PITCH_RESULT
+
+
+class Hand(RioValue):
+    """Handedness: Right / Left."""
+
+    _lookup = Tables.HAND
+
+
+class Position(RioValue):
+    """A fielding position: P/C/1B/.../RF, or Inv."""
+
+    _lookup = Tables.POSITION
+
+
+class FielderAction(RioValue):
+    """A fielder action: None / Sliding / Walljump / ..."""
+
+    _lookup = Tables.FIELDER_ACTIONS
+
+
+class FielderBobble(RioValue):
+    """A fielder bobble: None / Bobble / Fireball / Fumble / ..."""
+
+    _lookup = Tables.FIELDER_BOBBLES
+
+
+class ManualSelect(RioValue):
+    """Manual fielder selection: No Selected Char / Pitcher / Catcher / ..."""
+
+    _lookup = Tables.MANUAL_SELECT
+
+
+class TeamName(RioValue):
+    """A team (logo) name, e.g. 'Mario Fireballs'."""
+
+    _lookup = Tables.TEAM_NAME
+
+
+class DeadBallReason(RioValue):
+    """Why a ball was dead: N/A / Home Run / Foul Ball / Ground Rule Double / Ball Dead."""
+
+    _lookup = Tables.DEAD_BALL_REASON
+
+
+# -------------------------------------------------------------------------
+# Generic bulk / string-name translation
+# -------------------------------------------------------------------------
+# For typed value objects (Character, Stadium, PitchType, ...) use the value
+# class constructors, e.g. ``Character.from_raw(2)``. These functions are for
+# raw dict translation and the pandas helpers.
+
+def lookup(dictionary, search_term, auto_print: bool = False):
+    """Look up a value in a table bidirectionally.
+
+    dictionary: a dict, or a string name like 'char_name', 'stadium', etc.
+    search_term: int ID, string name, list, pd.Series, or pd.DataFrame.
+    """
+    d = _resolve_dict(dictionary)
+
+    if isinstance(search_term, list):
+        result = [_single_lookup(d, term) for term in search_term]
+    elif type(search_term).__module__.split('.')[0] == 'pandas':
+        # Only import pandas when we were actually handed a pandas object.
+        import pandas as pd
+        if isinstance(search_term, pd.Series):
+            result = search_term.apply(lambda t: _single_lookup(d, t))
+        elif isinstance(search_term, pd.DataFrame):
+            result = search_term.map(lambda t: _single_lookup(d, t))
+        else:
+            result = _single_lookup(d, search_term)
+    else:
+        result = _single_lookup(d, search_term)
+
+    if auto_print:
+        print(result)
+    return result
+
+
+def create_translated_columns(df: "pd.DataFrame") -> "pd.DataFrame":
+    """Add _str columns with human-readable translations for known columns."""
+    column_to_dict_map = {
+        'batter_char_id': Tables.CHAR_NAME,
+        'pitcher_char_id': Tables.CHAR_NAME,
+        'fielder_char_id': Tables.CHAR_NAME,
+        'batting_hand': Tables.HAND_BOOL,
+        'fielder_jump': Tables.FIELDER_ACTIONS,
+        'fielder_position': Tables.POSITION,
+        'fielding_hand': Tables.HAND_BOOL,
+        'final_result': Tables.FINAL_RESULT,
+        'manual_select_state': Tables.MANUAL_SELECT,
+        'stick_input': Tables.INPUT_DIRECTION,
+        'type_of_contact': Tables.CONTACT_TYPE,
+        'type_of_swing': Tables.TYPE_OF_SWING,
+        'stadium': Tables.STADIUM,
+    }
+
+    for column, dict_name in column_to_dict_map.items():
+        if column in df.columns:
+            translated_values = lookup(dict_name, df[column])
+            df[f'{column}_str'] = translated_values.astype('category')
+
+    return df
 
 
 # -------------------------------------------------------------------------
@@ -874,11 +876,12 @@ def userInputToCharacter(user_input: str) -> str:
     cleaned = user_input.replace(' ', '').lower()
     if cleaned not in _CHAR_ALIASES:
         raise ValueError(f'{user_input} is an invalid character name')
-    return lookup(LookupDicts.CHAR_NAME, _CHAR_ALIASES[cleaned])
+    return lookup(Tables.CHAR_NAME, _CHAR_ALIASES[cleaned])
 
 
 def is_captain(character: str) -> bool:
     """Check if a character (by any name/alias) is a captain."""
-    return userInputToCharacter(character) in CAPTAINS
+    from .constants.character_data import character_attributes
+    return character_attributes(userInputToCharacter(character)).is_captain
 
 

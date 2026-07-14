@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from ..lookup import Lookup, Character, OutType, StealType
+from ..rio_value import Character, OutType, StealType
 
 
 class RunnerObj:
@@ -16,7 +16,7 @@ class RunnerObj:
         return self.runner_json['Runner Roster Loc']
 
     def character(self) -> Optional[Character]:
-        return Lookup.character(self.runner_json.get('Runner Char Id'))
+        return Character.from_raw(self.runner_json.get('Runner Char Id'))
 
     def initial_base(self) -> int:
         return self.runner_json['Runner Initial Base']
@@ -28,10 +28,10 @@ class RunnerObj:
         return self.result_base() - self.initial_base()
 
     def out_type(self) -> Optional[OutType]:
-        return Lookup.out_type(self.runner_json.get('Out Type'))
+        return OutType.from_raw(self.runner_json.get('Out Type'))
 
     def steal(self) -> Optional[StealType]:
-        return Lookup.steal_type(self.runner_json.get('Steal'))
+        return StealType.from_raw(self.runner_json.get('Steal'))
 
     def is_out(self) -> bool:
         ot = self.out_type()

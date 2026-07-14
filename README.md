@@ -1,15 +1,37 @@
 # pyrio
 Library containing classes and functions to interact with Project Rio statfiles, web API, etc.
 
-## lookup.py
-Utility to access various stats and attributes of characters. Useful for things like setting parameters for web requests, since those require the character ID number. To get the character ID of a character like Bowser, you would do something like:
-```python
-from lookup import Lookup, LookupDicts
-l = Lookup()
+## rio_value.py
+ID/name tables (`Tables`), the typed value objects built on them (`Character`,
+`Stadium`, `PitchType`, …), and bulk translation helpers.
 
-l.lookup(LookupDicts.CHAR_NAME, 'bowser', auto_print=True)
+Resolve a raw id or name (any spelling) to a typed value object:
+```python
+from pyrio import Character
+
+bowser = Character.from_raw("bowser")   # or Character.from_raw(9)
+bowser.id          # 9
+bowser.name        # "Bowser"
 ```
-The lookup works in either direction, so you can pass it the integer value or the string representation of the lookup target.
+
+Per-character attributes (class, captain, stats, abilities) come from the
+CSV-backed record; star-ON values via `with_superstar()`:
+```python
+attrs = bowser.attributes
+attrs.char_class            # "Power"
+attrs.is_captain            # True
+attrs.slap_hit_power        # base (star-OFF)
+attrs.with_superstar().slap_hit_power
+```
+
+For raw bidirectional dict translation (returns ints/strings, works on pandas
+Series/DataFrames too):
+```python
+from pyrio import lookup, Tables
+
+lookup(Tables.CHAR_NAME, "bowser")   # -> 9
+lookup("char_name", 9)               # -> "Bowser"  (table by string name)
+```
 
 
 ## api.py
