@@ -16,22 +16,55 @@ stars_on, the superstar conversion (each AttributeSpec's to_star_on, a capped
 (pitcher) -- the same stats the JS calculator buffed, clamped to the in-game caps.
 
 Notes / known JS quirks carried over:
-  - Moonshot (`AtBat_MoonShot`) is unreachable here: the JS hardcodes
-    starsForBatter = 4, so the moonshot branch (needs >= 5) never runs. Its
-    undefined `AtBat_MoonShotMultiplier` therefore never matters.
+  - Moonshot (5-star dinger): a fully-charged star swing with 5 stars. The game
+    triggers it on stars + full charge, but a star swing's charge is zeroed in the
+    recording, so a Moonshot attempt can't be told from a regular 5-star swing
+    there -- except a *connected* dinger sets the "Star Swing Five-Star" flag. So we
+    detect the dinger via that flag (HitInputs.five_star_dinger) and model it as a
+    Star swing carrying AtBat_MoonShot (power override + _MOONSHOT_MULTIPLIER). A
+    failed Moonshot (Texas Leaguer, flag 0) is indistinguishable from a regular
+    5-star swing and is left unmodeled for now.
   - Super curve is read from the "Super Curve" column of the character attribute
     CSV (derived from the "Curved Hits" Extra tag) instead of the JS's hardcoded
     char ids.
 
+calculateHitGround / liveBallHitPhysics notes:
+  - Integration is semi-implicit (symplectic) Euler: each frame velocity is
+    decayed (air resistance + gravity) and acceleration added BEFORE the
+    position is stepped, matching the game's per-frame order.
+  - The trajectory starts at the world contact position. The recorded contact X
+    is batter-relative (mirrored about the plate for lefties) while velocity and
+    landing are world-frame, so the X start is mirrored for lefties.
+  - The ground plane is GROUND_Y (0.15, or 0.35 on Toy Field), not 0. Most
+    stadiums (BOUNCING_STADIUM_IDS) get a blanket flat-ground bounce: clamp Y and
+    reverse a downward Y velocity. Bowser Castle / Toy Field are excluded because
+    their ground has holes, so the game resolves them in ballCollisionLogic (not
+    ported); we approximate that with a ground-pinning skid.
+  - The aerial `landing` is recorded one frame after first ground contact (the
+    sim advances one extra frame). HitResult.trajectory stays wall-free and
+    stops at that aerial landing.
+
+Testing helpers (not used by the core sim):
+  - simulate_hit_trajectory / simulate_hit_trajectory_from_event continue the
+    ball through ground contacts (bounce/skid) for a fixed number of frames --
+    e.g. walking a grounder/liner to its recorded hang time.
+  - stadiums.wall_collision_point / boundary_intersection clip a trajectory to
+    the outfield wall or the field-boundary polygon.
+  - hit_sim_validation.py's --landing flag compares simulated vs. recorded
+    landing position (informational; excludes caught balls by default).
+
 Testing status (via hit_sim_validation.py):
-    - Hit inputs, such as horizontal/vertical angle thresholds and hit power, have been spot-checked with 2 stars off stat files and they achieved 100% convergence.
-    - The hit path is not validating against the landing spot output in the stat files, even for balls that stay in-play and aren't caught by fielders.
-        - The outputs are usually close, but there are some large deviances that are concerning.
+    - The deterministic contact-stage fields (contact type/quality, angles,
+      power, velocity) reproduce recorded events exactly given their RNG seeds;
+      see tests/test_hit_simulation.py::test_validation_harness_reproduces_recorded_contacts.
+    - Landing position is not yet validated to the same standard -- treat it as
+      informational, per --landing's docstring.
 """
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, field
+import struct
+from dataclasses import dataclass, field, replace
 from typing import Optional
 
 from .constants import hit_sim_tables as T
@@ -39,9 +72,9 @@ from .constants import game_constants as G
 from .constants.character_data import character_attributes, ATTRIBUTES_BY_KEY
 from .stat_file_parser import EventObj
 
-# JS leaves AtBat_MoonShotMultiplier undefined; the branch is unreachable here
-# (starsForBatter is hardcoded 4), so this value is never actually used.
-_MOONSHOT_MULTIPLIER = 1.0
+# Moonshot (5-star dinger) power multiplier, from the decomp. Applied in
+# calculate_hit_power when AtBat_MoonShot survives to a Perfect contact.
+_MOONSHOT_MULTIPLIER = 1.5
 
 _CONTACT_TYPE_NAMES = ["Left Sour", "Left Nice", "Perfect", "Right Nice", "Right Sour"]
 
@@ -56,6 +89,12 @@ def _jfloor(x: float) -> int:
 def _to_int32(x: int) -> int:
     x &= 0xFFFFFFFF
     return x - 0x100000000 if x & 0x80000000 else x
+
+
+def _f32(x: float) -> float:
+    """Narrow a Python double to 32-bit float, as the game's single-precision
+    arithmetic does (needed where an intermediate (float) cast changes a result)."""
+    return struct.unpack("f", struct.pack("f", x))[0]
 
 
 def _adjust_ball_angle(a: int) -> int:
@@ -100,6 +139,17 @@ def _star(attrs, key, stars_on):
     """A numeric attribute, star-converted when stars_on (via its AttributeSpec)."""
     value = getattr(attrs, key)
     return ATTRIBUTES_BY_KEY[key].to_star_on(value) if stars_on else value
+
+
+# Non-red Toad color variants. The "Fix Non-red Toad Hitboxes and Bat Reach" mod
+# gives these Red Toad's bat reach (Horizontal Range Near/Far); see HitInputs.
+_NON_RED_TOADS = frozenset({"Toad(B)", "Toad(Y)", "Toad(G)", "Toad(P)"})
+
+
+def _red_toad_reach() -> tuple:
+    """Red Toad's (Horizontal Range Near, Far)."""
+    a = character_attributes("Toad(R)")
+    return a.horizontal_range_near, a.horizontal_range_far
 
 
 @dataclass
@@ -158,13 +208,44 @@ class PitcherAttributes:
 # ---------------------------------------------------------------- I/O structs
 
 @dataclass
+class HitOverrides:
+    """Optional overrides that force specific internal decisions in the hit
+    pipeline, bypassing the corresponding RNG/derivation. Each field defaults to
+    None (no override -> the game's normal behavior), so an unset override is a
+    no-op. Add new override knobs here as the need arises; the simulator reads
+    each one at the point it would otherwise compute that value.
+    """
+    # Force which of the 5 vertical trajectory cones (zones) calculate_vertical_angle
+    # picks, replacing the weighted-RNG choice. 0-4. The RNG draw still happens (so
+    # downstream state -- including the within-cone angle draw -- is consumed exactly
+    # as in-game); only the selected zone changes. No effect on events whose vertical
+    # angle isn't chosen from the cone table (captain/non-captain star swings,
+    # Moonshots, or forced pop-fly/grounder hits).
+    vertical_zone: Optional[int] = None
+
+    # Force the final raw horizontal angle (0-4096), bypassing
+    # calculate_horizontal_angle's RNG draw and hand mirroring. Applied at the end
+    # of that step, so the value is used verbatim by convert_power_to_velocity.
+    horizontal_angle: Optional[int] = None
+
+    # Force the raw vertical angle (0-4096) before the wrap/flip that folds angles
+    # above 0x400 back down (and mirrors the horizontal angle). The RNG draw still
+    # happens so downstream state is consumed as in-game; only the angle changes.
+    vertical_angle: Optional[int] = None
+
+    # Force the final hit power, bypassing the contact/field/charge power math.
+    power: Optional[int] = None
+
+
+@dataclass
 class HitInputs:
     batter_name: str
     pitcher_name: str
-    # pitch: 0 Curve, 1 Charge(Slider), 2 Perfect Charge, 3 ChangeUp
+    # pitch: 0 Curve, 1 Charge(Slider), 2 Perfect Charge, 3 ChangeUp, 4 ChargedStar
     pitch_type_val: int
     pos_x: float                 # batter X at contact
-    ball_x: float                # ball X at contact
+    ball_x: float                # ball X at contact (world X start of trajectory)
+    # ball_z (world Z start of trajectory) is in the defaulted block below.
     batter_hand: int             # 0 Righty, 1 Lefty
     swing: int                   # 0 Slap, 1 Charge (Star handled via is_star)
     is_star: bool = False
@@ -179,9 +260,47 @@ class HitInputs:
     easy_batting: bool = False
     batter_stars_on: bool = False
     pitcher_stars_on: bool = False
+    # A connected 5-star dinger (the recorded "Star Swing Five-Star" flag). This is
+    # how a Moonshot is detected (see _resolve_star_swing): a 5-star swing's charge
+    # is zeroed in the recording, so a failed Moonshot (Texas Leaguer) can't be told
+    # from a regular 5-star swing -- only the connected dinger is modeled.
+    five_star_dinger: bool = False
+    ball_z: float = 0.0                     # ball Z at contact (world Z start of trajectory)
+    ground_y: float = T.GROUND_Y_DEFAULT   # landing/bounce plane (0.35 on Toy Field)
+    bounce: bool = True                     # ground bounces elastically (False = skid; Bowser Castle / Toy Field)
+    # Gecko-mod toggles (off = vanilla). The validator turns these on from a
+    # match's active tags; see TAG_TO_FLAG and _inputs_from_event.
+    # "Fix Non-red Toad Hitboxes and Bat Reach": give the non-red Toad color
+    # variants Red Toad's bat reach (Horizontal Range Near/Far). No other effect.
+    fix_non_red_toad_reach: bool = False
+    # "Remove slice": patch the [0,0] holes in BattingAngleRanges (an early/late
+    # contact otherwise goes dead up the middle) so frame-2/10 hits go foul; see
+    # T.REMOVE_SLICE_ANGLE_OVERRIDES.
+    remove_slice: bool = False
+    # DK/Diddy "banana" captain star hit (auto-applied when the captain star is
+    # DK or Diddy): while active, the horizontal velocity is rotated
+    # T.DK_DIDDY_STAR_ANGLE_DELTA rad/frame (speed preserved), making the wide
+    # horizontal arc. CalculateHitVariables derives all three from the hit, so
+    # None means "use the game's rule": the window is 0.25x..0.95x of the
+    # straight-flight hang time, and the direction is the batter's hand. Set
+    # explicit values only to override.
+    banana_hit_start_frame: Optional[int] = None   # active while start < framesSinceLiveBall < end
+    banana_hit_end_frame: Optional[int] = None
+    banana_direction: Optional[int] = None         # 0 (Righty) subtracts, 1 (Lefty) adds the delta
+    # Wario/Waluigi "garlic" captain star hit (auto-applied for Wario/Waluigi). The
+    # ball splits in two near the ground; each ball's heading is offset from the
+    # pre-split heading by a per-side spread. None -> the game's RNG
+    # (randomInRange(0.2, 0.3) per side); a float forces one symmetric spread (rad).
+    # The game rolls warioWaluStarHitDirection via RandomInt_Game(2); None
+    # reproduces that, 0/1 forces which side the real ball takes.
+    garlic_spread: Optional[float] = None
+    garlic_direction: Optional[int] = None
     rng1: int = T.DEFAULT_STATIC_RANDOM_INT1
     rng2: int = T.DEFAULT_STATIC_RANDOM_INT2
     rng3: int = T.DEFAULT_USHORT_8089269c
+    # Force-specific internal pipeline decisions (see HitOverrides). Defaults to an
+    # all-None HitOverrides, i.e. the unmodified game behavior.
+    overrides: HitOverrides = field(default_factory=HitOverrides)
 
 
 @dataclass
@@ -201,7 +320,11 @@ class HitResult:
     landing: tuple                           # (x, y, z) last airborne point
     distance: float                          # sqrt(x^2 + z^2) of landing
     hang_frames: int
-    trajectory: list = field(repr=False)     # list of (x, y, z) per frame
+    ball_energy: float                       # BallEnergy (Bowser/BJ bullet = 4x power; else charge energy)
+    trajectory: list = field(repr=False)     # list of (x, y, z) per frame -- the real ball
+    # Wario/Waluigi garlic ball's (x, y, z) per frame from the split onward; None
+    # for non-garlic hits. The main `trajectory` follows the real ball.
+    garlic_trajectory: Optional[list] = field(default=None, repr=False)
 
 
 # ---------------------------------------------------------------- simulator
@@ -219,18 +342,24 @@ class _HitSim:
         self.s2 = inp.rng2
         self.ushort = inp.rng3
 
-        # pitcher pitch typing (parseValues)
+        # pitcher pitch typing (parseValues). pitch_type_val:
+        #   0 Curve, 1 Slider charge, 2 Perfect charge, 3 ChangeUp, 4 ChargedStar.
+        # Only ChargePitchType == Perfect is special-cased downstream; Slider and
+        # ChargedStar both take the non-perfect (else) branch in calculate_contact.
         pv = inp.pitch_type_val
         if pv == 0:
             self.Pitcher_TypeOfPitch = T.PitchCurve
             self.ChargePitchType = T.PitchChargeType_None
         elif pv == 1:
             self.Pitcher_TypeOfPitch = T.PitchCharge
-            self.ChargePitchType = T.PitchChargeType_Charge
+            self.ChargePitchType = T.PitchChargeType_Charge      # Slider
         elif pv == 2:
             self.Pitcher_TypeOfPitch = T.PitchCharge
             self.ChargePitchType = T.PitchChargeType_Perfect
-        else:
+        elif pv == 4:
+            self.Pitcher_TypeOfPitch = T.PitchCharge
+            self.ChargePitchType = T.PitchChargeType_ChargedStar
+        else:  # pv == 3
             self.Pitcher_TypeOfPitch = T.PitchChangeUp
             self.ChargePitchType = T.PitchChargeType_None
         self.cursed_ball = pitcher.cursed_ball
@@ -254,6 +383,14 @@ class _HitSim:
         self.Batter_Bunting = batter.bunting
         self.BatterAtPlate_TrajectoryNearFar = batter.horizontal_trajectory
         self.AtBat_HitTrajectoryLow = batter.vertical_trajectory
+
+        # Bat reach (Horizontal Range Near/Far). "Fix Non-red Toad Hitboxes and
+        # Bat Reach" gives the non-red Toads Red Toad's reach.
+        self.horizontalRangeNear = batter.horizontal_range_near
+        self.horizontalRangeFar = batter.horizontal_range_far
+        if inp.fix_non_red_toad_reach and batter.name in _NON_RED_TOADS:
+            self.horizontalRangeNear, self.horizontalRangeFar = _red_toad_reach()
+        self.removeSlice = inp.remove_slice
         self.RandomBattingFactors_ChemLinksOnBase = inp.chem_links
         self.Frame_SwingContact1 = int(inp.frame)
         self.EasyBatting = 1 if inp.easy_batting else 0
@@ -268,6 +405,22 @@ class _HitSim:
         self.nonCaptainStarSwingContact = 0
         self.AtBat_Mystery_CaptainStarSwing = 0
         self.AtBat_Mystery_DidPopFlyOrGrounderConnect = False
+
+        # DK/Diddy banana star hit window/direction (see HitInputs).
+        self.bananaHitStartFrame = inp.banana_hit_start_frame
+        self.bananaHitEndFrame = inp.banana_hit_end_frame
+        self.directionOfBananaHit = inp.banana_direction
+
+        # Wario/Waluigi garlic star hit spread/direction (see HitInputs).
+        self.garlicSpread = inp.garlic_spread
+        self.warioWaluStarHitDirection = inp.garlic_direction
+
+        # Moonshot detection (see _resolve_star_swing).
+        self.fiveStarDinger = inp.five_star_dinger
+
+        # Force-specific pipeline decisions (see HitOverrides). Always a
+        # HitOverrides (defaulted to all-None), so fields can be read unguarded.
+        self.overrides = inp.overrides
 
         self._resolve_star_swing()
 
@@ -286,20 +439,30 @@ class _HitSim:
         self.AddedContactGravity = 0.0
         self.ballVelocity = [0.0, 0.0, 0.0]
         self.ballAcceleration = [0.0, 0.0, 0.0]
+        self.BallEnergy = 0.0
         self.trajectory: list = []
+        self._garlic_trajectory: Optional[list] = None
 
-    # -- parseValues star resolution (starsForBatter hardcoded 4) --
+    # -- parseValues star resolution (the decomp's Moonshot determination) --
     def _resolve_star_swing(self):
-        stars_for_batter = 4
         if not self.isStar:
             return
         if self.Batter_IsBunting:
             self.Batter_Contact_SlapChargeBuntStar = T.Bunt
             self.AtBat_MoonShot = False
             return
-        # starsForBatter != 0  -> True
-        # (not fullyCharged) or (starsForBatter < 5) -> always True here
-        if self.AtBat_CaptainStarHitPitch == 0:
+        # Moonshot first, ahead of the captain/non-captain split (hitGeneralType =
+        # captainStar/Moonshot). The game triggers it on a fully-charged 5-star
+        # swing, but that's indistinguishable from a regular 5-star swing in the
+        # recording (the star swing zeroes the charge) -- except a connected dinger
+        # sets "Star Swing Five-Star", surfaced here as five_star_dinger. It only
+        # fires on the Perfect-contact dinger; a failed Moonshot (Texas Leaguer) is
+        # left as a regular star swing. AtBat_MoonShot carries the power override and
+        # _MOONSHOT_MULTIPLIER.
+        if self.fiveStarDinger:
+            self.Batter_Contact_SlapChargeBuntStar = T.Star
+            self.AtBat_MoonShot = True
+        elif self.AtBat_CaptainStarHitPitch == 0:
             if self.AtBat_NonCaptainStarSwing == 0:
                 self.isStar = False
             else:
@@ -315,8 +478,9 @@ class _HitSim:
                 elif self.AtBat_NonCaptainStarSwing < 4:  # == 3
                     self.Batter_Contact_SlapChargeBuntStar = T.Slap
         else:
-            # JS captain-at-roster-loc branch is `else if (false)`; falls through
-            # to: else if (starsForBatter < 2) -> False, else -> Star
+            # Captain-class character. Under-starred captain swings (Walu tech) are
+            # converted to a regular swing upstream (see _inputs_from_event), so by
+            # here the captain has enough stars -> captain star swing.
             self.Batter_Contact_SlapChargeBuntStar = T.Star
 
         if (self.Batter_Contact_SlapChargeBuntStar == T.Star
@@ -348,6 +512,25 @@ class _HitSim:
             i += 1
         return 0
 
+    def _random_int_game(self, max_num: int) -> int:
+        """Port of RandomInt_Game: a uniform int in [0, |max_num|) drawn from the
+        same StaticRandomInt1/2 + TotalframesAtPlay RNG as _weighted_random_index
+        (and mutating s1 the same way)."""
+        n = -max_num if max_num < 0 else max_num
+        if n < 2:
+            return 0
+        self.s1 = (self.s1 - (self.s2 & 0xFF)) + _jfloor(self.s2 / n) + self.ushort
+        rr = _to_int32(self.s1 - _jfloor(self.s1 / n) * n)
+        result = ((rr >> 31) ^ rr) - (rr >> 31)  # abs(int32)
+        return -result if max_num < 0 else result
+
+    def _random_in_range(self, lower: float, upper: float) -> float:
+        """Port of randomInRange: a uniform float in [lower, upper] quantized to
+        0.001, drawn from the same RNG as _random_int_game. The (float) casts on
+        the step count are reproduced so the quantization matches the game."""
+        steps = _jfloor(_f32(1000.0 * _f32(upper - lower))) + 1
+        return _f32(0.001 * self._random_int_game(steps) + lower)
+
     # -- hitBall: is contact even possible? --
     def hit_ball(self) -> bool:
         ext = T.BattingExtensions[self.AtBat_TrimmedBat]
@@ -377,9 +560,9 @@ class _HitSim:
         if self.AtBat_BatterHand == T.Lefty:
             diff = -diff
         if diff >= 0.0:
-            cbp = 100.0 * (diff / self.b.horizontal_range_far) + 100.0
+            cbp = 100.0 * (diff / self.horizontalRangeFar) + 100.0
         else:
-            cbp = -(100.0 * (diff / self.b.horizontal_range_near) - 100.0)
+            cbp = -(100.0 * (diff / self.horizontalRangeNear) - 100.0)
         cbp = max(0.0, min(200.0, cbp))
         self.CalculatedBallPos = cbp
 
@@ -418,7 +601,15 @@ class _HitSim:
         else:
             self.ContactQuality = 1.0 - (cbp - self.RightNiceThreshold) / (200.0 - self.RightNiceThreshold)
 
-        # (AtBat_MoonShot is always False here, so its block is skipped.)
+        # Moonshot resolves at contact (the decomp's calculateContactAndHitType): a
+        # Perfect connect is the 5-star dinger and clears captainStarSwingActivated
+        # (so it uses the charge angles); any other contact downgrades it to a Texas
+        # Leaguer -- the flag clears, the charge-modeled swing stays.
+        if self.AtBat_MoonShot:
+            if self.Batter_ContactType == T.Perfect:
+                self.AtBat_Mystery_CaptainStarSwing = 0
+            else:
+                self.AtBat_MoonShot = False
 
         swing = self.Batter_Contact_SlapChargeBuntStar
         if swing in (T.Slap, T.Charge):
@@ -451,6 +642,8 @@ class _HitSim:
 
         frame = self.Frame_SwingContact1
         rng = T.BattingAngleRanges[input_direction][is_charge][frame]
+        if self.removeSlice:
+            rng = T.REMOVE_SLICE_ANGLE_OVERRIDES.get((input_direction, is_charge, frame), rng)
         i_low = rng[0]
         i_span = rng[1] - rng[0]
         if i_span < 0:
@@ -461,6 +654,8 @@ class _HitSim:
         if self.AtBat_BatterHand != T.Righty:
             i_low = (0x800 - i_low) if i_low < 0x801 else (0x1800 - i_low)
         self.Hit_HorizontalAngle = _adjust_ball_angle(i_low)
+        if self.overrides.horizontal_angle is not None:
+            self.Hit_HorizontalAngle = self.overrides.horizontal_angle
 
     # -- calculateVerticalAngle --
     def calculate_vertical_angle(self):
@@ -472,76 +667,89 @@ class _HitSim:
 
         captain_star = self.AtBat_Mystery_CaptainStarSwing
         if captain_star == 0:
-            if not self.AtBat_MoonShot:
-                noncap = self.nonCaptainStarSwingContact
-                if noncap == 0:
-                    if self.AtBat_Mystery_BatDirection == 0:
-                        if not self.input_up:
-                            if self.input_down:
-                                up_down = 2
-                        else:
-                            up_down = 1
-
-                    weights = T.BattingVerticalAngleWeights[self.AtBat_HitTrajectoryLow][slap_or_charge][self.EasyBatting][self.Batter_ContactType]
-                    w0, w1, w2, w3, w4 = weights
-
-                    u4 = T.UINT_ARRAY_ARRAY_807b7134[self.Batter_HitType][3 - self.EasyBatting]
-                    u6 = T.UINT_ARRAY_ARRAY_807b7134[self.Batter_HitType][4]
-                    u5 = u4 & 0xF000000
-                    if u5 == 0:
-                        u16 = u4 & 0xF
-                        if u16 != 0:
-                            i_var5 = 2
-                            if u16 == 2:
-                                if up_down == 2:
-                                    i_var5 = 0
-                                    u6 = 2
-                            elif u16 == 3 and up_down == 1:
-                                i_var5 = 0
-                                u6 = 2
+            noncap = self.nonCaptainStarSwingContact
+            if self.AtBat_MoonShot:
+                # Moonshot dinger (survives to Perfect contact): the charge-column
+                # moonshot zone -- "the charge angles".
+                zone = T.SHORT_ARRAY_ARRAY_ARRAY_ARRAY_807b67cc[1][self.Batter_ContactType][2]
+                lower, higher = zone[0], zone[1]
+            elif noncap == 0:
+                if self.AtBat_Mystery_BatDirection == 0:
+                    if not self.input_up:
+                        if self.input_down:
+                            up_down = 2
                     else:
-                        i_var5 = 1
-                        if u5 == 0x2000000:
+                        up_down = 1
+
+                weights = T.BattingVerticalAngleWeights[self.AtBat_HitTrajectoryLow][slap_or_charge][self.EasyBatting][self.Batter_ContactType]
+                w0, w1, w2, w3, w4 = weights
+
+                # A Star swing leaves Batter_HitType unset at -1; the game then
+                # reads one row *before* the table (an OOB read of a float table),
+                # not Python's negative wrap to the last row. See the constant.
+                if self.Batter_HitType < 0:
+                    ht_row = T.UINT_ARRAY_807b7120_HITTYPE_UNSET
+                else:
+                    ht_row = T.UINT_ARRAY_ARRAY_807b7134[self.Batter_HitType]
+                u4 = ht_row[3 - self.EasyBatting]
+                u6 = ht_row[4]
+                u5 = u4 & 0xF000000
+                if u5 == 0:
+                    u16 = u4 & 0xF
+                    if u16 != 0:
+                        i_var5 = 2
+                        if u16 == 2:
                             if up_down == 2:
                                 i_var5 = 0
                                 u6 = 2
-                        elif u5 == 0x3000000 and up_down == 1:
+                        elif u16 == 3 and up_down == 1:
                             i_var5 = 0
                             u6 = 2
-
-                    if i_var5 == 0:
-                        if (u4 & 0x1E0) == 0:
-                            w0 = 0
-                        if (u4 & 0xF0) == 0:
-                            w1 = 0
-                        if (u4 & 0x78) == 0:
-                            w2 = 0
-                        if (u4 & 0x3C) == 0:
-                            w3 = 0
-                        if (u4 & 0x1E) == 0:
-                            w4 = 0
-                        if up_down == 2:
-                            w4 += w0
-                            w0 = 0
-                        elif up_down == 1:
-                            tmp = w4 + w0
-                            w4 = 0
-                            w0 = w3 + tmp
-                            w3 = 0
-
-                    if i_var5 == 0:
-                        idx = self._weighted_random_index([w0, w1, w2, w3, w4], 5)
-                        zone = T.SHORT_ARRAY_ARRAY_ARRAY_ARRAY_807b67cc[slap_or_charge][self.Batter_ContactType][idx]
-                        lower, higher = zone[0], zone[1]
-                        handled_zones = True
-                    else:
-                        lower, higher = T.SHORT_ARRAY_ARRAY_807b6af4[i_var5]
                 else:
-                    rng = T.NonCaptainStarSwingBattingVerticalAngleRanges[noncap - 1][self.Batter_ContactType]
-                    lower, higher = rng[0], rng[1]
+                    i_var5 = 1
+                    if u5 == 0x2000000:
+                        if up_down == 2:
+                            i_var5 = 0
+                            u6 = 2
+                    elif u5 == 0x3000000 and up_down == 1:
+                        i_var5 = 0
+                        u6 = 2
+
+                if i_var5 == 0:
+                    if (u4 & 0x1E0) == 0:
+                        w0 = 0
+                    if (u4 & 0xF0) == 0:
+                        w1 = 0
+                    if (u4 & 0x78) == 0:
+                        w2 = 0
+                    if (u4 & 0x3C) == 0:
+                        w3 = 0
+                    if (u4 & 0x1E) == 0:
+                        w4 = 0
+                    if up_down == 2:
+                        w4 += w0
+                        w0 = 0
+                    elif up_down == 1:
+                        tmp = w4 + w0
+                        w4 = 0
+                        w0 = w3 + tmp
+                        w3 = 0
+
+                if i_var5 == 0:
+                    idx = self._weighted_random_index([w0, w1, w2, w3, w4], 5)
+                    # Override the cone choice if requested, but only after the RNG
+                    # draw above so downstream state is consumed exactly as in-game
+                    # (see HitOverrides.vertical_zone).
+                    if self.overrides.vertical_zone is not None:
+                        idx = self.overrides.vertical_zone
+                    zone = T.SHORT_ARRAY_ARRAY_ARRAY_ARRAY_807b67cc[slap_or_charge][self.Batter_ContactType][idx]
+                    lower, higher = zone[0], zone[1]
+                    handled_zones = True
+                else:
+                    lower, higher = T.SHORT_ARRAY_ARRAY_807b6af4[i_var5]
             else:
-                zone = T.SHORT_ARRAY_ARRAY_ARRAY_ARRAY_807b67cc[1][self.Batter_ContactType][2]
-                lower, higher = zone[0], zone[1]
+                rng = T.NonCaptainStarSwingBattingVerticalAngleRanges[noncap - 1][self.Batter_ContactType]
+                lower, higher = rng[0], rng[1]
         else:
             rng = T.CaptainStarSwingBattingVerticalAngleRanges[captain_star - 1][self.Batter_ContactType]
             lower, higher = rng[0], rng[1]
@@ -552,6 +760,8 @@ class _HitSim:
         else:
             s_var3 = lower + (self.s1 - _jfloor(self.s1 / span) * span)
         self.Hit_VerticalAngle = s_var3
+        if self.overrides.vertical_angle is not None:
+            self.Hit_VerticalAngle = self.overrides.vertical_angle
 
         if self.Hit_VerticalAngle < 0x401:
             if self.Hit_VerticalAngle < -0x400:
@@ -646,6 +856,8 @@ class _HitSim:
             f = f * _MOONSHOT_MULTIPLIER
 
         self.Hit_HorizontalPower = _jfloor(f)
+        if self.overrides.power is not None:
+            self.Hit_HorizontalPower = _jfloor(self.overrides.power)
 
     # -- convertPowerToVelocity --
     def convert_power_to_velocity(self):
@@ -711,27 +923,211 @@ class _HitSim:
             if self.AtBat_BatterHand != T.Righty:
                 self.ballAcceleration[0] = -self.ballAcceleration[0]
 
-    # -- calculateHitGround --
-    def calculate_hit_ground(self):
-        px, py, pz = 0.0, self.b.pitching_height, 0.0
+    # -- CalculateHitVariables tail (runs after CalculateBallVelocityAcceleration) --
+    def _calculate_star_state(self):
+        """Derive BallEnergy and the Wario/Waluigi garlic direction, mirroring the
+        captain-star tail of CalculateHitVariables. Called after
+        convert_power_to_velocity so any RNG draw lands in the game's order."""
+        cap = self.AtBat_Mystery_CaptainStarSwing
+        # Regular charge energy: a fully-charged, non-captain-star, non-sour
+        # contact arms the ball (BallEnergy = hit power). The Ghidra sour test
+        # rendered oddly; "not sour" (Nice/Perfect) is the intent.
+        if (cap == 0
+                and self.Batter_ContactType not in (T.LeftSour, T.RightSour)
+                and self.BatterAtPlate_BatterCharge_Up >= 1.0):
+            self.BallEnergy = float(self.Hit_HorizontalPower)
+        # Bowser / Bowser Jr bullet star: 4x energy (metadata only -- the flat
+        # flight already comes from the captain-star exit-velocity table).
+        if cap in T.BULLET_CAPTAIN_STARS:
+            self.BallEnergy = self.Hit_HorizontalPower * T.BULLET_STAR_ENERGY_MULT
+        # Wario / Waluigi: warioWaluStarHitDirection = RandomInt_Game(2) unless the
+        # caller forced it (drawn here to match the game's RNG consumption order).
+        if cap in T.GARLIC_CAPTAIN_STARS and self.warioWaluStarHitDirection is None:
+            self.warioWaluStarHitDirection = self._random_int_game(2)
+
+    # -- calculateHitGround (per-frame loop of liveBallHitPhysics) --
+    def _straight_hangtime(self) -> int:
+        """Frames to first ground contact with no star modifiers applied -- the
+        game's hangtimeOfHit / framesUntilBallHitsGround, which both the banana
+        window and the garlic split are scheduled against (they are computed from
+        the un-curved flight)."""
+        self._build_trajectory(_apply_specials=False)
+        return self._landed_at if self._landed_at is not None else 0
+
+    def _banana_active(self) -> bool:
+        return self.AtBat_Mystery_CaptainStarSwing in T.BANANA_CAPTAIN_STARS
+
+    def _banana_window(self):
+        """Resolve (start_frame, end_frame, direction) for the DK/Diddy banana
+        hit, applying the game's rules (CalculateHitVariables) for any field left
+        as None: the window is 0.25x..0.95x of the straight-flight hang time and
+        the direction is the batter's hand."""
+        direction = self.directionOfBananaHit
+        if direction is None:
+            direction = self.AtBat_BatterHand
+        start = self.bananaHitStartFrame
+        end = self.bananaHitEndFrame
+        if start is None or end is None:
+            hangtime = self._straight_hangtime()
+            if start is None:
+                start = math.trunc(hangtime * T.DK_DIDDY_STAR_HANGTIME_START)
+            if end is None:
+                end = math.trunc(hangtime * T.DK_DIDDY_STAR_HANGTIME_END)
+        return start, end, direction
+
+    def _garlic_active(self) -> bool:
+        return self.AtBat_Mystery_CaptainStarSwing in T.GARLIC_CAPTAIN_STARS
+
+    def _garlic_params(self):
+        """Resolve (split_frame, spread_plus, spread_minus, direction) for the
+        Wario/Waluigi garlic hit. The ball splits GARLIC_SPLIT_FRAMES_BEFORE_GROUND
+        frames before it would land (warioWaluStarHit fires on
+        framesUntilBallHitsGround == that), i.e. at straight_hangtime - 120. Each
+        side's heading offset is an independent randomInRange(0.2, 0.3) draw (the
+        +side first, matching warioWaluStarHit's RNG order); a forced garlic_spread
+        overrides both with one symmetric value."""
+        direction = self.warioWaluStarHitDirection
+        if direction is None:
+            direction = 0
+        if self.garlicSpread is None:
+            spread_plus = self._random_in_range(T.GARLIC_SPREAD_LOWER, T.GARLIC_SPREAD_UPPER)
+            spread_minus = self._random_in_range(T.GARLIC_SPREAD_LOWER, T.GARLIC_SPREAD_UPPER)
+        else:
+            spread_plus = spread_minus = self.garlicSpread
+        split_frame = self._straight_hangtime() - T.GARLIC_SPLIT_FRAMES_BEFORE_GROUND
+        return split_frame, spread_plus, spread_minus, direction
+
+    def _build_trajectory(self, max_frames=None, _apply_specials=True):
+        """Integrate the flight, semi-implicit Euler as in liveBallHitPhysics.
+
+        Aerial mode (``max_frames`` None): fly until the first ground contact,
+        then one extra frame -- the stat file records the landing one frame after
+        contact -- and stop. This is the wall-free aerial landing.
+
+        Fixed mode (``max_frames`` = N): integrate exactly N frames, continuing
+        through ground contacts. On stadiums with the blanket flat-ground bounce
+        (``HitInputs.bounce``) a downward Y velocity is reversed; on Bowser Castle
+        / Toy Field (holes in the ground, so no blanket bounce) we approximate
+        their unported ballCollisionLogic by pinning the ball to the ground plane
+        and killing its downward Y velocity (a skid). Used to walk a
+        grounder/liner along the ground for testing.
+        """
+        # Start at the ball's world contact position (the game integrates from
+        # AtBat_Contact_BallPos, which is offset from home plate, not the origin).
+        # The recorded contact X is batter-relative (mirrored about the plate for
+        # lefties), whereas velocity and landing are world-frame, so mirror the X
+        # start for lefties -- the same handedness flip the curve applies to
+        # ballAcceleration[0]. Z (depth) is not handed.
+        start_x = -self.ballContact_X if self.AtBat_BatterHand != T.Righty else self.ballContact_X
+        px, py, pz = start_x, self.b.pitching_height, self.inp.ball_z
         vx, vy, vz = self.ballVelocity
         ax, ay, az = self.ballAcceleration
         air = T.AIR_RESISTANCE
         grav = T.GRAVITY
+        ground_y = self.inp.ground_y
+        bounce = self.inp.bounce
 
-        points = []
-        while py > 0:
-            points.append((px, py, pz))
-            px += vx
-            py += vy
-            pz += vz
+        points = [(px, py, pz)]
+        landed_at = None
+        f = 0
+        # Star modifiers resolve their timing from the straight flight, so they
+        # are skipped on the internal straight pass (_apply_specials=False).
+        # DK (5) / Diddy (6) banana: curve the horizontal velocity below.
+        banana = _apply_specials and self._banana_active()
+        if banana:
+            banana_start, banana_end, banana_dir = self._banana_window()
+        # Wario (3) / Waluigi (4) garlic: split into two balls near the ground.
+        garlic = _apply_specials and self._garlic_active()
+        if garlic:
+            garlic_split_frame, garlic_spread_plus, garlic_spread_minus, garlic_dir = self._garlic_params()
+            garlic_split_done = False
+            garlic_pts = None
+            gx = gy = gz = gvx = gvy = gvz = 0.0
+        while True:
+            # framesSinceLiveBall for this tick (the game increments it at the top
+            # of liveBallHitPhysics, before the physics).
+            f += 1
+            # Decay velocity and add acceleration FIRST, then step the position
+            # (and only then resolve the ground).
             vx = vx * air + ax
             vy = (vy - grav) * air + ay
             vz = vz * air + az
-        self.trajectory = points
+            # DK/Diddy banana star hit: while the window is open, rotate the
+            # horizontal velocity by a fixed angle each frame (horizontal speed
+            # preserved) -> the wide banana arc. Mirrors the DK/Diddy branch of
+            # liveBallHitPhysics, inserted between the acceleration and position
+            # steps. radianAngleToPoint(vx, vz) == atan2(vz, vx) so that
+            # vx == cos(angle)*speed and vz == sin(angle)*speed.
+            if banana and banana_start < f < banana_end:
+                ground_speed = math.hypot(vx, vz)
+                angle = math.atan2(vz, vx)
+                if banana_dir == 0:   # Righty
+                    angle -= T.DK_DIDDY_STAR_ANGLE_DELTA
+                else:                 # Lefty
+                    angle += T.DK_DIDDY_STAR_ANGLE_DELTA
+                vx = math.cos(angle) * ground_speed
+                vz = math.sin(angle) * ground_speed
+            px += vx
+            py += vy
+            pz += vz
+            # Wario/Waluigi garlic star hit. At the split frame the ball forks
+            # into the real ball (kept as the main px/py/pz) and a garlic ball,
+            # both starting here with the pre-split horizontal speed and vy but
+            # headings offset +/- garlic_spread from the pre-split heading; which
+            # side is real is warioWaluStarHitDirection. After the split both fly
+            # under plain air+gravity (acceleration zeroed), per warioWaluStarHit.
+            if garlic and not garlic_split_done and f == garlic_split_frame:
+                speed = math.hypot(vx, vz)
+                heading = math.atan2(vz, vx)
+                plus_a = heading + garlic_spread_plus
+                minus_a = heading - garlic_spread_minus
+                if garlic_dir == 0:
+                    real_a, garlic_a = minus_a, plus_a
+                else:
+                    real_a, garlic_a = plus_a, minus_a
+                vx, vz = math.cos(real_a) * speed, math.sin(real_a) * speed
+                ax = ay = az = 0.0
+                gx, gy, gz = px, py, pz
+                gvx, gvy, gvz = math.cos(garlic_a) * speed, vy, math.sin(garlic_a) * speed
+                garlic_pts = [(gx, gy, gz)]
+                garlic_split_done = True
+            elif garlic and garlic_split_done:
+                gvx = gvx * air
+                gvy = (gvy - grav) * air
+                gvz = gvz * air
+                gx += gvx
+                gy += gvy
+                gz += gvz
+                if gy < ground_y:
+                    gy = ground_y
+                    if gvy < 0.0:
+                        gvy = -gvy if bounce else 0.0
+                garlic_pts.append((gx, gy, gz))
+            if py < ground_y:
+                py = ground_y
+                if vy < 0.0:
+                    # bounce: blanket flat-ground reversal. skid: approximation of
+                    # the unported ballCollisionLogic on hole stadiums (Bowser
+                    # Castle / Toy Field), which have no blanket ground bounce.
+                    vy = -vy if bounce else 0.0
+                if landed_at is None:
+                    landed_at = f
+            points.append((px, py, pz))
+            if max_frames is None:
+                if landed_at is not None and f >= landed_at + 1:
+                    break
+            elif f >= max_frames:
+                break
+        self._landed_at = landed_at
+        if garlic:
+            self._garlic_trajectory = garlic_pts
+        return points
 
-    # -- run the whole pipeline --
-    def run(self) -> HitResult:
+    def calculate_hit_ground(self):
+        self.trajectory = self._build_trajectory()
+
+    # -- pipeline up to (but not including) the ground integration --
+    def _pipeline(self):
         if not self.hit_ball():
             raise ValueError("These inputs would not make contact with the ball")
         self.calculate_contact()
@@ -739,6 +1135,11 @@ class _HitSim:
         self.calculate_vertical_angle()
         self.calculate_hit_power()
         self.convert_power_to_velocity()
+        self._calculate_star_state()
+
+    # -- run the whole pipeline --
+    def run(self) -> HitResult:
+        self._pipeline()
         self.calculate_hit_ground()
 
         landing = self.trajectory[-1] if self.trajectory else (0.0, self.b.pitching_height, 0.0)
@@ -758,7 +1159,9 @@ class _HitSim:
             landing=landing,
             distance=math.sqrt(landing[0] ** 2 + landing[2] ** 2),
             hang_frames=len(self.trajectory),
+            ball_energy=self.BallEnergy,
             trajectory=self.trajectory,
+            garlic_trajectory=self._garlic_trajectory,
         )
 
 
@@ -771,12 +1174,58 @@ def simulate_hit(inputs: HitInputs) -> HitResult:
     return _HitSim(batter, pitcher, inputs).run()
 
 
+def simulate_hit_all_vertical_zones(inputs: HitInputs) -> list:
+    """Simulate the same inputs once per vertical trajectory cone (zone 0-4),
+    returning the five HitResults in zone order.
+
+    Each run forces HitOverrides.vertical_zone; every other input is identical, so
+    the list isolates how the cone choice alone moves the hit. Events whose vertical
+    angle isn't picked from the cone table (captain/non-captain star swings,
+    Moonshots, or forced pop-fly/grounder hits) ignore the override and yield five
+    identical results.
+    """
+    return [
+        simulate_hit(replace(inputs, overrides=replace(inputs.overrides, vertical_zone=zone)))
+        for zone in range(5)
+    ]
+
+
+def simulate_hit_all_vertical_zones_from_event(event: EventObj,
+                                               active_tags=frozenset()) -> list:
+    """simulate_hit_all_vertical_zones for a stat-file contact event."""
+    return simulate_hit_all_vertical_zones(_inputs_from_event(event, active_tags))
+
+
 def _int_no_commas(value) -> int:
     return int(str(value).replace(",", "")) if value is not None else 0
 
 
-def simulate_hit_from_event(event: EventObj) -> HitResult:
-    """Build HitInputs from a stat-file contact event and simulate it.
+# Maps a ProjectRio gecko tag name to the HitInputs flag that models it, so the
+# simulator reproduces a modded match's behavior rather than diverging from it.
+TAG_TO_FLAG = {
+    "Fix Non-red Toad Hitboxes and Bat Reach": "fix_non_red_toad_reach",
+    "Remove slice": "remove_slice",
+}
+
+
+def _mod_flags_from_tags(active_tags) -> dict:
+    """HitInputs mod-flag kwargs for the gecko tags active in a match."""
+    return {flag: (tag in active_tags) for tag, flag in TAG_TO_FLAG.items()}
+
+
+def _batter_is_off_captain(event: EventObj) -> bool:
+    """True if the batter is a captain-class character (has a captain star hit)
+    who is NOT this game's designated captain -- so a lone star can't be spent on
+    their captain swing (see the Walu-tech check in _inputs_from_event)."""
+    if BatterAttributes.from_name(event.batter().name).captain_star_hit_pitch == 0:
+        return False
+    stat = event.rioStat
+    team_str = stat.getTeamString(event.batting_team(), event.batter_roster_loc())
+    return stat.statJson["Character Game Stats"][team_str].get("Captain") != 1
+
+
+def _inputs_from_event(event: EventObj, active_tags=frozenset()) -> HitInputs:
+    """Build HitInputs from a stat-file contact event.
 
     Mirrors the JS `useStatFileValues`. Requires the event to have contact
     (raises otherwise). Bunts (swing "None" with contact) are not supported.
@@ -794,12 +1243,38 @@ def simulate_hit_from_event(event: EventObj) -> HitResult:
             f"Unsupported swing type {pitch.get('Type of Swing')!r} (bunts not supported)"
         )
 
+    charge_up = float(contact.get("Charge Power Up", 0.0))
+    charge_down = float(contact.get("Charge Power Down", 0.0))
+
+    # "Walu tech": an old-game bug where a star swing attempted without enough
+    # stars to spend silently becomes a regular swing (charge if the batter was
+    # charging, else slap) with charge-down forced to 0. The event is still
+    # recorded as Type of Swing "Star" though no star is used, so detect it here.
+    # Insufficient stars = the batting team has none, or has exactly one but the
+    # batter is a captain-class character who isn't this game's captain (their
+    # captain swing can't be fueled by that lone star). Fixed in newer games.
+    if swing_code == 3:
+        team_stars = event.team_stars(event.batting_team())  # Walu tech check
+        if team_stars == 0 or (team_stars == 1 and _batter_is_off_captain(event)):
+            swing_code = 2  # regular Charge swing...
+            charge_down = 0.0  # ...with charge-down forced to 0 (the power benefit)
+
     pitch_code = G.to_encoded(G.PITCH_TYPE, pitch.get("Pitch Type"))  # 0 Curve/1 Charge/2 ChangeUp
     if pitch_code == 0:
         pitch_type_val = 0
     elif pitch_code == 1:
-        charge_code = G.to_encoded(G.CHARGE_PITCH_TYPE, pitch.get("Charge Type"))  # 2 Slider/3 Perfect
-        pitch_type_val = 1 if charge_code == 2 else 2
+        # Charge Type: 1 ChargedStar / 2 Slider / 3 Perfect. Older stat files
+        # couldn't decode ChargedStar and log "Unable to Decode. Invalid Value
+        # (1)." instead -- map that legacy string back to 1.
+        try:
+            charge_code = G.to_encoded(G.CHARGE_PITCH_TYPE, pitch.get("Charge Type"))
+        except KeyError:
+            if "(1)" in str(pitch.get("Charge Type")):
+                charge_code = 1  # ChargedStar
+            else:
+                raise ValueError(f"undecodable Charge Type {pitch.get('Charge Type')!r}")
+        # 1 ChargedStar -> 4, 3 Perfect -> 2, else (Slider) -> 1.
+        pitch_type_val = {1: 4, 3: 2}.get(charge_code, 1)
     else:
         pitch_type_val = 3
 
@@ -810,17 +1285,23 @@ def simulate_hit_from_event(event: EventObj) -> HitResult:
 
     up, down, left, right = G.stick_directions(contact.get("Input Direction - Stick"))
 
-    inputs = HitInputs(
+    # Toy Field's ground plane sits higher; Bowser Castle / Toy Field skid.
+    stadium_code = int(event.rioStat.stadium())  # Stadium value object -> encoded id
+    ground_y = T.GROUND_Y_TOY_FIELD if stadium_code == 0x6 else T.GROUND_Y_DEFAULT
+    bounce = stadium_code in T.BOUNCING_STADIUM_IDS
+
+    return HitInputs(
         batter_name=event.batter().name,    # Character value object -> canonical name
         pitcher_name=event.pitcher().name,
         pitch_type_val=pitch_type_val,
         pos_x=pitch.get("Bat Contact Pos - X"),
         ball_x=contact.get("Ball Contact Pos - X"),
+        ball_z=float(contact.get("Ball Contact Pos - Z", 0.0)),
         batter_hand=int(event.batter_hand()),  # Hand value object -> encoded id (0 Right/1 Left)
         swing=T.Charge if swing_code == 2 else T.Slap,
         is_star=swing_code == 3,
-        charge_up=float(contact.get("Charge Power Up", 0.0)),
-        charge_down=float(contact.get("Charge Power Down", 0.0)),
+        charge_up=charge_up,
+        charge_down=charge_down,
         chem_links=event.chem_links_on_base(),
         frame=_int_no_commas(contact.get("Frame of Swing Upon Contact")),
         input_up=up,
@@ -830,8 +1311,115 @@ def simulate_hit_from_event(event: EventObj) -> HitResult:
         easy_batting=False,  # not recorded in stat files
         batter_stars_on=batter_starred,
         pitcher_stars_on=pitcher_starred,
+        five_star_dinger=_int_no_commas(contact.get("Star Swing Five-Star") or 0) == 1,
+        ground_y=ground_y,
+        bounce=bounce,
         rng1=_int_no_commas(contact.get("RNG1")),
         rng2=_int_no_commas(contact.get("RNG2")),
         rng3=_int_no_commas(contact.get("RNG3")),
+        **_mod_flags_from_tags(active_tags),
     )
-    return simulate_hit(inputs)
+
+
+def simulate_hit_from_event(event: EventObj, active_tags=frozenset()) -> HitResult:
+    """Build HitInputs from a stat-file contact event and simulate it.
+
+    ``active_tags`` is the set of gecko-mod tag names active for the match;
+    recognized mods (TAG_TO_FLAG) are modeled instead of diverging.
+    """
+    return simulate_hit(_inputs_from_event(event, active_tags))
+
+
+def _inputs_from_landing_row(row: dict, stadium_id: int, active_tags=frozenset(),
+                             batter_stars_on: bool = False,
+                             pitcher_stars_on: bool = False) -> HitInputs:
+    """Build HitInputs from a ProjectRio ``/landing_data/`` row.
+
+    The endpoint already serves encoded values, so characters come through as
+    encoded char ids (BatterAttributes.from_name resolves those directly) and the
+    categorical fields (swing/pitch/charge type, hand, stick) are integer codes
+    matching game_constants. The row carries everything the contact pipeline
+    needs except two game-level facts the endpoint doesn't expose: whether
+    superstars are on (``batter_stars_on``/``pitcher_stars_on``, default off) and
+    the stadium (``stadium_id``, used only for the ground plane / bounce). Walu
+    tech (see _inputs_from_event) can't be detected here -- the row lacks the
+    team's star count -- so star swings without enough stars won't be corrected.
+    """
+    swing_code = int(row["type_of_swing"])
+    if swing_code not in (1, 2, 3):  # 1 Slap, 2 Charge, 3 Star (0 None / 4 Bunt unsupported)
+        raise ValueError(
+            f"Unsupported swing type {swing_code!r} (None/Bunt not supported)"
+        )
+
+    pitch_code = int(row["pitch_type"])  # 0 Curve / 1 Charge / 2 ChangeUp
+    if pitch_code == 0:
+        pitch_type_val = 0
+    elif pitch_code == 1:
+        charge_code = int(row.get("charge_pitch_type") or 0)  # 1 ChargedStar/2 Slider/3 Perfect
+        pitch_type_val = {1: 4, 3: 2}.get(charge_code, 1)
+    else:
+        pitch_type_val = 3
+
+    up, down, left, right = G.stick_directions(int(row["stick_input"]))
+    ground_y = T.GROUND_Y_TOY_FIELD if stadium_id == 0x6 else T.GROUND_Y_DEFAULT
+    bounce = stadium_id in T.BOUNCING_STADIUM_IDS
+
+    return HitInputs(
+        batter_name=int(row["batter_char_id"]),
+        pitcher_name=int(row["pitcher_char_id"]),
+        pitch_type_val=pitch_type_val,
+        pos_x=float(row["bat_x_contact_pos"]),
+        ball_x=float(row["ball_x_contact_pos"]),
+        ball_z=float(row.get("ball_z_contact_pos") or 0.0),
+        batter_hand=int(bool(row["batting_hand"])),  # 0 Right / 1 Left
+        swing=T.Charge if swing_code == 2 else T.Slap,
+        is_star=swing_code == 3,
+        charge_up=float(row.get("charge_power_up") or 0.0),
+        charge_down=float(row.get("charge_power_down") or 0.0),
+        chem_links=int(row.get("chem_links_ob") or 0),
+        frame=int(row["frame_of_swing"]),
+        input_up=up,
+        input_down=down,
+        input_left=left,
+        input_right=right,
+        easy_batting=False,
+        batter_stars_on=batter_stars_on,
+        pitcher_stars_on=pitcher_stars_on,
+        ground_y=ground_y,
+        bounce=bounce,
+        rng1=int(row["rng1"]),  # endpoint serves the seeds as floats (e.g. 9747.0)
+        rng2=int(row["rng2"]),
+        rng3=int(row["rng3"]),
+        **_mod_flags_from_tags(active_tags),
+    )
+
+
+def simulate_hit_from_landing_row(row: dict, stadium_id: int, active_tags=frozenset(),
+                                  batter_stars_on: bool = False,
+                                  pitcher_stars_on: bool = False) -> HitResult:
+    """Build HitInputs from a ``/landing_data/`` row and simulate it."""
+    return simulate_hit(_inputs_from_landing_row(
+        row, stadium_id, active_tags, batter_stars_on, pitcher_stars_on))
+
+
+def simulate_hit_trajectory(inputs: HitInputs, frames: int) -> list:
+    """Full bounce-inclusive (x, y, z) trajectory integrated for ``frames`` frames.
+
+    Unlike ``simulate_hit`` -- whose ``HitResult.trajectory`` stops at the
+    wall-free aerial landing -- this continues through ground contacts using the
+    bounce/skid physics (per ``HitInputs.bounce``). Intended for testing, e.g.
+    walking a grounder along the ground to a known hang time. Returns
+    ``frames + 1`` points (index 0 is the contact point, index ``frames`` is the
+    position after ``frames`` integration steps).
+    """
+    batter = BatterAttributes.from_name(inputs.batter_name, inputs.batter_stars_on)
+    pitcher = PitcherAttributes.from_name(inputs.pitcher_name, inputs.pitcher_stars_on)
+    sim = _HitSim(batter, pitcher, inputs)
+    sim._pipeline()
+    return sim._build_trajectory(max_frames=frames)
+
+
+def simulate_hit_trajectory_from_event(event: EventObj, frames: int,
+                                       active_tags=frozenset()) -> list:
+    """``simulate_hit_trajectory`` for a stat-file contact event."""
+    return simulate_hit_trajectory(_inputs_from_event(event, active_tags), frames)

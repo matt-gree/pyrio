@@ -3,11 +3,18 @@ import pathlib
 import pyrio
 from pyrio import simulate_hit_from_event
 from pyrio.hit_sim_validation import validate_statobj
+from pyrio.hit_simulation import HitInputs, HitOverrides, simulate_hit, simulate_hit_all_vertical_zones
 from pyrio.stat_file_parser import EventObj
 
 FIXTURES = pathlib.Path(__file__).parent / "fixtures"
 DECODED = FIXTURES / "decoded.20260618T191655_SpiceOrange-Vs-MattGree_3896251267.json"
 ENCODED = FIXTURES / "20260618T191655_SpiceOrange-Vs-MattGree_3896251267.json"
+
+_BASE_INPUTS = dict(
+    batter_name="Mario", pitcher_name="Mario", pitch_type_val=0,
+    pos_x=0.0, ball_x=0.0, batter_hand=0, swing=1,
+    rng1=7769, rng2=5359, rng3=1828,
+)
 
 
 def _first_contact_index(sf):
@@ -42,3 +49,39 @@ def test_validation_is_source_agnostic():
     enc = validate_statobj(pyrio.load_stat_file(ENCODED))
     assert {n: st.failures for n, st in dec.fields.items()} == \
            {n: st.failures for n, st in enc.fields.items()}
+
+
+def test_hit_overrides_force_power():
+    result = simulate_hit(HitInputs(**_BASE_INPUTS, overrides=HitOverrides(power=999)))
+    assert result.power == 999
+
+
+def test_bowser_bullet_star_quadruples_ball_energy():
+    inputs = dict(_BASE_INPUTS, batter_name="Bowser", is_star=True, charge_up=1.0)
+    result = simulate_hit(HitInputs(**inputs))
+    assert result.ball_energy == result.power * 4
+
+
+def test_wario_garlic_star_splits_the_trajectory():
+    inputs = dict(_BASE_INPUTS, batter_name="Wario", is_star=True, charge_up=1.0)
+    result = simulate_hit(HitInputs(**inputs))
+    assert result.garlic_trajectory
+    assert result.garlic_trajectory[0] != result.trajectory[0]
+
+
+def test_five_star_dinger_moonshot_boosts_power():
+    inputs = dict(_BASE_INPUTS, is_star=True, charge_up=1.0)
+    normal = simulate_hit(HitInputs(**inputs)).power
+    dinger = simulate_hit(HitInputs(**inputs, five_star_dinger=True)).power
+    assert dinger > normal
+
+
+def test_charged_star_pitch_type_is_accepted():
+    result = simulate_hit(HitInputs(**dict(_BASE_INPUTS, pitch_type_val=4)))
+    assert result.power > 0
+
+
+def test_simulate_hit_all_vertical_zones_covers_five_zones():
+    results = simulate_hit_all_vertical_zones(HitInputs(**_BASE_INPUTS))
+    assert len(results) == 5
+    assert len({r.vertical_angle for r in results}) > 1

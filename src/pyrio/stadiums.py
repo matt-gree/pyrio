@@ -15,6 +15,7 @@ approximations of the game, not ground truth.
 from __future__ import annotations
 
 import math
+import os
 from typing import Iterable, Optional
 
 # Each stadium: parallel arrays exactly as in the JS `stadiums` constant.
@@ -83,7 +84,13 @@ NOTE_BLOCKS = [
     {"x": 39, "y": 10, "z": 36, "type": "Brick"},
 ]
 
-_NOTE_BLOCK_RADIUS = 2.0  # JS hitNoteBlock: blockBallDist < 2
+# Effective block-collision radius. The JS hitNoteBlock used 2.0, but validating
+# against recorded Peach Garden landings shows deflected balls passing up to ~4.7
+# from a block center, so ~5 better matches the real collision volume (estimate).
+_NOTE_BLOCK_RADIUS = 5.0
+
+# The note blocks live only in Peach Garden; note_block_hit is a no-op elsewhere.
+NOTE_BLOCK_STADIUM = "Peach Garden"
 
 
 def wall_at(stadium: str, x: float) -> Optional[tuple[float, float]]:
@@ -113,6 +120,163 @@ def is_home_run(trajectory: Iterable[tuple], stadium: str) -> bool:
     return False
 
 
+def wall_collision_point(trajectory, stadium) -> Optional[tuple]:
+    """Interpolated (x, y, z) where the trajectory first reaches the outfield
+    wall plane (z crosses ``wall_at`` for that x), or None if it never does
+    (stayed in the park, left over foul territory where there is no wall, or the
+    stadium has no walls, e.g. Toy Field).
+
+    This is the point the ball meets the wall whether it clears it (home run --
+    see ``is_home_run``) or strikes it (off the wall), so it is what a recorded
+    landing should be compared against for balls that reach the wall. It does
+    not modify the trajectory; ``HitResult`` stays wall-free.
+    """
+    if stadium not in STADIUM_WALLS:
+        return None
+    traj = list(trajectory)
+    if not traj:
+        return None
+    prev = traj[0]
+    pw = wall_at(stadium, prev[0])
+    prev_d = (prev[2] - pw[0]) if pw else None       # signed dist to wall plane (z - wall_z)
+    for cur in traj[1:]:
+        cw = wall_at(stadium, cur[0])
+        cur_d = (cur[2] - cw[0]) if cw else None
+        if prev_d is not None and cur_d is not None and prev_d < 0.0 <= cur_d:
+            t = prev_d / (prev_d - cur_d)
+            return tuple(prev[k] + t * (cur[k] - prev[k]) for k in range(3))
+        prev, prev_d = cur, cur_d
+    return None
+
+
+# --------------------------------------------------------------------------
+# Field-boundary polygons (constants/stadiums/*.txt)
+# --------------------------------------------------------------------------
+# Each file is a closed (x, z) polygon of the whole playable boundary -- the
+# outfield fence plus the foul-line fences wrapping back behind home plate. Used
+# to detect a ball leaving the park (home run / off the wall / foul into the
+# netting) and find where its flight path crosses that boundary plane.
+
+_STADIUMS_DIR = os.path.join(os.path.dirname(__file__), "constants", "stadiums")
+
+# StatObj.stadium() normalized name -> boundary file stem.
+_STADIUM_POLY_FILES = {
+    "Mario Stadium": "mario_stadium",
+    "Bowser Castle": "bowser_castle",
+    "Wario Palace": "wario_palace",
+    "Yoshi Park": "yoshi_park",
+    "Peach Garden": "peach_garden",
+    "DK Jungle": "dk_jungle",
+    "Toy Field": "toy_field",
+}
+
+_poly_cache: dict = {}
+
+
+def stadium_boundary(stadium: str):
+    """Closed (x, z) boundary polygon for a stadium from constants/stadiums, or
+    None if there's no file. Cached; the returned list is closed (last == first)."""
+    if stadium in _poly_cache:
+        return _poly_cache[stadium]
+    stem = _STADIUM_POLY_FILES.get(stadium)
+    poly = None
+    if stem:
+        path = os.path.join(_STADIUMS_DIR, stem + ".txt")
+        if os.path.exists(path):
+            pts = []
+            with open(path) as f:
+                for line in f:
+                    s = line.split()
+                    if len(s) == 2:
+                        pts.append((float(s[0]), float(s[1])))
+            if len(pts) >= 3:
+                if pts[0] != pts[-1]:
+                    pts.append(pts[0])
+                poly = pts
+    _poly_cache[stadium] = poly
+    return poly
+
+
+def _segment_cross_param(ax, az, bx, bz, c, d) -> Optional[float]:
+    """Parameter t in [0, 1] along (ax,az)->(bx,bz) where it crosses edge c->d,
+    or None if the segments don't intersect."""
+    cx, cz = c
+    dx, dz = d
+    rx, rz = bx - ax, bz - az
+    sx, sz = dx - cx, dz - cz
+    denom = rx * sz - rz * sx
+    if denom == 0.0:
+        return None  # parallel / collinear
+    t = ((cx - ax) * sz - (cz - az) * sx) / denom
+    u = ((cx - ax) * rz - (cz - az) * rx) / denom
+    if 0.0 <= t <= 1.0 and 0.0 <= u <= 1.0:
+        return t
+    return None
+
+
+def boundary_crossing(trajectory, stadium) -> Optional[tuple]:
+    """(frame_index, t) where the trajectory first exits the field boundary: the
+    segment from trajectory[frame_index] (last point in play) to
+    trajectory[frame_index + 1] (first point past the boundary) crosses the
+    boundary polygon at parameter ``t`` in [0, 1] along that segment. None if the
+    ball never leaves the park or the stadium has no boundary polygon.
+
+    The trajectory begins inside the boundary, so the first edge crossing is the
+    exit. Note the recorded fence-ball landing is usually a few frames *past* this
+    crossing (a ball that clears the fence is logged downstream), so for matching
+    a recording prefer ``nearest_trajectory_point``; this gives the geometric
+    plane crossing itself.
+    """
+    poly = stadium_boundary(stadium)
+    if not poly:
+        return None
+    traj = list(trajectory)
+    for i in range(len(traj) - 1):
+        ax, _, az = traj[i]
+        bx, _, bz = traj[i + 1]
+        best_t = None
+        for j in range(len(poly) - 1):
+            t = _segment_cross_param(ax, az, bx, bz, poly[j], poly[j + 1])
+            if t is not None and (best_t is None or t < best_t):
+                best_t = t
+        if best_t is not None:
+            return i, best_t
+    return None
+
+
+def boundary_intersection(trajectory, stadium) -> Optional[tuple]:
+    """Interpolated (x, y, z) where the trajectory's (x, z) path first crosses
+    the field-boundary polygon -- the ball leaving the park (home run, off the
+    wall, or foul into the netting). None if it never leaves (stayed in play) or
+    the stadium has no boundary polygon. The trajectory itself is not modified.
+    """
+    cross = boundary_crossing(trajectory, stadium)
+    if cross is None:
+        return None
+    traj = list(trajectory)
+    i, t = cross
+    a, b = traj[i], traj[i + 1]
+    return tuple(a[k] + t * (b[k] - a[k]) for k in range(3))
+
+
+def nearest_trajectory_point(trajectory, point) -> Optional[tuple]:
+    """(distance, frame_index, (x, y, z)) of the trajectory point closest in 3D
+    to ``point``, or None for an empty trajectory.
+
+    A recorded fence-ball landing (home run / off the wall / foul) is the ball's
+    position where it actually struck something, which lies on the wall-free
+    flight path -- so its nearest trajectory point reproduces it closely. Walls
+    only matter at the moment of contact; up to that instant the real ball and
+    the simulated wall-free path coincide.
+    """
+    best = None
+    for idx, p in enumerate(trajectory):
+        d = math.dist(point, p)
+        if best is None or d < best[0]:
+            best = (d, idx, tuple(p))
+    return best
+
+
 def home_run_stadiums(trajectory) -> list[str]:
     """Stadium names where this trajectory clears the outfield wall.
 
@@ -123,11 +287,16 @@ def home_run_stadiums(trajectory) -> list[str]:
     return [name for name in STADIUM_NAMES if is_home_run(trajectory, name)]
 
 
-def note_block_hit(trajectory) -> Optional[dict]:
-    """First Peach Garden block (note/random/brick) the trajectory passes
-    within range of, or None. Port of the JS `hitNoteBlock` (which only
-    checks points with 6 < y < 15).
+def note_block_hit(trajectory, stadium=None) -> Optional[dict]:
+    """First Peach Garden block (note/random/brick) the trajectory passes within
+    range of, or None. Only points in the block height band (6 < y < 15) count.
+
+    ``stadium`` (a StatObj.stadium() name) gates the check: the blocks only exist
+    in Peach Garden, so any other stadium returns None. Pass None to skip the
+    gate (e.g. when the trajectory is already known to be a Peach Garden hit).
     """
+    if stadium is not None and stadium != NOTE_BLOCK_STADIUM:
+        return None
     for x, y, z in trajectory:
         if not (6 < y < 15):
             continue

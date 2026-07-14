@@ -57,8 +57,8 @@ PitchChangeUp = 2
 
 # --- Charge pitch type (ChargePitchType) ---
 PitchChargeType_None = 0
-PitchChargeType_Unknown = 1
-PitchChargeType_Charge = 2
+PitchChargeType_ChargedStar = 1   # a charged star pitch that never resolved to Slider/Perfect
+PitchChargeType_Charge = 2        # Slider
 PitchChargeType_Perfect = 3
 
 # --- Stick input direction (AtBat_InputDirection) ---
@@ -76,12 +76,36 @@ DEFAULT_USHORT_8089269c = 1828
 AIR_RESISTANCE = 0.996
 GRAVITY = 0.00275
 
+# Ground-plane Y used for landing/bounce detection in liveBallHitPhysics
+# (const_0.15(/0.35ToyField)GroundYForBounces). The ball is treated as having
+# reached the ground when its Y drops below this; Toy Field sits higher.
+GROUND_Y_DEFAULT = 0.15
+GROUND_Y_TOY_FIELD = 0.35
+
+# Stadiums where liveBallHitPhysics applies the blanket flat-ground bounce
+# (clamp Y to the ground plane, reverse a downward Y velocity). Bowser Castle
+# (0x1) and Toy Field (0x6) are excluded because their ground plane has HOLES, so
+# a uniform "clamp + bounce up everywhere" would be wrong -- their real,
+# geometry-aware ground/wall collisions are resolved by ballCollisionLogic (not
+# ported here). Keyed by encoded StadiumID. Decoded from the JS gating
+# `StadiumID == Mario || (byte)(StadiumID + ~BowserCastle) < 3 || StadiumID == DKJungle`.
+BOUNCING_STADIUM_IDS = frozenset({0x0, 0x2, 0x3, 0x4, 0x5})  # Mario, Wario, Yoshi, Peach, DK
+
 # --- Contact threshold base values, indexed [trimmedBat][slapChargeStarBunt][easyBatting] ---
 # Each leaf is [b0, b1, b2, b3, leftNice, leftPerfect, rightPerfect, rightNice].
 BallContactArray_807b6294 = [[[[50, 98, 106, 150, 30, 95, 109, 170], [40, 98, 106, 160, 20, 95, 109, 180]], [[60, 99, 101, 150, 40, 97, 103, 170], [55, 99, 101, 160, 35, 97, 103, 180]], [[50, 99, 101, 140, 40, 97, 103, 160], [45, 99, 101, 145, 35, 97, 103, 165]], [[80, 98, 102, 120, 35, 95, 105, 165], [80, 98, 102, 110, 35, 95, 105, 165]], [[0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]]], [[[40, 96, 104, 150, 30, 93, 107, 170], [30, 96, 104, 170, 20, 93, 107, 180]], [[60, 96, 104, 140, 35, 93, 107, 170], [50, 96, 104, 150, 25, 93, 107, 180]], [[60, 99, 101, 140, 40, 97, 103, 160], [40, 99, 101, 160, 30, 97, 103, 170]], [[90, 98, 102, 110, 75, 95, 105, 125], [90, 98, 102, 110, 75, 95, 105, 125]], [[0, 0, 0, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0, 0, 0]]]]
 
 # Per hit-type flags, indexed [Batter_HitType]: [v0, v1, mask3, mask4, idx5].
 UINT_ARRAY_ARRAY_807b7134 = [[100, 100, 0x00111110, 0x00111110, 0], [100, 100, 0x00111110, 0x00111110, 2], [101, 102, 0x00111110, 0x00111110, 1], [90, 90, 0x00111110, 0x00111110, 0], [94, 95, 0x00111110, 0x00111110, 0], [102, 103, 0x00111110, 0x00111110, 1], [90, 90, 0x00111110, 0x01100000, 0], [85, 90, 0x00111110, 0x00111110, 0], [102, 103, 0x00111110, 0x00111110, 1], [100, 100, 0x00111110, 0x00111110, 0], [95, 100, 0x00111110, 0x00111110, 2], [104, 105, 0x00111110, 0x00111110, 1], [60, 60, 0x00111110, 0x00111110, 0], [70, 75, 0x00111110, 0x00111110, 0], [87, 90, 0x00111110, 0x00111110, 1], [70, 70, 0x00111110, 0x00111110, 0], [80, 85, 0x00111110, 0x00111110, 0], [105, 110, 0x00111110, 0x00111110, 1], [50, 50, 0x00110110, 0x00110110, 0]]
+
+# A Star swing leaves Batter_HitType unset at -1 (0xff) -- the contact code only
+# assigns it for Slap/Charge. The game then reads UINT_ARRAY_ARRAY_807b7134[-1],
+# which is out of bounds: it picks up the 20 bytes *before* the table (0x807b7120),
+# the tail of a float table ([1.02, 1.05, 1.0, 0.95, 0.85]) reinterpreted as a uint
+# row. Only mask3 (u4 = 0x3f733333) matters downstream -- its 0x3000000 bits force
+# i_var5 = 1 (the pop-fly vertical zone -> the Texas Leaguer of a failed Moonshot).
+# Modeled explicitly because Python's table[-1] would wrap to the last valid row.
+UINT_ARRAY_807b7120_HITTYPE_UNSET = [0x3f828f5c, 0x3f866666, 0x3f800000, 0x3f733333, 0x3f59999a]
 
 # "Most perfect" contact window per swing kind: [lowerBound, upperBound, _].
 ContactPerfectThresholds = [[99.1, 100.9, 100.5], [99.7, 100.3, 1.1], [99.7, 100.3, 1.0]]
@@ -94,6 +118,22 @@ RandomBattingFactors_ChemLinkMult0 = [1.0, 1.1, 1.25, 1.5]
 
 # Horizontal angle ranges, indexed [inputDirection][isCharge][frameOfContact] -> [low, high].
 BattingAngleRanges = [[[[0, 0], [0, 0], [-700, -500], [-500, -350], [-400, -250], [-350, -100], [-150, 250], [200, 300], [250, 400], [350, 550], [550, 700], [0, 0], [0, 0], [0, 0], [0, 0]], [[0, 0], [0, 0], [0, 0], [-600, -400], [-400, -200], [-300, -100], [-200, 200], [100, 400], [300, 450], [350, 600], [0, 0], [0, 0], [0, 0], [0, 0], [0, 0]]], [[[0, 0], [0, 0], [-750, -500], [-500, -300], [-300, -150], [-150, 200], [200, 400], [300, 450], [400, 600], [500, 600], [600, 700], [0, 0], [0, 0], [0, 0], [0, 0]], [[0, 0], [0, 0], [0, 0], [-600, -400], [-400, -200], [-300, 100], [100, 400], [100, 400], [200, 500], [500, 700], [0, 0], [0, 0], [0, 0], [0, 0], [0, 0]]], [[[0, 0], [0, 0], [-700, -600], [-600, -400], [-450, -350], [-400, -300], [-350, -200], [-200, 150], [150, 300], [300, 700], [0, 0], [0, 0], [0, 0], [0, 0], [0, 0]], [[0, 0], [0, 0], [0, 0], [-550, -300], [-400, -200], [-300, -100], [-300, -100], [-100, 200], [200, 450], [450, 650], [0, 0], [0, 0], [0, 0], [0, 0], [0, 0]]]]
+
+# "Remove slice" gecko mod: vanilla leaves these [inputDirection][isCharge][frame]
+# cells as [0,0], which forces the hit dead up the middle (raw angle 0x400 -- the
+# unrealistic "slice") whenever contact lands on the earliest/latest valid frame.
+# The mod replaces them with the proper extreme pull (frame 2) / push (frame 10)
+# ranges so the ball goes foul instead. Values are zero-span (low == high), so the
+# angle is deterministic and no RNG index is drawn. See hit_simulation.remove_slice.
+REMOVE_SLICE_ANGLE_OVERRIDES = {
+    (PushPullNone, 1, 2): [-600, -600],
+    (PushPullNone, 1, 10): [600, 600],
+    (PullStickTowardsHitting, 1, 2): [-600, -600],
+    (PullStickTowardsHitting, 1, 10): [700, 700],
+    (PushStickAway, 1, 2): [-550, -550],
+    (PushStickAway, 1, 10): [650, 650],
+    (PushStickAway, 0, 10): [700, 700],
+}
 
 # Vertical zone weights, indexed [hitTrajectoryLow][slapOrCharge][easyBatting][contactType] -> 5 weights.
 BattingVerticalAngleWeights = [[[[[0, 10, 20, 30, 40], [20, 20, 20, 20, 20], [10, 25, 30, 25, 10], [20, 20, 20, 20, 20], [40, 30, 20, 10, 0]], [[0, 10, 20, 30, 40], [20, 20, 20, 20, 20], [10, 25, 30, 25, 10], [20, 20, 20, 20, 20], [40, 30, 20, 10, 0]]], [[[10, 0, 20, 30, 40], [20, 22, 22, 28, 8], [20, 25, 25, 25, 5], [20, 22, 22, 28, 8], [10, 0, 20, 30, 40]], [[10, 0, 20, 30, 40], [20, 22, 22, 28, 8], [20, 25, 25, 25, 5], [20, 22, 22, 28, 8], [10, 0, 20, 30, 40]]]], [[[[0, 10, 20, 30, 40], [5, 5, 15, 40, 35], [5, 5, 20, 40, 35], [5, 5, 15, 40, 35], [40, 30, 20, 10, 0]], [[0, 10, 20, 30, 40], [5, 5, 15, 40, 35], [5, 5, 20, 40, 35], [5, 5, 15, 40, 35], [40, 30, 20, 10, 0]]], [[[5, 0, 10, 40, 45], [5, 21, 12, 29, 33], [5, 23, 15, 27, 30], [5, 21, 12, 29, 33], [5, 0, 10, 40, 45]], [[5, 0, 10, 40, 45], [5, 21, 12, 29, 33], [5, 23, 15, 27, 30], [5, 21, 12, 29, 33], [5, 0, 10, 40, 45]]]], [[[[10, 20, 20, 20, 30], [35, 40, 15, 5, 5], [30, 40, 20, 5, 5], [35, 40, 15, 5, 5], [40, 30, 20, 5, 5]], [[10, 20, 20, 20, 30], [35, 40, 15, 5, 5], [30, 40, 20, 5, 5], [35, 40, 15, 5, 5], [40, 30, 20, 5, 5]]], [[[10, 0, 20, 30, 40], [35, 30, 22, 10, 3], [30, 30, 25, 15, 0], [35, 30, 22, 10, 3], [10, 0, 20, 30, 40]], [[10, 0, 20, 30, 40], [35, 30, 22, 10, 3], [30, 30, 25, 15, 0], [35, 30, 22, 10, 3], [10, 0, 20, 30, 40]]]]]
@@ -134,4 +174,53 @@ FLOAT_ARRAY_ARRAY_807b72bc = [[0.5, 0.001, 0.003], [0.25, 0.006, 0.008]]
 # Star-swing codes (captain_star_hit_pitch 1-12 / 0, non_captain_star_swing 1-3)
 # now live pre-encoded in the "Captain Star Hit" / "Non-Captain Star Hit" columns
 # of constants/character_attributes.csv; their name<->code maps are
-# constants.game_constants.CAPTAIN_STAR_BALL / NON_CAPTAIN_STAR_HIT.
+# LookupDicts.CAPTAIN_STAR_BALL / NON_CAPTAIN_STAR_HIT.
+
+# --- DK / Diddy "banana" captain star hit ---
+# The "Captain Star Hit" column encodes a per-captain code (1 Mario .. 12 Daisy),
+# stored at contact in AtBat_Mystery_CaptainStarSwing. DK (5) and Diddy (6) both
+# throw the banana star hit: while it is active, liveBallHitPhysics rotates the
+# ball's HORIZONTAL velocity by a fixed angle each frame (the horizontal speed is
+# preserved -- only the direction turns), producing the wide banana arc.
+CaptainStar_DK = 5
+CaptainStar_Diddy = 6
+BANANA_CAPTAIN_STARS = frozenset({CaptainStar_DK, CaptainStar_Diddy})
+
+# Per-frame horizontal turn applied during the banana hit, in radians
+# (const_hitFloats.0.008_DKStarAngleDelta).
+DK_DIDDY_STAR_ANGLE_DELTA = 0.008
+
+# The banana curve is active over the middle of the flight: CalculateHitVariables
+# sets bananaHitStartFrame = trunc(hangtimeOfHit * 0.25) and bananaHitEndFrame =
+# trunc(hangtimeOfHit * 0.95), where hangtimeOfHit is the straight-flight hang
+# time (the curve turns on after a quarter of the flight and off near the end).
+DK_DIDDY_STAR_HANGTIME_START = 0.25
+DK_DIDDY_STAR_HANGTIME_END = 0.95
+
+# --- Other captain star hit codes ("Captain Star Hit" column) ---
+CaptainStar_Wario = 3
+CaptainStar_Waluigi = 4
+CaptainStar_Bowser = 7
+CaptainStar_BowserJr = 8
+
+# Bowser / Bowser Jr "bullet" star: BallEnergy = 4x the hit power
+# (const_hitFloats.4.0_bulletStarEnergyMultiplier). Energy drives how hard the
+# ball plows through fielders, NOT the aerial flight, so it is exposed as
+# HitResult metadata only -- the bullet's flat trajectory already comes from the
+# captain-star exit-velocity table.
+BULLET_CAPTAIN_STARS = frozenset({CaptainStar_Bowser, CaptainStar_BowserJr})
+BULLET_STAR_ENERGY_MULT = 4.0
+
+# Wario / Waluigi "garlic" star (warioWaluStarHit): the hit flies normally until
+# GARLIC_SPLIT_FRAMES_BEFORE_GROUND frames before it would reach the ground
+# (hitShortConst.120_framesBeforeGroundWhenGarlicSplits), then SPLITS into two
+# balls -- one "real", one garlic -- that start at the split point keeping the
+# pre-split horizontal speed and Y velocity, but with headings offset to either
+# side of the pre-split heading. warioWaluStarHitDirection (RandomInt_Game(2),
+# set in CalculateHitVariables) picks which side is the real ball.
+GARLIC_CAPTAIN_STARS = frozenset({CaptainStar_Wario, CaptainStar_Waluigi})
+GARLIC_SPLIT_FRAMES_BEFORE_GROUND = 120
+# Per-side heading offset (radians) from the pre-split heading: the game rolls an
+# independent randomInRange(0.2, 0.3) for each ball (ported in _random_in_range).
+GARLIC_SPREAD_LOWER = 0.2
+GARLIC_SPREAD_UPPER = 0.3

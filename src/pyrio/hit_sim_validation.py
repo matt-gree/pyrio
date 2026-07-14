@@ -273,7 +273,7 @@ def _is_slice_event(event, contact, result) -> bool:
     if frame not in (2, 10):
         return False
     # Line-drive star swings (non-captain star type 3) don't slice.
-    batter = hs.BatterAttributes.from_name(event.batter())
+    batter = hs.BatterAttributes.from_name(event.batter().name)
     is_line_drive_star = (batter.captain_star_hit_pitch == 0
                           and batter.non_captain_star_swing == 3)
     return not is_line_drive_star
@@ -290,7 +290,7 @@ _NON_RED_TOADS = frozenset({"Toad(B)", "Toad(Y)", "Toad(G)", "Toad(P)"})
 
 def _is_non_red_toad_batter(event, contact, result) -> bool:
     # from_name normalizes either a name or an encoded char id to the canonical name.
-    return hs.BatterAttributes.from_name(event.batter()).name in _NON_RED_TOADS
+    return hs.BatterAttributes.from_name(event.batter().name).name in _NON_RED_TOADS
 
 
 KNOWN_MOD_EXCEPTIONS = [
@@ -359,7 +359,7 @@ def validate_statobj(stat: StatObj, *, include_landing: bool = False,
             continue
 
         try:
-            result = hs.simulate_hit_from_event(event)
+            result = hs.simulate_hit_from_event(event, active_tags)
         except ValueError as ex:
             report.skipped.append((game_id, i, f"value error: {ex}"))
             continue
