@@ -8,14 +8,20 @@ processing -- is shared via hit_sim_report; only the record source and the
 per-game input resolution are different here.
 
 A /landing_data/ row carries almost every simulator input already encoded, so
-events come through hit_simulation.simulate_hit_from_landing_row. The three
-game-level facts the row omits are resolved from the API per game:
+events come through hit_simulation.simulate_hit_from_landing_row. The game-level
+facts the row omits are resolved from the API per game:
 
   - stadium    -- from /games/ (drives the ground plane / bounce).
   - active mods-- a game's ``game_mode`` IS its tag-set id, so its tags come from
                   rio_tags; TAG_TO_FLAG picks out the ones the simulator models
                   (e.g. Remove slice, the Toad bat-reach fix).
   - superstars -- on unless the tag set carries "Disable Superstars".
+
+Superstars is a game-level approximation: it can't tell a starred character from
+an unstarred one within a superstars-enabled game. That matters most for bunts,
+whose contact size is star-sensitive. If the endpoint is extended to serve the
+per-character ``batter_superstar``/``pitcher_superstar`` columns, the landing-row
+adapter uses them automatically and this approximation is bypassed.
 
 Quirk: the endpoint's ``ball_horiz_angle`` and ``ball_vert_angle`` columns are
 swapped relative to the simulator's convention, so the contact field specs read
@@ -38,19 +44,17 @@ from typing import Optional
 
 from . import hit_simulation as hs
 from .. import rio_tags
-from ..api_manager import APIManager
+from ..rio_web import RioWeb
 from ..constants import game_constants as G
 from ..lookup import LookupDicts
 from .hit_sim_report import (FieldSpec, ValidationReport, note_block_deflected,
                              resolve_landing)
 
-class Endpoints:
-    GAMES = "/games/"
-    LANDING_DATA = "/landing_data/"
 
-
-# Type of Swing codes the simulator supports: 1 Slap, 2 Charge, 3 Star.
-_SUPPORTED_SWING_CODES = (1, 2, 3)
+# Type of Swing codes the simulator supports: 0 Bunt, 1 Slap, 2 Charge, 3 Star.
+# A landing row always carries contact, so swing "None" (0) is a bunt (the game
+# zeroes the swing byte for a bunt); it is simulated like any other contact.
+_SUPPORTED_SWING_CODES = (0, 1, 2, 3)
 # final_result codes where the ball came down on its own (singles..home run), so
 # the recorded landing is a natural landing rather than a fielder-catch point.
 _NATURAL_RESULT_CODES = frozenset({7, 8, 9, 10})
@@ -147,7 +151,7 @@ def _game_context(games_rows) -> dict:
 def validate_api(*, tag=None, games=None, username=None, limit_games=None,
                  include_landing: bool = False, landing_exclude_caught: bool = True,
                  bounces: bool = True, vel_tol: float = 1e-4, float_tol: float = 1e-3,
-                 landing_tol: float = 1.0, api: Optional[APIManager] = None,
+                 landing_tol: float = 1.0, api: Optional[RioWeb] = None,
                  report: Optional[ValidationReport] = None) -> ValidationReport:
     """Fetch landing data for the selected games and compare each event to the sim.
 
@@ -158,15 +162,15 @@ def validate_api(*, tag=None, games=None, username=None, limit_games=None,
     point, in-park balls the bounce/skid at hang time, and caught/note-block
     landings are excluded), matching the stat-file validator.
     """
-    api = api or APIManager()
+    api = api or RioWeb()
     report = report or ValidationReport()
 
     params = _filter_params(tag, games, username, limit_games)
-    games_resp = api.send_request(Endpoints.GAMES, "GET", params) or {}
+    games_resp = api.get_games(params, raw=True) or {}
     ctx = _game_context(games_resp.get("games", []))
     report.files += len(ctx)
 
-    landing_resp = api.send_request(Endpoints.LANDING_DATA, "GET", params) or {}
+    landing_resp = api.get_landing_data(params, raw=True) or {}
     rows = [r for r in landing_resp.get("Data", []) if r["game_id"] in ctx]
 
     specs = _contact_field_specs(vel_tol, float_tol)
