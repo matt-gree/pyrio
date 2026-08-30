@@ -40,6 +40,12 @@ Roster args:
 # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
 '''
 
+# MSB ends a game once a side leads by this many runs, on the same
+# "no unnecessary half-inning" terms as the final inning. Used by both the live
+# HudObj.game_over predicate and StatObj.isMercy, so the two cannot drift.
+MERCY_MARGIN = 10
+
+
 class ErrorChecker:
     @staticmethod
     def check_team_num(teamNum: int) -> None:
@@ -203,7 +209,11 @@ class StatObj:
 
     def isMercy(self) -> bool:
         # returns if the game ended in a mercy or not
-        return self.inningsSelected() - self.inningsPlayed() >= 1 and abs(self.score(0) - self.score(1)) > 10
+        # MERCY_MARGIN, and >=, because the rule is a lead OF 10 — `> 10` missed
+        # every game mercied by exactly the margin. Shared with HudObj.game_over
+        # so the live predicate and this post-hoc one cannot disagree.
+        return (self.inningsSelected() - self.inningsPlayed() >= 1
+                and abs(self.score(0) - self.score(1)) >= MERCY_MARGIN)
 
     def wasQuit(self) -> bool:
         # returns if the game was quit out early
@@ -1972,7 +1982,69 @@ class HudObj:
         return {i: {'captain': ro._slots[i]['Captain'], 'char_id': ro.char_id(i)} for i in range(9)}
     
     def inning_end(self) -> bool:
-        return self.hud_json['Outs'] + self.hud_json['Num Outs During Play'] == 3
+        # >= rather than == : a play that records more outs than the half had
+        # left still ends the half, and a predicate that answers False there
+        # fails silently — nothing downstream can tell "the half is not over"
+        # from "we could not tell".
+        return self.hud_json['Outs'] + self.hud_json['Num Outs During Play'] >= 3
+
+    def game_over(self) -> bool:
+        """Whether this frame is the last one of the game.
+
+        MSB's HUD has no end-of-game event: the frame recording the final out
+        (or the winning run) is simply the last one written, and the next event
+        belongs to the next game. So "is this game over" is a question about ONE
+        frame, answered with no history — which is also what lets a caller
+        re-derive it from a stale file on disk after a restart.
+
+        REGULATION AND MERCY ARE THE SAME RULE at two margins. Both say an
+        unnecessary half-inning is not played, and both give the team batting
+        second its chance to respond:
+
+          - after the TOP half, the bottom is skipped only if the team batting
+            second is ALREADY ahead — by any margin once regulation is complete,
+            or by the mercy margin at any point in the game. A team batting
+            first that goes ahead by 10 does not end it; the other side bats.
+          - after the BOTTOM half, the game ends if the scores differ in
+            regulation, or if either side leads by the mercy margin. A tie in
+            regulation goes to extras.
+          - a walk-off ends play mid-half, without a third out.
+
+        Sides are resolved through ``first_batting_team`` rather than
+        away/home, which are not interchangeable with batting order.
+
+        Deliberately conservative: anything it cannot establish resolves to
+        False, so it answers late rather than calling a game that is still being
+        played. Quits and disconnects are NOT detectable here — the file just
+        stops — and are the stat file's to report (``StatObj.wasQuit``).
+        """
+        innings = self.innings_selected()
+        if not innings:
+            return False
+
+        first_t = self.first_batting_team()
+        if first_t not in (0, 1):
+            return False
+        second_t = 1 - first_t
+        # Positive = the team batting second is ahead.
+        lead = self.score(second_t) - self.score(first_t)
+
+        regulation = self.inning() >= innings
+        bottom = self.half_inning() == 1
+
+        # Walk-off. Only reachable in regulation or later: if the team batting
+        # second were already ahead going into this half, the half would not be
+        # being played at all (the skip-bottom branch below).
+        if bottom and regulation and lead > 0:
+            return True
+
+        if not self.inning_end():
+            return False
+
+        if not bottom:
+            return lead > 0 and (regulation or lead >= MERCY_MARGIN)
+
+        return (regulation and lead != 0) or abs(lead) >= MERCY_MARGIN
     
     def event_result(self) -> str:
         if str(self.hud_json['Event Num'])[-1] == 'b':

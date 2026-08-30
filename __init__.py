@@ -1,5 +1,5 @@
 # Stat file parsing
-from .stat_file_parser import StatObj, EventSearch, EventObj, HudObj
+from .stat_file_parser import StatObj, EventSearch, EventObj, HudObj, MERCY_MARGIN
 
 # Lookup tables and translation
 from .lookup import (
