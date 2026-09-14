@@ -15,10 +15,17 @@ from pyrio.stat_file_parser import MERCY_MARGIN, HudObj
 
 
 def frame(*, inning=1, half=0, outs=0, outs_in_play=0, away=0, home=0,
-          innings_selected=9, first_batting=0):
-    """A HUD frame carrying only the fields game_over reads."""
+          innings_selected=9, first_batting=0, event="1b"):
+    """A HUD frame carrying only the fields game_over reads.
+
+    ``event`` defaults to a RESOLVED event num ("1b"). Rio writes two frames
+    per event and only the resolved one describes a completed play; this helper
+    defaulted to the in-flight spelling ("1"), so every frame here was one the
+    predicate must decline to read a half-inning boundary off — which is how
+    the double-counted out below went untested.
+    """
     return HudObj({
-        "Event Num": "1",
+        "Event Num": event,
         "Inning": inning,
         "Half Inning": half,
         "Outs": outs,
@@ -129,15 +136,77 @@ def test_mercy_needs_the_half_to_be_over():
                  home=MERCY_MARGIN).game_over() is False
 
 
-# ----- batting order, not away/home ------------------------------------------
+# ----- in-flight frames -------------------------------------------------------
+#
+# `Outs` is the half's count and `Num Outs During Play` is the current play's,
+# so only a resolved frame ("…b") may add them. In flight, `Outs` has already
+# absorbed the last play while `Num Outs During Play` still describes it.
 
-def test_sides_resolve_through_first_batting_team():
-    """With HOME batting first, the responding side is AWAY — so an away lead
-    after the top is what skips the bottom."""
-    assert frame(inning=9, half=0, away=14, home=6,
-                 first_batting=1, **THIRD_OUT).game_over() is True
+IN_FLIGHT = {"event": "43"}
+
+
+def test_an_in_flight_frame_does_not_double_count_the_last_out():
+    """THE BUG: two outs, a batter at the plate, and a 10-run margin read as a
+    mercy — so the board flipped Final/Live with every HUD write."""
+    assert frame(inning=6, half=1, outs=2, outs_in_play=1,
+                 away=12, home=1, innings_selected=7,
+                 **IN_FLIGHT).game_over() is False
+
+
+def test_the_same_frame_resolved_is_a_mercy():
+    assert frame(inning=6, half=1, outs=2, outs_in_play=1,
+                 away=12, home=1, innings_selected=7).game_over() is True
+
+
+def test_an_in_flight_frame_still_sees_a_walk_off():
+    """The walk-off branch asks about the score, not the outs, so it answers on
+    any frame — a run that ends a game does not wait for a resolution."""
+    assert frame(inning=9, half=1, outs=1, away=5, home=6,
+                 **IN_FLIGHT).game_over() is True
+
+
+def test_an_in_flight_frame_at_the_end_of_regulation_is_not_over():
+    assert frame(inning=9, half=1, outs=2, outs_in_play=1, away=7, home=4,
+                 **IN_FLIGHT).game_over() is False
+
+
+# ----- batting order, not away/home ------------------------------------------
+#
+# `Half Inning` is the BATTING TEAM's away/home id, not top/bottom: with HOME
+# batting first, half 1 is the TOP and half 0 is the bottom.
+
+HOME_FIRST = {"first_batting": 1}
+
+
+def test_the_top_is_the_first_batting_teams_half():
+    """Home bats first, so the responding side is AWAY: an away lead after the
+    top skips the bottom, and a home lead does not."""
+    assert frame(inning=9, half=1, away=14, home=6,
+                 **HOME_FIRST, **THIRD_OUT).game_over() is True
+    assert frame(inning=9, half=1, away=6, home=14,
+                 **HOME_FIRST, **THIRD_OUT).game_over() is False
+
+
+def test_the_first_batting_team_still_gets_its_whole_half():
+    """THE INVERSION: half 1 read as "the bottom" put the walk-off branch —
+    which has no third-out gate — over the whole of HOME's half, so a game with
+    away ahead in regulation was Final from the first pitch of the top."""
+    assert frame(inning=9, half=1, outs=1, away=7, home=4,
+                 **HOME_FIRST).game_over() is False
+
+
+def test_the_bottom_is_the_second_batting_teams_half():
+    # Away bats second here, so a third out in half 0 ends a decided game.
     assert frame(inning=9, half=0, away=6, home=14,
-                 first_batting=1, **THIRD_OUT).game_over() is False
+                 **HOME_FIRST, **THIRD_OUT).game_over() is True
+
+
+def test_a_walk_off_belongs_to_whoever_bats_second():
+    # Away takes the lead in its own half — the mirror of the home walk-off.
+    assert frame(inning=9, half=0, outs=1, away=6, home=5,
+                 **HOME_FIRST).game_over() is True
+    assert frame(inning=9, half=0, outs=1, away=5, home=6,
+                 **HOME_FIRST).game_over() is False
 
 
 # ----- degenerate frames ------------------------------------------------------
