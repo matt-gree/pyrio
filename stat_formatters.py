@@ -140,11 +140,18 @@ def format_pitching_line(*, outs_pitched=0, hits_allowed=0, runs_allowed=0,
     All fields are always shown even if zero (omission is ambiguous in a pitcher line).
     Order: IP, H, R, ER, BB, K, HR, P
 
-    Example: "6.0, 3 H, 1 R, 1 ER, 2 BB, 4 K, 0 HR, 87 P"
+    EVERY TERM CARRIES ITS UNIT, INCLUDING THE FIRST. The innings used to print
+    bare — "6.0, 3 H, 1 R, …" — which made it the only number on the line that
+    did not say what it was, sat beside seven that did, and read as a stray
+    decimal rather than as a count of innings. That is not the batting line's
+    convention leaking across: its leading term is "2-for-4", which needs no
+    unit because it already names itself.
+
+    Example: "6.0 IP, 3 H, 1 R, 1 ER, 2 BB, 4 K, 0 HR, 87 P"
     """
     ip = innings_pitched(outs_pitched=outs_pitched)
     bb = walks_bb + walks_hbp
     return (
-        f"{ip}, {hits_allowed} H, {runs_allowed} R, {earned_runs} ER, "
+        f"{ip} IP, {hits_allowed} H, {runs_allowed} R, {earned_runs} ER, "
         f"{bb} BB, {strikeouts_pitched} K, {hrs_allowed} HR, {total_pitches} P"
     )
