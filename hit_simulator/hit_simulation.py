@@ -18,12 +18,12 @@ the same stats the JS calculator buffed, now clamped to the in-game caps.
 Notes / known JS quirks carried over:
   - Moonshot (5-star dinger): a fully-charged star swing with 5 stars. The game
     triggers it on stars + full charge, but a star swing's charge is zeroed in the
-    recording, so a Moonshot attempt can't be told from a regular 5-star swing
-    there -- except a *connected* dinger sets the "Star Swing Five-Star" flag. So we
-    detect the dinger via that flag (HitInputs.five_star_dinger) and model it as a
-    Star swing carrying AtBat_MoonShot (power override + _MOONSHOT_MULTIPLIER). A
-    failed Moonshot (Texas Leaguer, flag 0) is indistinguishable from a regular
-    5-star swing and is left unmodeled for now.
+    recording, so an attempt comes from the "Star Swing Five-Star" field instead
+    (HitInputs.five_star_attempt): 1 is a connected dinger, 2 a failed attempt. It's
+    modeled as a Star swing carrying AtBat_MoonShot (power override +
+    _MOONSHOT_MULTIPLIER), which non-Perfect contact clears into a Texas Leaguer.
+    Older stat files record a failed attempt as 0, so a Texas Leaguer is recognized
+    there by its launch angle (see _is_unflagged_texas_leaguer).
   - Super curve is read from the "Super Curve" column of the character attribute
     CSV (derived from the "Curved Hits" Extra tag) instead of the JS's hardcoded
     char ids.
@@ -73,6 +73,7 @@ from ..stat_file_parser import EventObj
 # Moonshot (5-star dinger) power multiplier, from the decomp. Applied in
 # calculate_hit_power when AtBat_MoonShot survives to a Perfect contact.
 _MOONSHOT_MULTIPLIER = 1.5
+_MOONSHOT_STAR_COST = 5
 
 _CONTACT_TYPE_NAMES = ["Left Sour", "Left Nice", "Perfect", "Right Nice", "Right Sour"]
 
@@ -270,11 +271,10 @@ class HitInputs:
     easy_batting: bool = False
     batter_stars_on: bool = False
     pitcher_stars_on: bool = False
-    # A connected 5-star dinger (the recorded "Star Swing Five-Star" flag). This is
-    # how a Moonshot is detected (see _resolve_star_swing): a 5-star swing's charge
-    # is zeroed in the recording, so a failed Moonshot (Texas Leaguer) can't be told
-    # from a regular 5-star swing -- only the connected dinger is modeled.
-    five_star_dinger: bool = False
+    # A Moonshot attempt, connected or failed (see _resolve_star_swing). A 5-star
+    # swing's charge is zeroed in the recording, so this can't be derived from
+    # charge_up; it comes from the recorded "Star Swing Five-Star" field.
+    five_star_attempt: bool = False
     ball_z: float = 0.0                     # ball Z at contact (world Z start of trajectory)
     ground_y: float = T.GROUND_Y_DEFAULT   # landing/bounce plane (0.35 on Toy Field)
     bounce: bool = True                     # ground bounces elastically (False = skid; Bowser Castle / Toy Field)
@@ -426,7 +426,7 @@ class _HitSim:
         self.warioWaluStarHitDirection = inp.garlic_direction
 
         # Moonshot detection (see _resolve_star_swing).
-        self.fiveStarDinger = inp.five_star_dinger
+        self.fiveStarAttempt = inp.five_star_attempt
 
         # Force-specific pipeline decisions (see HitOverrides). Always a
         # HitOverrides (defaulted to all-None), so fields can be read unguarded.
@@ -463,13 +463,12 @@ class _HitSim:
             return
         # Moonshot first, ahead of the captain/non-captain split (hitGeneralType =
         # captainStar/Moonshot). The game triggers it on a fully-charged 5-star
-        # swing, but that's indistinguishable from a regular 5-star swing in the
-        # recording (the star swing zeroes the charge) -- except a connected dinger
-        # sets "Star Swing Five-Star", surfaced here as five_star_dinger. It only
-        # fires on the Perfect-contact dinger; a failed Moonshot (Texas Leaguer) is
-        # left as a regular star swing. AtBat_MoonShot carries the power override and
-        # _MOONSHOT_MULTIPLIER.
-        if self.fiveStarDinger:
+        # swing, but the star swing zeroes the charge in the recording, so the
+        # attempt is surfaced here as five_star_attempt. AtBat_MoonShot carries the
+        # power override and _MOONSHOT_MULTIPLIER; calculate_contact resolves it into
+        # a dinger or a Texas Leaguer. This branch skips the non-captain swing setup,
+        # so a failed non-captain attempt stays T.Star with no star swing active.
+        if self.fiveStarAttempt:
             self.Batter_Contact_SlapChargeBuntStar = T.Star
             self.AtBat_MoonShot = True
         elif self.AtBat_CaptainStarHitPitch == 0:
@@ -1234,6 +1233,18 @@ def _batter_is_off_captain(event: EventObj) -> bool:
     return stat.statJson["Character Game Stats"][team_str].get("Captain") != 1
 
 
+def _is_unflagged_texas_leaguer(event: EventObj, contact: dict) -> bool:
+    """True for a 5-star swing that a stat file from before the failed Moonshot
+    value recorded as 0, but which launched as a Texas Leaguer. The forced pop-fly
+    zone is out of reach of a non-captain's regular star swing, so that launch
+    can't be anything else. A captain-class character's failed attempt is an
+    ordinary captain star hit, so it needs no special handling."""
+    lower, higher = T.SHORT_ARRAY_ARRAY_807b6af4[1]
+    return (event.team_stars(event.batting_team()) >= _MOONSHOT_STAR_COST
+            and BatterAttributes.from_name(event.batter()).captain_star_hit_pitch == 0
+            and lower <= _int_no_commas(contact.get("Vert Angle")) < higher)
+
+
 def _inputs_from_event(event: EventObj, active_tags=frozenset()) -> HitInputs:
     """Build HitInputs from a stat-file contact event.
 
@@ -1268,6 +1279,9 @@ def _inputs_from_event(event: EventObj, active_tags=frozenset()) -> HitInputs:
         if team_stars == 0 or (team_stars == 1 and _batter_is_off_captain(event)):
             swing_code = 2  # regular Charge swing...
             charge_down = 0.0  # ...with charge-down forced to 0 (the power benefit)
+
+    five_star = G.to_encoded(LookupDicts.FIVE_STAR, contact.get("Star Swing Five-Star") or 0)
+    five_star_attempt = swing_code == 3 and (five_star != 0 or _is_unflagged_texas_leaguer(event, contact))
 
     pitch_code = G.to_encoded(LookupDicts.PITCH_TYPE, pitch.get("Pitch Type"))  # 0 Curve/1 Charge/2 ChangeUp
     if pitch_code == 0:
@@ -1321,7 +1335,7 @@ def _inputs_from_event(event: EventObj, active_tags=frozenset()) -> HitInputs:
         easy_batting=False,  # not recorded in stat files
         batter_stars_on=batter_starred,
         pitcher_stars_on=pitcher_starred,
-        five_star_dinger=_int_no_commas(contact.get("Star Swing Five-Star") or 0) == 1,
+        five_star_attempt=five_star_attempt,
         ground_y=ground_y,
         bounce=bounce,
         rng1=_int_no_commas(contact.get("RNG1")),
