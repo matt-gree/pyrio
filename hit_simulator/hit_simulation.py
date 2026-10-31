@@ -1324,12 +1324,17 @@ def _inputs_from_event(event: EventObj, active_tags=frozenset()) -> HitInputs:
     # 0 in the swing byte for a bunt, so a bunt reads as "swing None but the bat
     # touched the ball". A genuine take carries no contact dict and was filtered
     # out above, so contact + swing 0 uniquely identifies a bunt here. Project Rio
-    # 2.3.0 logs bunts as code 4 instead.
+    # 2.3.0 logs bunts as code 4 instead. Before 1.9.6 swing 0 doesn't mean a bunt
+    # (ordinary swings logged it too), so those can't be reproduced.
     is_bunt = swing_code in _BUNT_SWING_CODES
     if swing_code not in (0, 1, 2, 3, 4):  # 0/4 Bunt, 1 Slap, 2 Charge, 3 Star
         raise ValueError(
             f"Unsupported swing type {pitch.get('Type of Swing')!r}"
         )
+    if is_bunt and event.rioStat.versionBefore(1, 9, 6):
+        raise ValueError(f"Can't simulate swing {pitch.get('Type of Swing')!r} from Rio {event.rioStat.version()}")
+    if pitch.get("Bat Contact Pos - X") is None:
+        raise ValueError(f"Rio {event.rioStat.version()} didn't log the bat position")
 
     charge_up = float(contact.get("Charge Power Up", 0.0))
     charge_down = float(contact.get("Charge Power Down", 0.0))

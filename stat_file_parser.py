@@ -161,11 +161,15 @@ class StatObj:
     def version(self) -> str:
         return self.statJson.get('Version', 'Pre 0.1.7')
 
+    def versionBefore(self, major: int, minor: int, patch: int = 0) -> bool:
+        # returns if the file was written by a Project Rio version before major.minor.patch
+        # versions can have a prefix or suffix, ex: "Pre 0.1.7" and "0.1.7a"
+        match = re.search(r'(\d+)\.(\d+)(?:\.(\d+))?', self.version())
+        return match is None or tuple(int(num or 0) for num in match.groups()) < (major, minor, patch)
+
     def versionBefore2_3(self) -> bool:
         # returns if the file was written by a Project Rio version before 2.3.0
-        # versions can have a prefix or suffix, ex: "Pre 0.1.7" and "0.1.7a"
-        match = re.search(r'(\d+)\.(\d+)', self.version())
-        return match is None or (int(match.group(1)), int(match.group(2))) < (2, 3)
+        return self.versionBefore(2, 3)
 
     def stadium(self) -> str:
         # returns the stadium that was played on
@@ -1484,6 +1488,7 @@ class EventObj():
         if abs(eventNum) > len(self.all_events):
             raise IndexError(f'Invalid event num: Event {eventNum} does not exist in game')
         self.eventDict = self.all_events[eventNum]
+        self.eventIndex = eventNum % len(self.all_events)
 
     def safe_int(self, value) -> Optional[int]:
         """
@@ -1831,13 +1836,29 @@ class EventObj():
         """
         return self.safe_int(self.contact_dict().get('Ball Hang Time'))
 
+    def nextEventContinuesAtBat(self) -> bool:
+        # A foul keeps the same batter up with the same outs and balls, and adds a strike
+        # unless there are already 2. The last event in a file can't be confirmed.
+        if self.eventIndex + 1 >= len(self.all_events):
+            return False
+        next_event = self.all_events[self.eventIndex + 1]
+        if any(next_event.get(key) != self.eventDict.get(key)
+               for key in ('Inning', 'Half Inning', 'Batter Roster Loc', 'Outs', 'Balls')):
+            return False
+        return next_event.get('Strikes') == min(self.eventDict.get('Strikes', 0) + 1, 2)
+
     def foulLoggedAsFair(self) -> bool:
         # Project Rio before 2.3.0 logged a foul as fair if the ball landed before the game
-        # called it foul. A play with contact only ends with no result or a strikeout on a foul.
-        return (self.rioStat.versionBefore2_3()
-                and self.contact_dict().get('Contact Result - Primary') in ('Fair', 'Fielded')
-                and self.result_of_AB() in ('None', 'Strikeout')
-                and self.num_outs_during_play() != UNFINISHED_PLAY_NUM_OUTS)
+        # called it foul. A strikeout with contact is always a foul bunt. No result alone isn't
+        # enough, since some real hits logged none, so that also has to continue the at bat.
+        contact = self.contact_dict()
+        if (not self.rioStat.versionBefore2_3()
+                or contact.get('Contact Result - Primary') not in ('Fair', 'Fielded')
+                or contact.get('Contact Result - Secondary') != 'Out-caught'
+                or self.num_outs_during_play() == UNFINISHED_PLAY_NUM_OUTS):
+            return False
+        result = self.result_of_AB()
+        return result == 'Strikeout' or (result == 'None' and self.nextEventContinuesAtBat())
 
     def contact_result_primary(self) -> Optional[str]:
         """

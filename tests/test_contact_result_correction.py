@@ -8,9 +8,15 @@ import pytest
 from pyrio.stat_file_parser import EventObj, StatObj, UNFINISHED_PLAY_NUM_OUTS
 
 
+AT_BAT = {'Inning': 1, 'Half Inning': 0, 'Batter Roster Loc': 3, 'Outs': 1, 'Balls': 1}
+
+
 def event_with(result: str, primary: str, secondary: str, batter_out: str = 'None',
-               version: str = '2.2.0', num_outs: int = 0) -> EventObj:
-    return EventObj(StatObj({'Version': version, 'Events': [{
+               version: str = '2.2.0', num_outs: int = 0, strikes: int = 1,
+               next_event: dict = None) -> EventObj:
+    events = [{
+        **AT_BAT,
+        'Strikes': strikes,
         'Result of AB': result,
         'Num Outs During Play': num_outs,
         'Runner Batter': {'Out Type': batter_out},
@@ -18,7 +24,10 @@ def event_with(result: str, primary: str, secondary: str, batter_out: str = 'Non
             'Contact Result - Primary': primary,
             'Contact Result - Secondary': secondary,
         }},
-    }]}), 0)
+    }]
+    if next_event is not None:
+        events.append(next_event)
+    return EventObj(StatObj({'Version': version, 'Events': events}), 0)
 
 
 def test_old_force_out():
@@ -34,12 +43,37 @@ def test_old_batter_safe_runner_out_is_left_alone():
     assert event.contact_result_secondary() == 'Batter safe, runner out'
 
 
-@pytest.mark.parametrize('result, batter_out', [('None', 'None'), ('Strikeout', 'Strike-out')])
 @pytest.mark.parametrize('primary', ['Fair', 'Fielded'])
-def test_old_foul_that_landed_first(result, batter_out, primary):
-    event = event_with(result, primary, 'Out-caught', batter_out)
+@pytest.mark.parametrize('strikes, next_strikes', [(0, 1), (1, 2), (2, 2)])
+def test_old_foul_that_landed_first(primary, strikes, next_strikes):
+    event = event_with('None', primary, 'Out-caught', strikes=strikes,
+                       next_event={**AT_BAT, 'Strikes': next_strikes})
     assert event.contact_result_primary() == 'Foul'
     assert event.contact_result_secondary() == 'Foul'
+
+
+def test_old_foul_bunt_strikeout_needs_no_next_event():
+    event = event_with('Strikeout', 'Fair', 'Out-caught', 'Strike-out', strikes=2)
+    assert event.contact_result_primary() == 'Foul'
+    assert event.contact_result_secondary() == 'Foul'
+
+
+@pytest.mark.parametrize('next_event', [
+    {**AT_BAT, 'Batter Roster Loc': 4, 'Strikes': 2},
+    {**AT_BAT, 'Outs': 2, 'Strikes': 2},
+    {**AT_BAT, 'Balls': 2, 'Strikes': 2},
+    {**AT_BAT, 'Strikes': 1},
+    None,
+])
+def test_old_no_result_that_doesnt_continue_the_at_bat_is_not_a_foul(next_event):
+    event = event_with('None', 'Fair', 'Out-caught', next_event=next_event)
+    assert event.contact_result_primary() == 'Fair'
+    assert event.contact_result_secondary() == 'Out-caught'
+
+
+def test_old_no_result_with_a_batter_out_is_not_a_foul():
+    event = event_with('None', 'Fair', 'Out-tag', 'Force', next_event={**AT_BAT, 'Strikes': 2})
+    assert event.contact_result_primary() == 'Fair'
 
 
 def test_old_real_catch_is_left_alone():

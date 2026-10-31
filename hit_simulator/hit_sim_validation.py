@@ -112,8 +112,8 @@ def _is_natural_landing(contact: dict) -> bool:
         the trajectory's landing -- e.g. a sliding interception fumbled into a
         hit. Only First Fielder Action 'None' is a clean natural landing.
     """
-    sec = contact.get("Contact Result - Secondary")
-    if sec is not None and G.to_encoded(LookupDicts.SECONDARY_CONTACT_RESULT, sec) == 0:
+    # Compare the raw value: older files have labels that are no longer in LookupDicts
+    if contact.get("Contact Result - Secondary") in ("Out-caught", 0):
         return False  # caught for an out
     action = (contact.get("First Fielder") or {}).get("Fielder Action", 0)
     try:
