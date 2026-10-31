@@ -25,8 +25,6 @@ from .. import stadiums
 from .hit_simulation import HitResult
 from ..stat_file_parser import StatObj, EventObj
 
-_SUPPORTED_SWINGS = ("Slap", "Charge", "Star")
-
 
 # ---------------------------------------------------------------- records
 
@@ -38,7 +36,7 @@ class ContactRecord:
     half_inning: int            # 0 = away batting, 1 = home batting
     player_name: str            # human controlling the batting team
     batter: str
-    swing: str                  # Slap / Charge / Star
+    swing: str                  # Slap / Charge / Star / Bunt (None for a bunt before Rio 2.3.0)
     result: str                 # event "Result of AB" (e.g. Single, HR, ...)
     primary_result: str         # contact "Contact Result - Primary" (Fair/Foul/Out)
     secondary_result: str       # contact "Contact Result - Secondary"
@@ -92,9 +90,9 @@ class ContactRecord:
 
 
 def simulate_contacts(stat: StatObj) -> list[ContactRecord]:
-    """Simulate every supported contact event in a game.
+    """Simulate every contact event in a game, including bunts.
 
-    Bunts and other unsupported swings are skipped silently (mirroring
+    Contacts the simulator can't reproduce are skipped silently (mirroring
     hit_sim_validation's skip behavior).
     """
     records = []
@@ -104,8 +102,6 @@ def simulate_contacts(stat: StatObj) -> list[ContactRecord]:
         if not contact:
             continue
         swing = event.pitch_dict().get("Type of Swing")
-        if swing not in _SUPPORTED_SWINGS:
-            continue
         try:
             sim = hs.simulate_hit_from_event(event)
         except ValueError:
