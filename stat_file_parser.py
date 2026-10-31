@@ -57,6 +57,8 @@ SWAPPED_CAUGHT_RESULT_OF_AB = {
     'Caught': 'Caught line-drive',
     'Caught line-drive': 'Caught',
 }
+# "Num Outs During Play" on an event that never finished, like the last one in a quit file.
+UNFINISHED_PLAY_NUM_OUTS = 255
 
 
 class ErrorChecker:
@@ -852,8 +854,9 @@ class EventSearch():
             self.character_action_dict[batter]['AtBat'].add(eventNum)
             self.character_action_dict[pitcher]['Pitching'].add(eventNum)
             
-            self._away_score_dict[currentEvent.score(0)].add(eventNum)
-            self._home_score_dict[currentEvent.score(1)].add(eventNum)
+            # setdefault because the final score can be behind the current one in an unfinished game
+            self._away_score_dict.setdefault(currentEvent.score(0), set()).add(eventNum)
+            self._home_score_dict.setdefault(currentEvent.score(1), set()).add(eventNum)
 
             if currentEvent.score(0) > currentEvent.score(1):
                 self._away_team_winning.add(eventNum)
@@ -869,14 +872,17 @@ class EventSearch():
             self._chem_on_base_dict[currentEvent.chem_links_on_base()].add(eventNum)
             self._strikes_dict[currentEvent.strikes()].add(eventNum)
             self._balls_dict[currentEvent.balls()].add(eventNum)
-            self._inning_dict[currentEvent.inning()].add(eventNum)
+            # setdefault because "Innings Played" can be behind the current inning in an unfinished game
+            self._inning_dict.setdefault(currentEvent.inning(), set()).add(eventNum)
             self._rbi_dict[currentEvent.rbi()].add(eventNum)
             self._pitcher_stamina_dict[currentEvent.pitcher_stamina()].add(eventNum)
             self._star_chance_dict[currentEvent.star_chance()].add(eventNum)
-            self._outs_during_event_dict[currentEvent.num_outs_during_play()].add(eventNum)
+            if currentEvent.num_outs_during_play() != UNFINISHED_PLAY_NUM_OUTS:
+                self._outs_during_event_dict[currentEvent.num_outs_during_play()].add(eventNum)
 
             self._half_inning_dict[currentEvent.half_inning()].add(eventNum)
-            self._result_of_AB_dict[currentEvent.result_of_AB()].add(eventNum)
+            # setdefault so a label this version doesn't know about can't stop the file from loading
+            self._result_of_AB_dict.setdefault(currentEvent.result_of_AB(), set()).add(eventNum)
             
             if currentEvent.bool_runner_on_base(-1) == 0:
                 self._runners_on_base_dict[0].add(eventNum)
@@ -1822,17 +1828,38 @@ class EventObj():
         """
         return self.safe_int(self.contact_dict().get('Ball Hang Time'))
 
+    def foulLoggedAsFair(self) -> bool:
+        # Project Rio before 2.3.0 logged a foul as fair if the ball landed before the game
+        # called it foul. A play with contact only ends with no result or a strikeout on a foul.
+        return (self.rioStat.versionBefore2_3()
+                and self.contact_dict().get('Contact Result - Primary') in ('Fair', 'Fielded')
+                and self.result_of_AB() in ('None', 'Strikeout')
+                and self.num_outs_during_play() != UNFINISHED_PLAY_NUM_OUTS)
+
     def contact_result_primary(self) -> Optional[str]:
         """
         Returns None if no contact in event.
         """
+        if self.foulLoggedAsFair():
+            return 'Foul'
         return self.contact_dict().get('Contact Result - Primary')
 
     def contact_result_secondary(self) -> Optional[str]:
         """
         Returns None if no contact in event.
+        Corrects files from Project Rio before 2.3.0, which logged a force out as
+        'Out-tag', a tag out as 'Foul', and a foul that landed first as 'Out-caught'.
         """
-        return self.contact_dict().get('Contact Result - Secondary')
+        secondary = self.contact_dict().get('Contact Result - Secondary')
+        if self.foulLoggedAsFair():
+            return 'Foul'
+        if self.rioStat.versionBefore2_3() and self.result_of_AB() == 'Out':
+            out_type = self.runner_dict(0).get('Out Type')
+            if out_type == 'Force':
+                return 'Out-force'
+            if out_type == 'Tag':
+                return 'Out-tag'
+        return RENAMED_RESULT_OF_AB.get(secondary, secondary)
 
     def first_fielder_dict(self) -> dict:
         """
