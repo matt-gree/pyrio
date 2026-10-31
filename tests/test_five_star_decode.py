@@ -5,8 +5,9 @@ import pytest
 
 from dataclasses import replace
 
-from pyrio.hit_simulator.hit_simulation import (HitInputs, _is_unflagged_texas_leaguer,
-                                                simulate_hit)
+from pyrio.constants import game_constants as G
+from pyrio.hit_simulator.hit_simulation import (HitInputs, _inputs_from_landing_row,
+                                                _launched_as_texas_leaguer, simulate_hit)
 from pyrio.stat_file_parser import EventObj
 
 
@@ -41,6 +42,23 @@ _TEXAS_LEAGUER = HitInputs(
     input_down=True, input_left=True, batter_stars_on=True, pitcher_stars_on=True,
     five_star_attempt=True, rng1=9688, rng2=0, rng3=184,
 )
+
+# The same hit as a /landing_data/ row. ball_horiz_angle holds the vertical angle
+# because the endpoint's angle columns are swapped.
+_TEXAS_LEAGUER_ROW = {
+    'batter_char_id': 37, 'pitcher_char_id': 1, 'type_of_swing': 3, 'pitch_type': 0,
+    'stick_input': G.STICK_DOWN | G.STICK_LEFT, 'bat_x_contact_pos': -0.168056,
+    'ball_x_contact_pos': -0.352598, 'ball_z_contact_pos': 1.78056, 'batting_hand': True,
+    'frame_of_swing': 4, 'rng1': 9688.0, 'rng2': 0.0, 'rng3': 184.0,
+    'ball_horiz_angle': 538, 'ball_vert_angle': 1336,
+    'star_swing_five_star': 2, 'batter_team_stars': 5,
+}
+
+
+def _attempt_from_row(**fields):
+    row = {**_TEXAS_LEAGUER_ROW, **fields}
+    row = {key: value for key, value in row.items() if value is not None}
+    return _inputs_from_landing_row(row, 0).five_star_attempt
 
 
 def _five_star_swing(contact):
@@ -89,5 +107,30 @@ def test_failed_attempt_by_a_captain_class_batter_is_a_regular_captain_star_hit(
     ("525", "Yoshi", 5, False),
 ])
 def test_older_files_recognize_a_texas_leaguer_by_its_launch(vert, batter, stars, expected):
-    event = _FiveStarEvent(batter, stars)
-    assert _is_unflagged_texas_leaguer(event, {'Vert Angle': vert}) is expected
+    assert _launched_as_texas_leaguer(stars, batter, int(vert)) is expected
+
+
+def test_landing_row_reproduces_the_recorded_texas_leaguer():
+    row_inputs = _inputs_from_landing_row(_TEXAS_LEAGUER_ROW, 0, batter_stars_on=True,
+                                          pitcher_stars_on=True)
+    result = simulate_hit(row_inputs)
+    assert (result.vertical_angle, result.power, result.horizontal_angle) == (538, 139, 1336)
+
+
+def test_landing_row_flagged_as_an_attempt():
+    assert _attempt_from_row(star_swing_five_star=1, ball_horiz_angle=300)
+    assert _attempt_from_row(star_swing_five_star=2, ball_horiz_angle=300)
+
+
+def test_older_landing_row_is_recognized_by_its_swapped_vertical_column():
+    assert _attempt_from_row(star_swing_five_star=0)
+    assert _attempt_from_row(star_swing_five_star=None)
+    assert not _attempt_from_row(star_swing_five_star=0, ball_horiz_angle=300, ball_vert_angle=525)
+
+
+def test_landing_row_from_the_current_endpoint_is_a_regular_star_swing():
+    assert not _attempt_from_row(star_swing_five_star=None, batter_team_stars=None)
+
+
+def test_only_a_star_swing_can_be_an_attempt():
+    assert not _attempt_from_row(type_of_swing=2)

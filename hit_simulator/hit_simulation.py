@@ -23,7 +23,7 @@ Notes / known JS quirks carried over:
     modeled as a Star swing carrying AtBat_MoonShot (power override +
     _MOONSHOT_MULTIPLIER), which non-Perfect contact clears into a Texas Leaguer.
     Older stat files record a failed attempt as 0, so a Texas Leaguer is recognized
-    there by its launch angle (see _is_unflagged_texas_leaguer).
+    there by its launch angle (see _launched_as_texas_leaguer).
   - Super curve is read from the "Super Curve" column of the character attribute
     CSV (derived from the "Curved Hits" Extra tag) instead of the JS's hardcoded
     char ids.
@@ -1233,16 +1233,17 @@ def _batter_is_off_captain(event: EventObj) -> bool:
     return stat.statJson["Character Game Stats"][team_str].get("Captain") != 1
 
 
-def _is_unflagged_texas_leaguer(event: EventObj, contact: dict) -> bool:
-    """True for a 5-star swing that a stat file from before the failed Moonshot
-    value recorded as 0, but which launched as a Texas Leaguer. The forced pop-fly
-    zone is out of reach of a non-captain's regular star swing, so that launch
-    can't be anything else. A captain-class character's failed attempt is an
-    ordinary captain star hit, so it needs no special handling."""
+def _launched_as_texas_leaguer(team_stars: int, batter, vertical_angle: int) -> bool:
+    """True for a star swing that data from before the failed Moonshot value
+    recorded as 0, but which launched as a Texas Leaguer. The forced pop-fly zone
+    is out of reach of a non-captain's regular star swing, so that launch can't be
+    anything else. A captain-class character's failed attempt is an ordinary
+    captain star hit, so it needs no special handling. ``batter`` is a character
+    name or encoded char id."""
     lower, higher = T.SHORT_ARRAY_ARRAY_807b6af4[1]
-    return (event.team_stars(event.batting_team()) >= _MOONSHOT_STAR_COST
-            and BatterAttributes.from_name(event.batter()).captain_star_hit_pitch == 0
-            and lower <= _int_no_commas(contact.get("Vert Angle")) < higher)
+    return (team_stars >= _MOONSHOT_STAR_COST
+            and BatterAttributes.from_name(batter).captain_star_hit_pitch == 0
+            and lower <= vertical_angle < higher)
 
 
 def _inputs_from_event(event: EventObj, active_tags=frozenset()) -> HitInputs:
@@ -1281,7 +1282,8 @@ def _inputs_from_event(event: EventObj, active_tags=frozenset()) -> HitInputs:
             charge_down = 0.0  # ...with charge-down forced to 0 (the power benefit)
 
     five_star = G.to_encoded(LookupDicts.FIVE_STAR, contact.get("Star Swing Five-Star") or 0)
-    five_star_attempt = swing_code == 3 and (five_star != 0 or _is_unflagged_texas_leaguer(event, contact))
+    five_star_attempt = swing_code == 3 and (five_star != 0 or _launched_as_texas_leaguer(
+        event.team_stars(event.batting_team()), event.batter(), _int_no_commas(contact.get("Vert Angle"))))
 
     pitch_code = G.to_encoded(LookupDicts.PITCH_TYPE, pitch.get("Pitch Type"))  # 0 Curve/1 Charge/2 ChangeUp
     if pitch_code == 0:
@@ -1366,8 +1368,10 @@ def _inputs_from_landing_row(row: dict, stadium_id: int, active_tags=frozenset()
     needs except two game-level facts the endpoint doesn't expose: whether
     superstars are on (``batter_stars_on``/``pitcher_stars_on``, default off) and
     the stadium (``stadium_id``, used only for the ground plane / bounce). Walu
-    tech (see _inputs_from_event) can't be detected here -- the row lacks the
-    team's star count -- so star swings without enough stars won't be corrected.
+    tech (see _inputs_from_event) isn't detected here -- the row doesn't say
+    whether the batter is their team's captain -- so star swings without enough
+    stars won't be corrected. A Moonshot attempt needs ``star_swing_five_star`` and
+    ``batter_team_stars``; a row without them is treated as a regular star swing.
     """
     swing_code = int(row["type_of_swing"])
     if swing_code not in (1, 2, 3):  # 1 Slap, 2 Charge, 3 Star (0 None / 4 Bunt unsupported)
@@ -1383,6 +1387,13 @@ def _inputs_from_landing_row(row: dict, stadium_id: int, active_tags=frozenset()
         pitch_type_val = {1: 4, 3: 2}.get(charge_code, 1)
     else:
         pitch_type_val = 3
+
+    # NOTE: ball_horiz_angle holds the vertical angle (the endpoint's columns are swapped).
+    team_stars = row.get("batter_team_stars")
+    five_star_attempt = swing_code == 3 and (
+        int(row.get("star_swing_five_star") or 0) != 0
+        or (team_stars is not None and _launched_as_texas_leaguer(
+            int(team_stars), int(row["batter_char_id"]), int(row["ball_horiz_angle"]))))
 
     up, down, left, right = G.stick_directions(int(row["stick_input"]))
     ground_y = T.GROUND_Y_TOY_FIELD if stadium_id == 0x6 else T.GROUND_Y_DEFAULT
@@ -1409,6 +1420,7 @@ def _inputs_from_landing_row(row: dict, stadium_id: int, active_tags=frozenset()
         easy_batting=False,
         batter_stars_on=batter_stars_on,
         pitcher_stars_on=pitcher_stars_on,
+        five_star_attempt=five_star_attempt,
         ground_y=ground_y,
         bounce=bounce,
         rng1=int(row["rng1"]),  # endpoint serves the seeds as floats (e.g. 9747.0)
