@@ -210,6 +210,12 @@ class LookupDicts:
         4: "Bunt"
     }
 
+    FIVE_STAR = {
+        0: "None",
+        1: "Moonshot",
+        2: "Failed Moonshot"
+    }
+
     POSITION = {
         0: "P",
         1: "C",
