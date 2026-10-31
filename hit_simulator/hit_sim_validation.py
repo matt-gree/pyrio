@@ -40,9 +40,6 @@ from .hit_sim_report import (FieldSpec, ValidationReport, ci,
                              note_block_deflected, resolve_landing)
 from ..stat_file_parser import StatObj, EventObj
 
-# game Type of Swing codes that the simulator supports: 1 Slap, 2 Charge, 3 Star.
-_SUPPORTED_SWING_CODES = (1, 2, 3)
-
 # Backwards-compatible aliases (the comparison core moved to hit_sim_report).
 _ci = ci
 _FieldSpec = FieldSpec
@@ -239,11 +236,11 @@ def validate_statobj(stat: StatObj, *, include_landing: bool = False,
             continue
         report.contact_events += 1
 
+        # swing_code feeds the Texas-Leaguer check below; every supported swing
+        # (bunt/slap/charge/star) is simulated. Genuinely unsupported swings raise
+        # in _inputs_from_event and are caught as a skip in the try block.
         swing = event.pitch_dict().get("Type of Swing")
         swing_code = G.to_encoded(LookupDicts.TYPE_OF_SWING, swing) if swing is not None else None
-        if swing_code not in _SUPPORTED_SWING_CODES:
-            report.skipped.append((game_id, i, f"unsupported swing: {swing!r}"))
-            continue
 
         if _is_texas_leaguer(event, contact, swing_code):
             report.skipped.append((game_id, i, "texas leaguer (unmodeled failed moonshot)"))
