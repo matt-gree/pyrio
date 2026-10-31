@@ -2,6 +2,7 @@ from __future__ import annotations
 from .lookup import LookupDicts
 from datetime import datetime
 from typing import Optional, Union
+import re
 
 '''
 Intended to parse "decoded" files which would be present on a user's computer
@@ -44,6 +45,18 @@ Roster args:
 # "no unnecessary half-inning" terms as the final inning. Used by both the live
 # HudObj.game_over predicate and StatObj.isMercy, so the two cannot drift.
 MERCY_MARGIN = 10
+
+# "Result of AB" labels from older decoded files, mapped to the LookupDicts.FINAL_RESULT
+# names. Files keep the label they were written with, so these are corrected on read.
+RENAMED_RESULT_OF_AB = {
+    'Error - Input': 'Error',
+    'Error - Chem': 'Fielders Choice',
+}
+# Project Rio before 2.3.0 wrote the labels for results 5 and 6 the wrong way round.
+SWAPPED_CAUGHT_RESULT_OF_AB = {
+    'Caught': 'Caught line-drive',
+    'Caught line-drive': 'Caught',
+}
 
 
 class ErrorChecker:
@@ -144,6 +157,12 @@ class StatObj:
 
     def version(self) -> str:
         return self.statJson.get('Version', 'Pre 0.1.7')
+
+    def versionBefore2_3(self) -> bool:
+        # returns if the file was written by a Project Rio version before 2.3.0
+        # versions can have a prefix or suffix, ex: "Pre 0.1.7" and "0.1.7a"
+        match = re.search(r'(\d+)\.(\d+)', self.version())
+        return match is None or (int(match.group(1)), int(match.group(2))) < (2, 3)
 
     def stadium(self) -> str:
         # returns the stadium that was played on
@@ -1009,13 +1028,13 @@ class EventSearch():
         else:
             return self._result_of_AB_dict['Single'] | self._result_of_AB_dict['Double'] | self._result_of_AB_dict['Triple'] | self._result_of_AB_dict['HR']
 
-    def inputErrorResultEvents(self) -> set[int]:
-        # returns a set of events where the result is a input error
-        return self._result_of_AB_dict['Error - Input']
-    
-    def chemErrorResultEvents(self) -> set[int]:
-        # returns a set of events where the result is a chem error
-        return self._result_of_AB_dict['Error - Chem']
+    def errorResultEvents(self) -> set[int]:
+        # returns a set of events where the result is an error
+        return self._result_of_AB_dict['Error']
+
+    def fieldersChoiceResultEvents(self) -> set[int]:
+        # returns a set of events where the result is a fielders choice
+        return self._result_of_AB_dict['Fielders Choice']
 
     def buntResultEvents(self) -> set[int]:
         #returns a set of events of successful bunts
@@ -1561,7 +1580,10 @@ class EventObj():
         return self.eventDict['Num Outs During Play']
     
     def result_of_AB(self) -> str:
-        return self.eventDict['Result of AB']
+        result = self.eventDict['Result of AB']
+        if self.rioStat.versionBefore2_3():
+            result = SWAPPED_CAUGHT_RESULT_OF_AB.get(result, result)
+        return RENAMED_RESULT_OF_AB.get(result, result)
     
     def runners(self) -> set[str]:
         return set(self.eventDict).intersection(['Runner 1B', 'Runner 2B', 'Runner 3B'])
