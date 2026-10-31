@@ -51,10 +51,11 @@ from .hit_sim_report import (FieldSpec, ValidationReport, note_block_deflected,
                              resolve_landing)
 
 
-# Type of Swing codes the simulator supports: 0 Bunt, 1 Slap, 2 Charge, 3 Star.
+# Type of Swing codes the simulator supports: 0 and 4 Bunt, 1 Slap, 2 Charge, 3 Star.
 # A landing row always carries contact, so swing "None" (0) is a bunt (the game
 # zeroes the swing byte for a bunt); it is simulated like any other contact.
-_SUPPORTED_SWING_CODES = (0, 1, 2, 3)
+# Project Rio 2.3.0 logs bunts as 4 instead.
+_SUPPORTED_SWING_CODES = (0, 1, 2, 3, 4)
 # final_result codes where the ball came down on its own (singles..home run), so
 # the recorded landing is a natural landing rather than a fielder-catch point.
 _NATURAL_RESULT_CODES = frozenset({7, 8, 9, 10})

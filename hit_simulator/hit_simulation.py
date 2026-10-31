@@ -74,6 +74,9 @@ from ..stat_file_parser import EventObj
 # calculate_hit_power when AtBat_MoonShot survives to a Perfect contact.
 _MOONSHOT_MULTIPLIER = 1.5
 
+# Type of Swing codes for a bunt: 0 before Project Rio 2.3.0 (None with contact), 4 from then on.
+_BUNT_SWING_CODES = (0, 4)
+
 _CONTACT_TYPE_NAMES = ["Left Sour", "Left Nice", "Perfect", "Right Nice", "Right Sour"]
 
 
@@ -1293,8 +1296,9 @@ def _inputs_from_event(event: EventObj, active_tags=frozenset()) -> HitInputs:
     """Build HitInputs from a stat-file contact event.
 
     Mirrors the JS `useStatFileValues`. Requires the event to have contact
-    (raises otherwise). Bunts are recorded as swing "None" with a contact dict
-    (the game zeroes the swing byte for a bunt) and are mapped to T.Bunt here.
+    (raises otherwise). Bunts are recorded as swing "Bunt" from Project Rio 2.3.0,
+    or swing "None" with a contact dict before that (the game zeroes the swing
+    byte for a bunt), and are mapped to T.Bunt here.
     """
     pitch = event.pitch_dict()
     contact = event.contact_dict()
@@ -1307,9 +1311,10 @@ def _inputs_from_event(event: EventObj, active_tags=frozenset()) -> HitInputs:
     # A recorded contact whose swing is "None" (code 0) is a bunt: the game stores
     # 0 in the swing byte for a bunt, so a bunt reads as "swing None but the bat
     # touched the ball". A genuine take carries no contact dict and was filtered
-    # out above, so contact + swing 0 uniquely identifies a bunt here.
-    is_bunt = swing_code == 0
-    if swing_code not in (0, 1, 2, 3):  # 0 Bunt (None+contact), 1 Slap, 2 Charge, 3 Star
+    # out above, so contact + swing 0 uniquely identifies a bunt here. Project Rio
+    # 2.3.0 logs bunts as code 4 instead.
+    is_bunt = swing_code in _BUNT_SWING_CODES
+    if swing_code not in (0, 1, 2, 3, 4):  # 0/4 Bunt, 1 Slap, 2 Charge, 3 Star
         raise ValueError(
             f"Unsupported swing type {pitch.get('Type of Swing')!r}"
         )
@@ -1422,9 +1427,10 @@ def _inputs_from_landing_row(row: dict, stadium_id: int, active_tags=frozenset()
     """
     swing_code = int(row["type_of_swing"])
     # A landing row always carries contact, so swing "None" (0) is a bunt: the
-    # game zeroes the swing byte for a bunt, same as the stat-file path.
-    is_bunt = swing_code == 0
-    if swing_code not in (0, 1, 2, 3):  # 0 Bunt, 1 Slap, 2 Charge, 3 Star
+    # game zeroes the swing byte for a bunt, same as the stat-file path. Project
+    # Rio 2.3.0 logs bunts as code 4 instead.
+    is_bunt = swing_code in _BUNT_SWING_CODES
+    if swing_code not in (0, 1, 2, 3, 4):  # 0/4 Bunt, 1 Slap, 2 Charge, 3 Star
         raise ValueError(f"Unsupported swing type {swing_code!r}")
 
     # Prefer the endpoint's per-character superstar flag (a bunt's contact size,
