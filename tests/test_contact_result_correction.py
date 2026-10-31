@@ -1,0 +1,78 @@
+"""Project Rio before 2.3.0 logged some contact results wrongly, and decoded files
+keep what they were written with: a force out as 'Out-tag', a tag out as 'Foul',
+and a foul that landed before the game called it foul as 'Fair' / 'Out-caught'.
+Reading a file from any version has to give the same answer.
+"""
+import pytest
+
+from pyrio.stat_file_parser import EventObj, StatObj, UNFINISHED_PLAY_NUM_OUTS
+
+
+def event_with(result: str, primary: str, secondary: str, batter_out: str = 'None',
+               version: str = '2.2.0', num_outs: int = 0) -> EventObj:
+    return EventObj(StatObj({'Version': version, 'Events': [{
+        'Result of AB': result,
+        'Num Outs During Play': num_outs,
+        'Runner Batter': {'Out Type': batter_out},
+        'Pitch': {'Contact': {
+            'Contact Result - Primary': primary,
+            'Contact Result - Secondary': secondary,
+        }},
+    }]}), 0)
+
+
+def test_old_force_out():
+    assert event_with('Out', 'Fair', 'Out-tag', 'Force').contact_result_secondary() == 'Out-force'
+
+
+def test_old_tag_out():
+    assert event_with('Out', 'Fair', 'Foul', 'Tag').contact_result_secondary() == 'Out-tag'
+
+
+def test_old_batter_safe_runner_out_is_left_alone():
+    event = event_with('Out', 'Fair', 'Batter safe, runner out')
+    assert event.contact_result_secondary() == 'Batter safe, runner out'
+
+
+@pytest.mark.parametrize('result, batter_out', [('None', 'None'), ('Strikeout', 'Strike-out')])
+@pytest.mark.parametrize('primary', ['Fair', 'Fielded'])
+def test_old_foul_that_landed_first(result, batter_out, primary):
+    event = event_with(result, primary, 'Out-caught', batter_out)
+    assert event.contact_result_primary() == 'Foul'
+    assert event.contact_result_secondary() == 'Foul'
+
+
+def test_old_real_catch_is_left_alone():
+    event = event_with('Caught', 'Out', 'Out-caught', 'Caught')
+    assert event.contact_result_primary() == 'Out'
+    assert event.contact_result_secondary() == 'Out-caught'
+
+
+def test_old_error_label_is_renamed():
+    assert event_with('Error - Chem', 'Fair', 'Error - Chem').contact_result_secondary() == 'Fielders Choice'
+
+
+def test_unfinished_play_is_not_called_a_foul():
+    event = event_with('None', 'Fair', 'Out-caught', num_outs=UNFINISHED_PLAY_NUM_OUTS)
+    assert event.contact_result_primary() == 'Fair'
+    assert event.contact_result_secondary() == 'Out-caught'
+
+
+@pytest.mark.parametrize('result, primary, secondary, batter_out', [
+    ('Out', 'Fair', 'Out-tag', 'Tag'),
+    ('Out', 'Fair', 'Out-force', 'Force'),
+    ('None', 'Foul', 'Foul', 'None'),
+    ('None', 'Fair', 'None', 'None'),
+])
+def test_current_files_are_left_alone(result, primary, secondary, batter_out):
+    event = event_with(result, primary, secondary, batter_out, version='2.3.0')
+    assert event.contact_result_primary() == primary
+    assert event.contact_result_secondary() == secondary
+
+
+def test_no_contact_returns_none():
+    event = EventObj(StatObj({'Version': '2.2.0', 'Events': [{
+        'Result of AB': 'None', 'Num Outs During Play': 0, 'Pitch': {},
+    }]}), 0)
+    assert event.contact_result_primary() is None
+    assert event.contact_result_secondary() is None

@@ -118,8 +118,8 @@ def simulate_contacts(stat: StatObj) -> list[ContactRecord]:
             batter=event.batter(),
             swing=swing,
             result=event.result_of_AB(),
-            primary_result=contact.get("Contact Result - Primary"),
-            secondary_result=contact.get("Contact Result - Secondary"),
+            primary_result=event.contact_result_primary(),
+            secondary_result=event.contact_result_secondary(),
             rbi=event.rbi(),
             sim=sim,
         ))
