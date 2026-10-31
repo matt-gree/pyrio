@@ -1,4 +1,5 @@
 from __future__ import annotations
+from .constants import game_constants as G
 from .lookup import LookupDicts
 from datetime import datetime
 from typing import Optional, Union
@@ -1725,9 +1726,11 @@ class EventObj():
 
     def five_star_swing(self) -> Optional[int]:
         """
+        Returns the encoded value (see LookupDicts.FIVE_STAR)
         Returns None if no contact in event
         """
-        return self.contact_dict().get('Star Swing Five-Star')
+        five_star = self.contact_dict().get('Star Swing Five-Star')
+        return G.to_encoded(LookupDicts.FIVE_STAR, five_star) if five_star is not None else None
 
     def input_direction_push_or_pull(self) -> Optional[str]:
         """
