@@ -360,7 +360,10 @@ class RioWeb:
         })
 
     def group_members(self, group_name: str) -> dict:
-        return self._get("/user_group/members", {"group_name": group_name})
+        return self._get("/user_group/members", {
+            "group_name": group_name,
+            "rio_key": self.rio_key,
+        })
 
     # -------------------------------------------------------------------------
     # Game management (POST)
