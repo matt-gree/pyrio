@@ -197,7 +197,7 @@ class LookupDicts:
 
     CHARGE_TYPE = {
         0: "N/A",
-        1: "ChargedStar",
+        1: "Charged Captain Star",
         2: "Slider",
         3: "Perfect"
     }

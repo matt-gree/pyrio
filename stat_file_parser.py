@@ -1654,8 +1654,13 @@ class EventObj():
     def charge_type(self) -> Optional[str]:
         """
         Returns None if no pitch in event
+        Project Rio before 2.3.0 couldn't decode a charged captain star and logged
+        'Unable to Decode. Invalid Value (1).' instead, so that's corrected on read.
         """
-        return self.pitch_dict().get('Charge Type')
+        charge_type = self.pitch_dict().get('Charge Type')
+        if charge_type == 'ChargedStar' or '(1)' in str(charge_type):
+            return LookupDicts.CHARGE_TYPE[1]
+        return charge_type
     
     def star_pitch(self) -> Optional[int]:
         """
