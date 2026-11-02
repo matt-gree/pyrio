@@ -81,8 +81,29 @@ class RioWeb:
     def _post_with_key(self, endpoint: str, data: dict = None) -> dict:
         if data is None:
             data = {}
-        data["rio_key"] = self.rio_key
+        # Send the Rio Key only when there is no session. A session outranks it
+        # -- it is the only credential allowed to change group membership, your
+        # password or your keys -- and sending both lets the server resolve the
+        # weaker one and refuse. See login().
+        if not self._has_session:
+            data["rio_key"] = self.rio_key
         return self._post(endpoint, data)
+
+    @property
+    def _has_session(self) -> bool:
+        """True once login() has succeeded and not been undone by logout()."""
+        return "Authorization" in self.session.headers
+
+    def _key_params(self, params: dict) -> dict:
+        """Add the Rio Key to query params, unless a session makes it redundant.
+
+        Keeping it out of the query string when it is not needed matters: access
+        logs record the path and query string, so a key sent this way ends up on
+        disk. Headers are not logged.
+        """
+        if not self._has_session:
+            params = {**params, "rio_key": self.rio_key}
+        return params
 
     @staticmethod
     def _strip_value(v):
@@ -337,6 +358,35 @@ class RioWeb:
     # User management
     # -------------------------------------------------------------------------
 
+    def login(self, email: str, password: str) -> str:
+        """Start a session, and use it for every later request on this client.
+
+        Some operations are deliberately unavailable to a Rio Key or an API key,
+        however privileged their owner: changing group membership, changing a
+        password or email, rotating a key, deleting an account, and reading
+        another user's IP history. The rule is that a credential may not be used
+        to increase its own authority -- an API key that can add its own holder
+        to Admin is a lock with the key left in it. Those operations need a
+        session, which is what this provides.
+
+        Everything else keeps working on the Rio Key alone, so most scripts never
+        need to call this.
+
+        Returns the username the server associated with the session.
+
+        The token is treated as opaque on purpose: it is a JWT today and is
+        planned to become an opaque server-side session, so nothing here parses
+        it or reads an expiry out of it. When it expires, calls begin returning
+        401 and the fix is to call login() again.
+        """
+        response = self._post("/login/", {"Email": email, "Password": password})
+        self.session.headers["Authorization"] = f"Bearer {response['access_token']}"
+        return response.get("username")
+
+    def logout(self) -> None:
+        """Drop the session, falling back to the Rio Key for later requests."""
+        self.session.headers.pop("Authorization", None)
+
     def list_users(self) -> dict:
         return self._get("/user/all")
 
@@ -353,17 +403,15 @@ class RioWeb:
         })
 
     def check_user_in_group(self, username: str, group_name: str) -> dict:
-        return self._get("/user_group/check_for_member", {
+        return self._get("/user_group/check_for_member", self._key_params({
             "username": username,
             "group_name": group_name,
-            "rio_key": self.rio_key,
-        })
+        }))
 
     def group_members(self, group_name: str) -> dict:
-        return self._get("/user_group/members", {
+        return self._get("/user_group/members", self._key_params({
             "group_name": group_name,
-            "rio_key": self.rio_key,
-        })
+        }))
 
     # -------------------------------------------------------------------------
     # Game management (POST)
