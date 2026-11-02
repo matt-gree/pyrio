@@ -1513,7 +1513,7 @@ class EventObj():
             return value  # Return if it's already an integer
         elif isinstance(value, str):
             try:
-                return int(value)  # Try converting a string to an integer
+                return int(value.replace(',', ''))  # Try converting a string to an integer. Stat files group digits with commas
             except ValueError:
                 raise ValueError(f"Value '{value}' is not a valid integer.")
         
