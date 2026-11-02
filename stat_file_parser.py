@@ -958,7 +958,12 @@ class EventSearch():
             if not currentEvent.first_fielder_dict():
                 continue
 
-            self.character_action_dict[currentEvent.first_fielder_character()]['Fielding'].add(eventNum)
+            # setdefault because the fielder is logged separately from the rosters, and some files disagree
+            self.character_action_dict.setdefault(currentEvent.first_fielder_character(), {
+                'AtBat': set(),
+                'Pitching': set(),
+                'Fielding': set()
+            })['Fielding'].add(eventNum)
 
             if currentEvent.first_fielder_bobble() != 'None':
                 self._bobble.add(eventNum)

@@ -29,6 +29,42 @@ def game_file(charge_type: str = 'N/A') -> dict:
     }
 
 
+def game_file_with_first_fielder(character: str) -> dict:
+    stat_file = game_file()
+    stat_file['Events'][0]['Pitch']['Contact'] = {
+        'Type of Contact': 'Nice - Left',
+        'Input Direction - Stick': 'Left',
+        'Frame of Swing Upon Contact': 4,
+        'Star Swing Five-Star': 'None',
+        'Ball Contact Pos - X': 0.0,
+        'Ball Contact Pos - Z': 0.0,
+        'First Fielder': {
+            'Fielder Character': character,
+            'Fielder Position': 'SS',
+            'Fielder Bobble': 'None',
+            'Fielder Action': 'None',
+            'Fielder Manual Selected': 'No Selected Char',
+        },
+    }
+    return stat_file
+
+
+def test_first_fielder_on_a_roster():
+    search = EventSearch(StatObj(game_file_with_first_fielder('Home 3')))
+    assert search.characterFieldingEvents('Home 3') == {0}
+
+
+def test_first_fielder_not_on_a_roster():
+    search = EventSearch(StatObj(game_file_with_first_fielder('Toad(Y)')))
+    assert search.characterFieldingEvents('Toad(Y)') == {0}
+    assert search.characterAtBatEvents('Toad(Y)') == set()
+    assert search.positionFieldingEvents('SS') == {0}
+
+
+def test_character_who_never_appears_has_no_events():
+    assert EventSearch(StatObj(game_file())).characterFieldingEvents('Luigi') == set()
+
+
 @pytest.mark.parametrize('label', ['Charged Captain Star', 'ChargedStar', 'Unable to Decode. Invalid Value (1).'])
 def test_every_charged_captain_star_label_is_searchable(label):
     search = EventSearch(StatObj(game_file(label)))
