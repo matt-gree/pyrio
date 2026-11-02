@@ -1874,10 +1874,16 @@ class EventObj():
     def contact_result_primary(self) -> Optional[str]:
         """
         Returns None if no contact in event.
+        Project Rio before 2.3.0 logged every result from Single through double play as
+        'Fair'. A sac fly is always caught, so that's corrected to 'Out'. The rest can't
+        be, since the file doesn't say which of those balls were fielded before landing.
         """
+        primary = self.contact_dict().get('Contact Result - Primary')
         if self.foulLoggedAsFair():
             return 'Foul'
-        return self.contact_dict().get('Contact Result - Primary')
+        if primary == 'Fair' and self.rioStat.versionBefore2_3() and self.result_of_AB() == 'SacFly':
+            return 'Out'
+        return primary
 
     def contact_result_secondary(self) -> Optional[str]:
         """
@@ -1888,7 +1894,7 @@ class EventObj():
         secondary = self.contact_dict().get('Contact Result - Secondary')
         if self.foulLoggedAsFair():
             return 'Foul'
-        if self.rioStat.versionBefore2_3() and self.result_of_AB() == 'Out':
+        if self.rioStat.versionBefore2_3() and self.result_of_AB() in ('Out', 'None'):
             out_type = self.runner_dict(0).get('Out Type')
             if out_type == 'Force':
                 return 'Out-force'

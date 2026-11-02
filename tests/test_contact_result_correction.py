@@ -1,7 +1,8 @@
 """Project Rio before 2.3.0 logged some contact results wrongly, and decoded files
 keep what they were written with: a force out as 'Out-tag', a tag out as 'Foul',
 and a foul that landed before the game called it foul as 'Fair' / 'Out-caught'.
-Reading a file from any version has to give the same answer.
+Those read the same as a 2.3.0 file. A hit logged as 'Fair' stays that way, since the
+file doesn't say whether it was fielded first.
 """
 import pytest
 
@@ -36,6 +37,30 @@ def test_old_force_out():
 
 def test_old_tag_out():
     assert event_with('Out', 'Fair', 'Foul', 'Tag').contact_result_secondary() == 'Out-tag'
+
+
+def test_old_force_out_with_no_result():
+    event = event_with('None', 'Fair', 'Out-tag', 'Force', next_event={**AT_BAT, 'Batter Roster Loc': 4})
+    assert event.contact_result_primary() == 'Fair'
+    assert event.contact_result_secondary() == 'Out-force'
+
+
+def test_old_tag_out_with_no_result():
+    event = event_with('None', 'Fair', 'Foul', 'Tag', next_event={**AT_BAT, 'Batter Roster Loc': 4})
+    assert event.contact_result_primary() == 'Fair'
+    assert event.contact_result_secondary() == 'Out-tag'
+
+
+def test_old_sac_fly_was_caught():
+    event = event_with('SacFly', 'Fair', 'SacFly', 'Caught')
+    assert event.contact_result_primary() == 'Out'
+    assert event.contact_result_secondary() == 'SacFly'
+
+
+@pytest.mark.parametrize('result', ['Single', 'Double', 'Triple', 'HR', 'Error', 'Fielders Choice',
+                                    'Bunt', 'Ground ball double Play'])
+def test_old_hit_stays_as_logged(result):
+    assert event_with(result, 'Fair', result).contact_result_primary() == 'Fair'
 
 
 def test_old_batter_safe_runner_out_is_left_alone():
@@ -97,6 +122,10 @@ def test_unfinished_play_is_not_called_a_foul():
     ('Out', 'Fair', 'Out-force', 'Force'),
     ('None', 'Foul', 'Foul', 'None'),
     ('None', 'Fair', 'None', 'None'),
+    ('None', 'Fair', 'Out-tag', 'Tag'),
+    ('SacFly', 'Out', 'SacFly', 'Caught'),
+    ('SacFly', 'Fair', 'SacFly', 'Caught'),
+    ('Single', 'Fielded', 'Single', 'None'),
 ])
 def test_current_files_are_left_alone(result, primary, secondary, batter_out):
     event = event_with(result, primary, secondary, batter_out, version='2.3.0')
