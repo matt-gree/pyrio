@@ -242,8 +242,9 @@ class StatObj:
                 and abs(self.score(0) - self.score(1)) >= MERCY_MARGIN)
 
     def wasQuit(self) -> bool:
-        # returns if the game was quit out early
-        return self.statJson["Quitter Team"] != ""
+        # returns if the game was quit out early, which includes a game cut off by a "Crash"
+        # no quitter is "None" in a decoded file, 255 in an encoded file and "" in old files
+        return self.statJson["Quitter Team"] not in ("", "None", 255)
 
     def quitter(self) -> str:
         # returns the name of the quitter if the game was quit. empty string if no quitter
