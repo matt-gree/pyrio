@@ -197,7 +197,7 @@ class LookupDicts:
 
     CHARGE_TYPE = {
         0: "N/A",
-        1: "ChargedStar",
+        1: "Charged Captain Star",
         2: "Slider",
         3: "Perfect"
     }
@@ -208,6 +208,12 @@ class LookupDicts:
         2: "Charge",
         3: "Star",
         4: "Bunt"
+    }
+
+    FIVE_STAR = {
+        0: "None",
+        1: "Moonshot",
+        2: "Failed Moonshot"
     }
 
     POSITION = {
@@ -294,12 +300,12 @@ class LookupDicts:
         8: "Double",
         9: "Triple",
         10: "HR",
-        11: "Error - Input",
-        12: "Error - Chem",
+        11: "Error",
+        12: "Fielders Choice",
         13: "Bunt",
         14: "SacFly",
         15: "Ground ball double Play",
-        16: "Foul catch",
+        255: "None",
     }
 
     FINAL_RESULT = {
@@ -308,14 +314,14 @@ class LookupDicts:
         2: "Walk (BB)",
         3: "Walk (HBP)",
         4: "Out",
-        5: "Caught",
-        6: "Caught line-drive",
+        5: "Caught line-drive",
+        6: "Caught",
         7: "Single",
         8: "Double",
         9: "Triple",
         10: "HR",
-        11: "Error - Input",
-        12: "Error - Chem",
+        11: "Error",
+        12: "Fielders Choice",
         13: "Bunt",
         14: "SacFly",
         15: "Ground ball double Play",

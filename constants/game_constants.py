@@ -92,6 +92,7 @@ SUPERSTAR_STAT_MODIFIERS = {
     "Bunting": (50, 100),
     "Slap Contact Size Multiplier": (50, 100),
     "Charge Contact Size Multiplier": (50, 100),
+    "Bunt Contact Size Multiplier": (50, None),
 }
 
 

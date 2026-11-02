@@ -40,9 +40,6 @@ from .hit_sim_report import (FieldSpec, ValidationReport, ci,
                              note_block_deflected, resolve_landing)
 from ..stat_file_parser import StatObj, EventObj
 
-# game Type of Swing codes that the simulator supports: 1 Slap, 2 Charge, 3 Star.
-_SUPPORTED_SWING_CODES = (1, 2, 3)
-
 # Backwards-compatible aliases (the comparison core moved to hit_sim_report).
 _ci = ci
 _FieldSpec = FieldSpec
@@ -102,38 +99,6 @@ def _landing_field_specs(landing_tol: float) -> list[FieldSpec]:
 
 # ---------------------------------------------------------------- core driver
 
-# A failed Moonshot (Texas Leaguer) pops up into this raw vertical-angle band
-# (hit_simulation: the forced pop-fly zone SHORT_ARRAY_ARRAY_807b6af4).
-_TEXAS_LEAGUER_VERT_BAND = (500, 550)
-
-
-def _is_texas_leaguer(event: EventObj, contact: dict, swing_code: int) -> bool:
-    """True for a likely Texas Leaguer -- a failed 5-star Moonshot the simulator
-    can't model.
-
-    A Moonshot fires on a fully-charged 5-star swing; a Perfect connect is the
-    dinger (recorded "Star Swing Five-Star" = 1, which hit_simulation DOES model),
-    and any other contact pops weakly up the middle. But a star swing zeroes its
-    charge in the recording, so a *failed* Moonshot is indistinguishable from a
-    regular 5-star swing on inputs alone -- except its launch lands in the forced
-    pop-fly vertical band. So flag it after the fact: a 5-star, non-dinger Star
-    swing whose recorded Vert Angle is in that band, and exclude it from validation
-    (the sim mis-handles it as a regular star swing).
-    """
-    if swing_code != 3:  # Star
-        return False
-    if _ci(contact.get("Star Swing Five-Star") or 0) == 1:
-        return False  # connected dinger -- modeled
-    if event.team_stars(event.batting_team()) < 5:
-        return False
-    try:
-        vert = _ci(contact.get("Vert Angle"))
-    except (TypeError, ValueError):
-        return False
-    lo, hi = _TEXAS_LEAGUER_VERT_BAND
-    return lo <= vert <= hi
-
-
 def _is_natural_landing(contact: dict) -> bool:
     """True if 'Ball Landing Position' is where the ball naturally came down,
     rather than a point determined by a fielder.
@@ -147,8 +112,8 @@ def _is_natural_landing(contact: dict) -> bool:
         the trajectory's landing -- e.g. a sliding interception fumbled into a
         hit. Only First Fielder Action 'None' is a clean natural landing.
     """
-    sec = contact.get("Contact Result - Secondary")
-    if sec is not None and G.to_encoded(LookupDicts.SECONDARY_CONTACT_RESULT, sec) == 0:
+    # Compare the raw value: older files have labels that are no longer in LookupDicts
+    if contact.get("Contact Result - Secondary") in ("Out-caught", 0):
         return False  # caught for an out
     action = (contact.get("First Fielder") or {}).get("Fielder Action", 0)
     try:
@@ -239,15 +204,11 @@ def validate_statobj(stat: StatObj, *, include_landing: bool = False,
             continue
         report.contact_events += 1
 
+        # swing_code feeds the Texas-Leaguer check below; every supported swing
+        # (bunt/slap/charge/star) is simulated. Genuinely unsupported swings raise
+        # in _inputs_from_event and are caught as a skip in the try block.
         swing = event.pitch_dict().get("Type of Swing")
         swing_code = G.to_encoded(LookupDicts.TYPE_OF_SWING, swing) if swing is not None else None
-        if swing_code not in _SUPPORTED_SWING_CODES:
-            report.skipped.append((game_id, i, f"unsupported swing: {swing!r}"))
-            continue
-
-        if _is_texas_leaguer(event, contact, swing_code):
-            report.skipped.append((game_id, i, "texas leaguer (unmodeled failed moonshot)"))
-            continue
 
         try:
             result = hs.simulate_hit_from_event(event, active_tags)
