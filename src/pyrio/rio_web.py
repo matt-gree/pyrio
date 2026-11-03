@@ -22,29 +22,52 @@ from .rio_value import lookup, Tables
 BASE_URL = "https://api.projectrio.app"
 
 
-def _load_key_from_file() -> Optional[str]:
-    """Try to load rio_key from rio_key.json in the current directory."""
+def _load_keys_from_file() -> dict:
+    """Try to load rio_key and api_key from rio_key.json in the current directory."""
     if os.path.exists("rio_key.json"):
         with open("rio_key.json", "r") as f:
-            return json.load(f).get("rio_key")
-    return None
+            data = json.load(f)
+        return {key: data.get(key) for key in ("rio_key", "api_key")}
+    return {}
 
 
 class RioWeb:
     """Unified client for the Project Rio API.
 
     Usage:
-        client = RioWeb()                           # key from env or rio_key.json
-        client = RioWeb(rio_key="your_key_here")    # explicit key
+        client = RioWeb()                           # credential from env or rio_key.json
+        client = RioWeb(api_key="your_key_here")    # explicit
 
         games_df = client.get_games(tag=["tournament"])
         games_raw = client.get_games(tag=["tournament"], raw=True)
+
+    Credentials, in the order this client looks for them:
+
+        api_key=   /  PYRIO_API_KEY  /  "api_key" in rio_key.json
+        rio_key=   /  PYRIO_KEY      /  "rio_key" in rio_key.json
+
+    Public reads -- games, stats, events, characters, game-mode lists -- need
+    no credential at all. Everything else is an API key's job: Rio Web bounds
+    what a credential may do by its kind, and a Rio Key belongs to the game
+    client (signing in, reading game modes, submitting games) rather than to a
+    person managing communities. A Rio Key still works for management calls
+    today and will stop; `request_api_key()` is the one-time migration.
+
+    A few operations need a session rather than any key -- group membership,
+    password or email changes, key rotation, account deletion, another user's
+    IP history -- because a credential may not be used to increase its own
+    authority. `login()` provides one.
     """
 
-    def __init__(self, rio_key: str = None, base_url: str = BASE_URL, cache_dir: str = None):
-        self.rio_key = rio_key or os.environ.get("PYRIO_KEY") or _load_key_from_file()
-        if not self.rio_key:
-            print("WARNING: No Rio API key found. Set PYRIO_KEY env var, pass rio_key=, or create rio_key.json.")
+    def __init__(self, rio_key: str = None, api_key: str = None,
+                 base_url: str = BASE_URL, cache_dir: str = None):
+        keys = _load_keys_from_file()
+        self.api_key = api_key or os.environ.get("PYRIO_API_KEY") or keys.get("api_key")
+        self.rio_key = rio_key or os.environ.get("PYRIO_KEY") or keys.get("rio_key")
+        if not self.api_key and not self.rio_key:
+            print("WARNING: No Rio Web credential found. Set PYRIO_API_KEY (preferred) or "
+                  "PYRIO_KEY, pass api_key=/rio_key=, or create rio_key.json.")
+        self._warned_about_rio_key = False
         self.base_url = base_url
         self._cache_dir = cache_dir
         self.session = requests.Session()
@@ -66,44 +89,71 @@ class RioWeb:
     # Internal HTTP methods
     # -------------------------------------------------------------------------
 
-    def _get(self, endpoint: str, params: dict = None) -> dict:
+    def _get(self, endpoint: str, params: dict = None, authed: bool = False) -> dict:
         url = self.base_url + endpoint
-        response = self.session.get(url, params=params)
+        response = self.session.get(url, params=params,
+                                    headers=self._auth_headers() if authed else None)
         raise_for_status(response)
         return response.json()
 
-    def _post(self, endpoint: str, data: dict = None) -> dict:
+    def _post(self, endpoint: str, data: dict = None, authed: bool = False) -> dict:
         url = self.base_url + endpoint
-        response = self.session.post(url, json=data)
+        response = self.session.post(url, json=data,
+                                     headers=self._auth_headers() if authed else None)
         raise_for_status(response)
         return response.json()
 
-    def _post_with_key(self, endpoint: str, data: dict = None) -> dict:
-        if data is None:
-            data = {}
-        # Send the Rio Key only when there is no session. A session outranks it
-        # -- it is the only credential allowed to change group membership, your
-        # password or your keys -- and sending both lets the server resolve the
-        # weaker one and refuse. See login().
-        if not self._has_session:
-            data["rio_key"] = self.rio_key
-        return self._post(endpoint, data)
+    def _post_authed(self, endpoint: str, data: dict = None) -> dict:
+        return self._post(endpoint, {} if data is None else data, authed=True)
+
+    def _auth_headers(self) -> dict:
+        """The credential to present on this request, as a header.
+
+        Three things are going on here.
+
+        **The API key is preferred.** Rio Web is moving to a model where a
+        credential's *kind* bounds what it may do: a Rio Key belongs to the game
+        client and is trusted for signing in, reading game modes and submitting
+        games, while an API key is what a person at a terminal uses -- managing
+        communities, game modes and moderation. They are deliberately disjoint,
+        so a Rio Key will stop being accepted for the management calls on this
+        client no matter who owns it. Run `request_api_key()` once; see the
+        warning below.
+
+        **It goes in a header, not the body or the query string.** A credential
+        in a query string ends up in the server's access logs; headers are not
+        logged. The same key in `X-Rio-Auth` is the same authority with none of
+        that, which is why this replaced the old `rio_key` body field and
+        `_key_params()`.
+
+        **Nothing is sent when a session exists.** A session outranks a key, and
+        the server resolves the header *before* the session -- so sending both
+        would hand a ceiling operation (group membership, password, key
+        rotation) the weaker credential and get it refused. See login().
+        """
+        if self._has_session:
+            return {}
+        if self.api_key:
+            return {"X-Rio-Auth": f"api-key {self.api_key}"}
+        if self.rio_key:
+            self._warn_about_rio_key()
+            return {"X-Rio-Auth": f"rio-key {self.rio_key}"}
+        return {}
+
+    def _warn_about_rio_key(self) -> None:
+        """Say once, not per call, that a Rio Key is the wrong credential here."""
+        if self._warned_about_rio_key:
+            return
+        self._warned_about_rio_key = True
+        print("WARNING: using your Rio Key for a management call. Rio Web is moving these "
+              "to API keys and will stop accepting a Rio Key for them. To get one: "
+              "client.login(email, password) then client.request_api_key(), and set "
+              "PYRIO_API_KEY or put api_key in rio_key.json.")
 
     @property
     def _has_session(self) -> bool:
         """True once login() has succeeded and not been undone by logout()."""
         return "Authorization" in self.session.headers
-
-    def _key_params(self, params: dict) -> dict:
-        """Add the Rio Key to query params, unless a session makes it redundant.
-
-        Keeping it out of the query string when it is not needed matters: access
-        logs record the path and query string, so a key sent this way ends up on
-        disk. Headers are not logged.
-        """
-        if not self._has_session:
-            params = {**params, "rio_key": self.rio_key}
-        return params
 
     @staticmethod
     def _strip_value(v):
@@ -187,7 +237,7 @@ class RioWeb:
     # -------------------------------------------------------------------------
 
     def create_community(self, community_name: str, private: bool, global_link: bool, desc: str, comm_type: str = "Unofficial") -> dict:
-        return self._post_with_key("/community/create", {
+        return self._post_authed("/community/create", {
             "community_name": community_name,
             "type": comm_type,
             "private": private,
@@ -196,18 +246,18 @@ class RioWeb:
         })
 
     def community_invite(self, community_name: str, invite_list: list) -> dict:
-        return self._post_with_key("/community/invite", {
+        return self._post_authed("/community/invite", {
             "community_name": community_name,
             "invite_list": invite_list,
         })
 
     def community_members(self, community_name: str) -> dict:
-        return self._post_with_key("/community/members", {
+        return self._post_authed("/community/members", {
             "community_name": community_name,
         })
 
     def community_tags(self, community_name: str) -> dict:
-        return self._post_with_key("/community/tags", {
+        return self._post_authed("/community/tags", {
             "community_name": community_name,
         })
 
@@ -216,21 +266,21 @@ class RioWeb:
 
         user_list: list of dicts with keys: username, admin, remove, ban, key
         """
-        return self._post_with_key("/community/manage", {
+        return self._post_authed("/community/manage", {
             "community_name": community_name,
             "user_list": user_list,
         })
 
     def community_sponsor(self, community_name: str, action: str) -> dict:
         """Manage community sponsors. action: 'Get', 'Remove', or 'Add'."""
-        return self._post_with_key("/community/sponsor", {
+        return self._post_authed("/community/sponsor", {
             "community_name": community_name,
             "action": action,
         })
 
     def community_key(self, community_name: str, action: str) -> dict:
         """Manage community keys. action: 'generate', 'revoke', or 'generate_all'."""
-        return self._post_with_key("/community/key", {
+        return self._post_authed("/community/key", {
             "community_name": community_name,
             "action": action,
         })
@@ -251,7 +301,7 @@ class RioWeb:
             data["private"] = private
         if active_tag_set_limit is not None:
             data["active_tag_set_limit"] = active_tag_set_limit
-        return self._post_with_key("/community/update", data)
+        return self._post_authed("/community/update", data)
 
     # -------------------------------------------------------------------------
     # Tag management (POST)
@@ -270,7 +320,7 @@ class RioWeb:
                 data["gecko_code_desc"] = gecko_code_desc
             if gecko_code is not None:
                 data["gecko_code"] = gecko_code
-        return self._post_with_key("/tag/create", data)
+        return self._post_authed("/tag/create", data)
 
     def update_tag(self, tag_id: int, name: str = None, desc: str = None, tag_type: str = None,
                    gecko_code_desc: str = None, gecko_code: str = None) -> dict:
@@ -286,7 +336,7 @@ class RioWeb:
                 data["gecko_code"] = gecko_code
             if gecko_code_desc is not None:
                 data["gecko_code_desc"] = gecko_code_desc
-        return self._post_with_key("/tag/update", data)
+        return self._post_authed("/tag/update", data)
 
     def list_tags(self, tag_type=None, community_ids=None) -> dict:
         data = {}
@@ -294,7 +344,7 @@ class RioWeb:
             data["Types"] = tag_type
         if community_ids:
             data["community_ids"] = community_ids
-        return self._post_with_key("/tag/list", data)
+        return self._post_authed("/tag/list", data)
 
     # -------------------------------------------------------------------------
     # Game mode management (POST)
@@ -315,7 +365,7 @@ class RioWeb:
             data["add_tag_ids"] = add_tag_ids
         if mirror_tags_from:
             data["tag_set_id"] = mirror_tags_from
-        return self._post_with_key("/tag_set/create", data)
+        return self._post_authed("/tag_set/create", data)
 
     def update_game_mode(self, tag_set_id: int, name: str = None, desc: str = None,
                          game_mode_type: str = None, start_date: str = None, end_date: str = None,
@@ -335,10 +385,10 @@ class RioWeb:
             data["add_tag_ids"] = add_tag_ids
         if remove_tag_ids is not None:
             data["remove_tag_ids"] = remove_tag_ids
-        return self._post_with_key("/tag_set/update", data)
+        return self._post_authed("/tag_set/update", data)
 
     def delete_game_mode(self, name: str) -> dict:
-        return self._post_with_key("/tag_set/delete", {"name": name})
+        return self._post_authed("/tag_set/delete", {"name": name})
 
     def list_game_modes(self, active: bool = False, community_ids=None) -> dict:
         data = {}
@@ -346,13 +396,13 @@ class RioWeb:
             data["Active"] = "t"
         if community_ids:
             data["Communities"] = community_ids
-        return self._post_with_key("/tag_set/list", data)
+        return self._post_authed("/tag_set/list", data)
 
     def game_mode_tags(self, tag_set_id: int) -> dict:
         return self._get(f"/tag_set/{tag_set_id}")
 
     def game_mode_ladder(self, game_mode_name: str) -> dict:
-        return self._post_with_key("/tag_set/ladder", {"TagSet": game_mode_name})
+        return self._post_authed("/tag_set/ladder", {"TagSet": game_mode_name})
 
     # -------------------------------------------------------------------------
     # User management
@@ -384,41 +434,77 @@ class RioWeb:
         return response.get("username")
 
     def logout(self) -> None:
-        """Drop the session, falling back to the Rio Key for later requests."""
+        """Drop the session, falling back to the stored key for later requests."""
         self.session.headers.pop("Authorization", None)
+
+    def request_api_key(self) -> str:
+        """Mint this account's API key and start using it. Needs a session.
+
+        An API key is the credential for everything this client does other than
+        public reads. Rotating or minting one is deliberately session-only --
+        a leaked key must not be able to roll the key it leaked and lock the
+        owner out -- so call login() first:
+
+            client = RioWeb()
+            client.login(email, password)
+            key = client.request_api_key()     # also mailed to the account
+
+        Store it as PYRIO_API_KEY, or as "api_key" in rio_key.json, and later
+        runs will pick it up with no login. One key per account: if the account
+        already has one, this raises and reset_api_key() is the way back.
+        """
+        return self._remember_api_key(self._post("/api_key/register/"))
+
+    def reset_api_key(self) -> str:
+        """Roll this account's API key over and start using the new one.
+
+        Needs a session, for the same reason as request_api_key(). This is the
+        recovery path for a key you no longer have -- the old one stops working
+        the moment this returns, so anything still holding it will need the new
+        value.
+        """
+        return self._remember_api_key(self._post("/api_key/reset/"))
+
+    def _remember_api_key(self, response: dict) -> str:
+        """Use the key the server just issued for the rest of this client's life."""
+        self.api_key = response["api_key"]
+        if not response.get("email_sent", True):
+            print("NOTE: Rio Web could not email this key. It is returned here and "
+                  "nowhere else, so store it now.")
+        return self.api_key
 
     def list_users(self) -> dict:
         return self._get("/user/all")
 
     def add_user_to_group(self, username: str, group_name: str) -> dict:
-        return self._post_with_key("/user_group/add_user", {
+        return self._post_authed("/user_group/add_user", {
             "username": username,
             "group_name": group_name,
         })
 
     def remove_user_from_group(self, username: str, group_name: str) -> dict:
-        return self._post_with_key("/user_group/remove_user", {
+        return self._post_authed("/user_group/remove_user", {
             "username": username,
             "group_name": group_name,
         })
 
     def check_user_in_group(self, username: str, group_name: str) -> dict:
-        return self._get("/user_group/check_for_member", self._key_params({
+        return self._get("/user_group/check_for_member", {
             "username": username,
             "group_name": group_name,
-        }))
+        }, authed=True)
 
     def group_members(self, group_name: str) -> dict:
-        return self._get("/user_group/members", self._key_params({
+        return self._get("/user_group/members", {
             "group_name": group_name,
-        }))
+        }, authed=True)
 
     # -------------------------------------------------------------------------
     # Game management (POST)
     # -------------------------------------------------------------------------
 
     def delete_game(self, game_id: int) -> dict:
-        return self._post_with_key("/delete_game/", {"game_id": game_id})
+        return self._post_authed("/delete_game/", {"game_id": game_id})
 
     def manual_game_submit(self, winner_username: str, winner_score: int, loser_username: str,
                            loser_score: int, date: str, tag_set: str, recalc: bool = True,
@@ -437,7 +523,10 @@ class RioWeb:
             data["game_id_dec"] = game_id_dec
         if game_id_hex is not None:
             data["game_id_hex"] = game_id_hex
-        return self._post("/manual_submit_game/", data)
+        # submitter_rio_key stays: it is a field this endpoint reads by name to
+        # decide who is submitting, not the request's credential. The header is
+        # what authenticates the call.
+        return self._post("/manual_submit_game/", data, authed=True)
 
     # -------------------------------------------------------------------------
     # Response processing (private)
