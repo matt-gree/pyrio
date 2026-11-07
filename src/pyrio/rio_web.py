@@ -120,24 +120,36 @@ class RioWeb:
         client no matter who owns it. Run `request_api_key()` once; see the
         warning below.
 
-        **It goes in a header, not the body or the query string.** A credential
-        in a query string ends up in the server's access logs; headers are not
-        logged. The same key in `X-Rio-Auth` is the same authority with none of
-        that, which is why this replaced the old `rio_key` body field and
-        `_key_params()`.
+        **It goes in `Authorization`, not the body or the query string.** A
+        credential in a query string ends up in the server's access logs, which
+        is why this replaced the old `rio_key` body field and `_key_params()`.
+        The field is the standard one rather than a private `X-Rio-Auth`
+        because `Authorization` is what the rest of the stack already treats as
+        a secret: shared caches must not reuse a response to a request carrying
+        it, HTTP clients drop it across a cross-origin redirect, and log
+        pipelines redact it by default. A custom header name gets none of that.
 
-        **Nothing is sent when a session exists.** A session outranks a key, and
-        the server resolves the header *before* the session -- so sending both
-        would hand a ceiling operation (group membership, password, key
-        rotation) the weaker credential and get it refused. See login().
+        The scheme names are `ApiKey` and `RioKey` -- RFC 9110's
+        `credentials = auth-scheme [ 1*SP token68 ]`, matched case-insensitively
+        by the server. The hyphenated `api-key`/`rio-key` spellings this used to
+        send are **not** accepted: they went with `X-Rio-Auth`, which never
+        shipped, so there was no reason to carry two names for one scheme.
+
+        **Nothing is sent when a session exists.** `login()` puts
+        `Authorization: Bearer <jwt>` on the session, and a per-request header
+        of the same name replaces it -- a key and a session share one field now,
+        so they cannot both be sent. Returning `{}` here is what lets the
+        session's token through, and that matters because the ceiling
+        operations (group membership, password, key rotation) are session-only:
+        a key reaching them is refused. See login().
         """
         if self._has_session:
             return {}
         if self.api_key:
-            return {"X-Rio-Auth": f"api-key {self.api_key}"}
+            return {"Authorization": f"ApiKey {self.api_key}"}
         if self.rio_key:
             self._warn_about_rio_key()
-            return {"X-Rio-Auth": f"rio-key {self.rio_key}"}
+            return {"Authorization": f"RioKey {self.rio_key}"}
         return {}
 
     def _warn_about_rio_key(self) -> None:
