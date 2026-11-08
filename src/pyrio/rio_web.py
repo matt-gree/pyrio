@@ -414,7 +414,10 @@ class RioWeb:
         return self._get(f"/tag_set/{tag_set_id}")
 
     def game_mode_ladder(self, game_mode_name: str) -> dict:
-        return self._post_authed("/tag_set/ladder", {"TagSet": game_mode_name})
+        # The trailing slash is load-bearing; see Endpoint in api.py. Spelled
+        # "/tag_set/ladder" until sweep S45, which cost this call a 308 and a
+        # second round trip with the Authorization header re-sent to it.
+        return self._post_authed("/tag_set/ladder/", {"TagSet": game_mode_name})
 
     # -------------------------------------------------------------------------
     # User management
@@ -486,7 +489,10 @@ class RioWeb:
         return self.api_key
 
     def list_users(self) -> dict:
-        return self._get("/user/all")
+        # Slashed, as the server registers it -- see Endpoint in api.py. The
+        # route is @public, so unlike the ladder above this one paid only the
+        # wasted round trip.
+        return self._get("/user/all/")
 
     def add_user_to_group(self, username: str, group_name: str) -> dict:
         return self._post_authed("/user_group/add_user", {

@@ -4,6 +4,26 @@ from .rio_value import create_translated_columns
 
 
 class Endpoint:
+    """Rio Web paths, with the trailing slash exactly as the server spells it.
+
+    The slash is part of the path, not decoration. Rio Web registers 39 of its
+    73 paths with one and 34 without, and the split follows nothing -- no rule
+    can be applied here, only the server's own spelling, endpoint by endpoint.
+    Werkzeug answers a slashed rule asked for without its slash with a 308 to
+    the slashed form, and an unslashed rule asked for with one a flat 404.
+
+    Every constant below was already right. What was wrong were the paths this
+    client spells inline at the call site instead of here -- "/tag_set/ladder"
+    and "/user/all", both fixed in sweep S45, each having cost a redirect and
+    one of them with a credential re-sent across it. Nothing caught them
+    because the mismatch is invisible against a deployed server: Flask raises
+    FormDataRoutingRedirect on a non-GET redirect only while debug is on, for
+    any body or none, and plain 308s with it off.
+
+    A new endpoint belongs here rather than inline, and its slash is whatever
+    the app's route table says and nothing else.
+    """
+
     LANDING_DATA = "/landing_data/"
     STATS = "/stats/"
     CHARACTERS = "/characters/"
