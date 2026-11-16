@@ -542,11 +542,18 @@ class StatObj:
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
         return float(self.outsPitched(teamNum, rosterNum)) / 3
 
-    def pitchesPerPosition(self, teamNum: int, rosterNum: int) -> dict:
-        # returns a dict which tracks how many pitches a character was at a position for
+    def battersPerPosition(self, teamNum: int, rosterNum: int) -> dict:
+        # returns a dict which tracks how many batters a character faced at each position
+        # Rio renamed "Pitches Per Position" to "Batters Per Position" in 2022; older files use the old key
         # rosterNum: 0 -> 8 for each of the 9 roster spots
         ErrorChecker.check_roster_num_no_neg(rosterNum)
-        return self.defensiveStats(teamNum, rosterNum)["Pitches Per Position"][0]
+        stats = self.defensiveStats(teamNum, rosterNum)
+        key = "Batters Per Position" if "Batters Per Position" in stats else "Pitches Per Position"
+        return stats[key][0]
+
+    def pitchesPerPosition(self, teamNum: int, rosterNum: int) -> dict:
+        # the old name for battersPerPosition, kept so existing callers still work
+        return self.battersPerPosition(teamNum, rosterNum)
 
     def outsPerPosition(self, teamNum: int, rosterNum: int) -> dict:
         # returns a dict which tracks how many outs a character was at a position for
