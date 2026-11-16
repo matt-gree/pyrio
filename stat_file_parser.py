@@ -733,16 +733,18 @@ class StatObj:
 
     def obp(self, teamNum: int, rosterNum: int = -1) -> float:
         # returns the on base percentage of a character
-        # 0.0 with no at-bats
+        # (H + BB + HBP) / (AB + BB + HBP + SF). At Bats doesn't include walks or hit by pitches
+        # 0.0 with no plate appearances
         # if no character given, returns the on base percentage of a team
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
         nAtBats = self.atBats(teamNum, rosterNum)
         nHits = self.hits(teamNum, rosterNum)
-        nWalks = self.walks(teamNum, rosterNum)
-        return rate(nHits + nWalks, nAtBats)
+        nWalks = self.walks(teamNum, rosterNum)  # ball four and hit by pitch
+        nSacFlys = self.sacFlys(teamNum, rosterNum)
+        return rate(nHits + nWalks, nAtBats + nWalks + nSacFlys)
 
     def slg(self, teamNum: int, rosterNum: int = -1) -> float:
-        # returns the SLG of a character
+        # returns the SLG of a character: total bases / at-bats
         # 0.0 with no at-bats
         # if no character given, returns the SLG of a team
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
@@ -751,8 +753,7 @@ class StatObj:
         nDoubles = self.doubles(teamNum, rosterNum)
         nTriples = self.triples(teamNum, rosterNum)
         nHomeruns = self.homeruns(teamNum, rosterNum)
-        nWalks = self.walks(teamNum, rosterNum)
-        return rate(nSingles + nDoubles * 2 + nTriples * 3 + nHomeruns * 4, nAtBats - nWalks)
+        return rate(nSingles + nDoubles * 2 + nTriples * 3 + nHomeruns * 4, nAtBats)
 
     def ops(self, teamNum: int, rosterNum: int = -1) -> float:
         # returns the OPS of a character
