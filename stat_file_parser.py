@@ -62,6 +62,14 @@ SWAPPED_CAUGHT_RESULT_OF_AB = {
 UNFINISHED_PLAY_NUM_OUTS = 255
 
 
+def rate(numerator: float, denominator: float) -> float:
+    """numerator / denominator, or 0.0 when there's nothing to divide by, like a character with no
+    at-bats or who never pitched."""
+    if denominator <= 0:
+        return 0.0
+    return float(numerator) / float(denominator)
+
+
 class ErrorChecker:
     @staticmethod
     def check_team_num(teamNum: int) -> None:
@@ -357,9 +365,10 @@ class StatObj:
     # defensive stats
     def era(self, teamNum: int, rosterNum: int = -1) -> float:
         # tells the era of a character
+        # 0.0 if they never pitched
         # if no character given, returns era of that team
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
-        return 9 * float(self.runsAllowed(teamNum, rosterNum)) / self.inningsPitched(teamNum, rosterNum)
+        return 9 * rate(self.runsAllowed(teamNum, rosterNum), self.inningsPitched(teamNum, rosterNum))
 
     def battersFaced(self, teamNum: int, rosterNum: int = -1) -> int:
         # tells how many batters were faced by character
@@ -715,23 +724,26 @@ class StatObj:
 
     def battingAvg(self, teamNum: int, rosterNum: int = -1) -> float:
         # returns the batting average of a character
+        # 0.0 with no at-bats
         # if no character given, returns the batting average of a team
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
         nAtBats = self.atBats(teamNum, rosterNum)
         nHits = self.hits(teamNum, rosterNum)
-        return float(nHits) / float(nAtBats)
+        return rate(nHits, nAtBats)
 
     def obp(self, teamNum: int, rosterNum: int = -1) -> float:
         # returns the on base percentage of a character
+        # 0.0 with no at-bats
         # if no character given, returns the on base percentage of a team
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
         nAtBats = self.atBats(teamNum, rosterNum)
         nHits = self.hits(teamNum, rosterNum)
         nWalks = self.walks(teamNum, rosterNum)
-        return float(nHits + nWalks) / float(nAtBats)
+        return rate(nHits + nWalks, nAtBats)
 
     def slg(self, teamNum: int, rosterNum: int = -1) -> float:
         # returns the SLG of a character
+        # 0.0 with no at-bats
         # if no character given, returns the SLG of a team
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
         nAtBats = self.atBats(teamNum, rosterNum)
@@ -740,7 +752,7 @@ class StatObj:
         nTriples = self.triples(teamNum, rosterNum)
         nHomeruns = self.homeruns(teamNum, rosterNum)
         nWalks = self.walks(teamNum, rosterNum)
-        return float(nSingles + nDoubles * 2 + nTriples * 3 + nHomeruns * 4) / float(nAtBats - nWalks)
+        return rate(nSingles + nDoubles * 2 + nTriples * 3 + nHomeruns * 4, nAtBats - nWalks)
 
     def ops(self, teamNum: int, rosterNum: int = -1) -> float:
         # returns the OPS of a character
