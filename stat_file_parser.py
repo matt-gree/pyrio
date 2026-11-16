@@ -364,11 +364,21 @@ class StatObj:
 
     # defensive stats
     def era(self, teamNum: int, rosterNum: int = -1) -> float:
-        # tells the era of a character
+        # tells the era of a character, from earned runs
         # 0.0 if they never pitched
         # if no character given, returns era of that team
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
-        return 9 * rate(self.runsAllowed(teamNum, rosterNum), self.inningsPitched(teamNum, rosterNum))
+        return 9 * rate(self.earnedRuns(teamNum, rosterNum), self.inningsPitched(teamNum, rosterNum))
+
+    def earnedRuns(self, teamNum: int, rosterNum: int = -1) -> int:
+        # tells how many earned runs a character allowed when pitching
+        # files without Earned Runs count every run allowed instead
+        # if no character given, returns earned runs allowed by that team
+        # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
+        if rosterNum == -1:
+            return sum(self.earnedRuns(teamNum, x) for x in range(0, 9))
+        stats = self.defensiveStats(teamNum, rosterNum)
+        return stats.get("Earned Runs", stats["Runs Allowed"])
 
     def battersFaced(self, teamNum: int, rosterNum: int = -1) -> int:
         # tells how many batters were faced by character

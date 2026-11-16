@@ -21,6 +21,6 @@ def test_era_with_runs_but_no_innings_is_zero():
 def test_real_values_are_unchanged():
     stat = StatObj(make_stat(overrides={(0, 0): {
         'Offensive Stats': {'At Bats': 4, 'Hits': 2, 'Singles': 2},
-        'Defensive Stats': {'Runs Allowed': 1, 'Outs Pitched': 9}}}))
+        'Defensive Stats': {'Runs Allowed': 1, 'Earned Runs': 1, 'Outs Pitched': 9}}}))
     assert stat.battingAvg(0, 0) == pytest.approx(0.5)
     assert stat.era(0, 0) == pytest.approx(3.0)
