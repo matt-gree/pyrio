@@ -62,6 +62,12 @@ SWAPPED_CAUGHT_RESULT_OF_AB = {
 UNFINISHED_PLAY_NUM_OUTS = 255
 
 
+def per_position(values: list) -> dict:
+    """A per-position stat as {position: count}. Rio writes these as a list holding one object, or
+    an empty list when the character has none at any position."""
+    return values[0] if values else {}
+
+
 def rate(numerator: float, denominator: float) -> float:
     """numerator / denominator, or 0.0 when there's nothing to divide by, like a character with no
     at-bats or who never pitched."""
@@ -549,7 +555,7 @@ class StatObj:
         ErrorChecker.check_roster_num_no_neg(rosterNum)
         stats = self.defensiveStats(teamNum, rosterNum)
         key = "Batters Per Position" if "Batters Per Position" in stats else "Pitches Per Position"
-        return stats[key][0]
+        return per_position(stats[key])
 
     def pitchesPerPosition(self, teamNum: int, rosterNum: int) -> dict:
         # the old name for battersPerPosition, kept so existing callers still work
@@ -559,7 +565,7 @@ class StatObj:
         # returns a dict which tracks how many outs a character was at a position for
         # rosterNum: 0 -> 8 for each of the 9 roster spots
         ErrorChecker.check_roster_num_no_neg(rosterNum)
-        return self.defensiveStats(teamNum, rosterNum)["Outs Per Position"][0]
+        return per_position(self.defensiveStats(teamNum, rosterNum)["Outs Per Position"])
 
     # offensive stats
 
