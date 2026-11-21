@@ -1,9 +1,15 @@
 """MSSB stadium outfield-wall geometry and Peach Garden note blocks.
 
-Ported from the batting calculator's index.js (`stadiums`, `noteBlocks`,
-`isHomeRun`, `hitNoteBlock`). Each outfield wall is a set of line segments in
-the field X/Z plane: for segment i the wall runs from x = starting_x[i] to
-x = ending_x[i] along the line  z = m[i] * x + c[i]  with height wall_height[i].
+Each outfield wall is a set of line segments in the field X/Z plane: for
+segment i the wall runs from x = starting_x[i] to x = ending_x[i] along the
+line  z = m[i] * x + c[i]  with height wall_height[i]. STADIUM_WALLS is derived
+from the game's own collision models (see tools/derive_stadium_walls.py); the
+note blocks and the isHomeRun / hitNoteBlock logic come from the batting
+calculator's index.js.
+
+A segment holds one height, so this cannot express a wall whose top slopes, nor
+a tall surface standing behind a shorter one. Neither occurs in the seven
+stadiums; the generator checks for both.
 
 Keys match ``StatObj.stadium()`` normalized names (e.g. "Peach Garden", not
 the JS's "Peach Gardens").
@@ -18,67 +24,84 @@ import math
 import os
 from typing import Iterable, Optional
 
-# Each stadium: parallel arrays exactly as in the JS `stadiums` constant.
+# Derived from the stadium collision models by tools/derive_stadium_walls.py,
+# which reproduces them exactly: wall-typed triangles (BALL_COLLISION_TYPE_WALL,
+# fair territory only), nearest surface per x, height taken as the top of the
+# wall standing there. Regenerate rather than hand-editing.
+#
+# This replaces the transcription of the JS `stadiums` constant. The two agree
+# on the wall's position everywhere -- the old breakpoints were these values
+# rounded to integers -- and on height at Wario Palace, Yoshi Park, Bowser
+# Castle, DK Jungle and Peach Garden's middle. Two of the old heights were
+# wrong, in opposite directions, so they were transcription slips rather than
+# any systematic bias:
+#   Mario Stadium        was 3,  is 4.0  (all 8 wall panels measure 4.00)
+#   Peach Garden corners were 8, are 7.0 (all 9 corner triangles measure 7.000)
+# Toy Field was absent from the JS table and is included here.
 STADIUM_WALLS = {
-    "Mario Stadium": {
-        "starting_x": [-57, -44, -14, 16],
-        "ending_x": [-44, -14, 16, 57],
-        "wall_height": [3, 3, 3, 3],
-        "m": [1.65, 0.69, 0, -1.05],
-        "c": [151.3, 110.7, 100, 116.8],
-    },
-    "Peach Garden": {
-        "starting_x": [-59, -53, -45, -35, -32, -30, -14.3, -7, -5, 5, 7, 14.3, 30, 32, 35, 45, 53],
-        "ending_x": [-53, -45, -35, -32, -30, -14.3, -7, -5, 5, 7, 14.3, 30, 32, 35, 45, 53, 59],
-        "wall_height": [8, 8, 8, 18, 18, 18, 18, 21, 23, 21, 18, 18, 18, 18, 8, 8, 8],
-        "m": [2, 1.5, 0.7, -1 / 3, 0.5, -0.064, -0.205, -0.1, 0, 0.1, 0.205, 0.064, -0.5, 1 / 3, -0.7, -1.5, -2],
-        "c": [177, 150.5, 114.5, 78.33, 105, 88.08, 86.07, 86.8, 87.3, 86.8, 86.07, 88.08, 105, 78.33, 114.5, 150.5, 177],
-    },
-    "Wario Palace": {
-        "starting_x": [-51, -49, -39, -26, -9, 9, 26, 39, 49],
-        "ending_x": [-49, -39, -26, -9, 9, 26, 39, 49, 51],
-        "wall_height": [5, 5, 5, 5, 5, 5, 5, 5, 5],
-        "m": [6.25, 1.55, 0.923, 0.412, 0, -0.412, -0.923, -1.55, -6.25],
-        "c": [369.75, 139.75, 115, 101.712, 98, 101.712, 115, 139.75, 369.75],
-    },
-    "Yoshi Park": {
-        "starting_x": [-58, -52, -40, -25, -9, 9, 25, 40, 52],
-        "ending_x": [-52, -40, -25, -9, 9, 25, 40, 52, 58],
-        "wall_height": [3.2, 3.2, 3.2, 3.2, 3.2, 3.2, 3.2, 3.2, 3.2],
-        "m": [5 / 3, 1, 0.6, 0.25, 0, -0.25, -0.6, -1, -5 / 3],
-        "c": [154.66666, 120, 104, 95.25, 93, 95.25, 104, 120, 154.66666],
+    "Bowser Castle": {
+        "starting_x": [-54.4363, -54.0623, -53.4676, -52.217, -45.3188, -36.6322, -26.8103, -21.2497, -20.0654, -18.5346, -17.4522, -15.9191, -8.1376, 8.1376, 15.9191, 17.4522, 18.5346, 20.0654, 21.2497, 26.8103, 36.6322, 45.3188, 52.217, 53.4676, 54.0623],
+        "ending_x": [-54.0623, -53.4676, -52.217, -45.3188, -36.6322, -26.8103, -21.2497, -20.0654, -18.5346, -17.4522, -15.9191, -8.1376, 8.1376, 15.9191, 17.4522, 18.5346, 20.0654, 21.2497, 26.8103, 36.6322, 45.3188, 52.217, 53.4676, 54.0623, 54.4363],
+        "wall_height": [16.64, 16.64, 12.0, 5.0, 5.0, 5.0, 12.0, 12.0, 12.0, 12.0, 12.0, 12.0, 12.0, 12.0, 12.0, 12.0, 12.0, 12.0, 12.0, 5.0, 5.0, 5.0, 12.0, 16.64, 16.64],
+        "m": [-1.000004, 1.0, 1.715334, 1.32012, 0.931046, 0.547168, 0.323751, -1.000002, 0.0, 0.999998, 0.478278, 0.200553, 0.0, -0.200553, -0.478278, -0.999998, 0.0, 1.000002, -0.323749, -0.547168, -0.931046, -1.32012, -1.715334, -1.0, 1.000004],
+        "c": [2.7247, 108.0682, 150.5376, 129.9007, 112.2683, 98.206, 92.2161, 64.0868, 84.1522, 102.6868, 95.0398, 90.6187, 88.9866, 90.6187, 95.0398, 102.6868, 84.1522, 64.0868, 92.2161, 98.206, 112.2683, 129.9007, 150.5376, 108.0682, 2.7247],
     },
     "DK Jungle": {
-        "starting_x": [-50, -43, -33, -26, -10, 10, 26, 40, 49],
-        "ending_x": [-43, -33, -26, -10, 10, 26, 40, 49, 50],
-        "wall_height": [3.5, 6.9, 3.5, 3.7, 3.8, 3.8, 3.8, 3.7, 3.7],
-        "m": [19 / 7, 17 / 10, 5 / 7, 3 / 8, 0, -3 / 8, -6 / 7, -17 / 9, -12],
-        "c": [185.7, 142.1, 109.6, 100.75, 97, 100.75, 113.3, 154.6, 650],
+        "starting_x": [-51.2114, -46.0863, -42.8404, -42.7986, -33.1491, -33.1318, -25.9913, -20.4, -9.0226, 9.0603, 20.4, 26.0511, 39.2906, 40.1068, 49.0594],
+        "ending_x": [-46.0863, -42.8404, -42.7986, -33.1491, -33.1318, -25.9913, -20.4, -9.0226, 9.0603, 20.4, 26.0511, 39.2906, 40.1068, 49.0594, 51.4519],
+        "wall_height": [3.5, 3.5, 6.83, 6.83, 3.5, 3.5, 3.5, 3.68, 4.0, 3.5, 4.0, 4.0, 3.52, 3.5, 3.52],
+        "m": [1.685197, 2.813405, 2.813405, 1.796701, 1.796701, 0.678385, 0.348567, 0.348568, 0.011688, -0.383786, -0.383786, -0.80699, -0.806992, -1.741488, -5.237224],
+        "c": [137.5126, 189.5075, 189.5075, 145.994, 145.9939, 108.9422, 100.3698, 100.3698, 97.3303, 100.9134, 100.9134, 111.9383, 111.9384, 149.418, 320.9169],
     },
-    "Bowser Castle": {
-        "starting_x": [-54, -53.5, -52, -45, -36, -27, -21.5, -20, -19, -17.5, -17, -8, 8, 17, 17.5, 19, 20, 21.5, 27, 36, 45, 52, 53.5],
-        "ending_x": [-53.5, -52, -45, -36, -27, -21.5, -20, -19, -17.5, -17, -8, 8, 17, 17.5, 19, 20, 21.5, 27, 36, 45, 52, 53.5, 54],
-        "wall_height": [16.7, 12, 5, 5, 5, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 12, 5, 5, 5, 12, 16.7],
-        "m": [6, 2.3333, 1.43, 0.888, 0.5, 0.3636, -0.6667, -0.5, 1, 4, 0.22222, 0, -0.22222, -4, -1, 0.5, 0.6667, -0.3636, -0.5, -0.888, -1.43, -2.3333, -6],
-        "c": [378, 181.8, 134.86, 110.5, 96.5, 92.82, 70.67, 74, 102.5, 155, 90.78, 89, 90.78, 155, 102.5, 74, 70.67, 92.82, 96.5, 110.5, 134.86, 181.8, 378],
+    "Mario Stadium": {
+        "starting_x": [-57.4152, -41.5506, -13.3121, 15.7805],
+        "ending_x": [-41.5506, -13.3121, 15.7805, 57.461],
+        "wall_height": [4.0, 4.0, 4.0, 4.0],
+        "m": [1.602718, 0.611196, 0.0, -1.023017],
+        "c": [149.3791, 108.1808, 100.0445, 116.1882],
+    },
+    "Peach Garden": {
+        "starting_x": [-58.952, -54.2796, -45.6364, -35.0, -32.4544, -29.9088, -15.0748, -13.4, -11.8, -9.0, -7.0, -5.0, 5.0, 7.0, 9.0, 11.8, 13.4, 15.0748, 29.9088, 32.4544, 35.0, 45.6364, 54.2796, 57.3375],
+        "ending_x": [-54.2796, -45.6364, -35.0, -32.4544, -29.9088, -15.0748, -13.4, -11.8, -9.0, -7.0, -5.0, 5.0, 7.0, 9.0, 11.8, 13.4, 15.0748, 29.9088, 32.4544, 35.0, 45.6364, 54.2796, 57.3375, 58.952],
+        "wall_height": [7.0, 7.0, 7.0, 18.0, 18.0, 18.0, 18.0, 18.0, 18.0, 18.0, 20.99, 23.0, 20.99, 18.0, 18.0, 18.0, 18.0, 18.0, 18.0, 18.0, 7.0, 7.0, 7.0, 7.0],
+        "m": [2.597932, 1.35429, 0.685267, -0.414212, 0.414213, 0.0, -0.827368, 5e-06, 0.137727, -0.699997, 0.0, 0.0, 0.0, 0.699997, -0.137727, -5e-06, 0.827368, 0.0, -0.414213, 0.414212, -0.685268, -1.35429, -2.597928, -2.597946],
+        "c": [212.0205, 144.5161, 113.9843, 75.5026, 102.3886, 90.0, 77.5276, 88.6144, 90.2395, 82.7, 87.6, 87.6, 87.6, 82.7, 90.2395, 88.6144, 77.5276, 90.0, 102.3886, 75.5026, 113.9844, 144.5161, 212.0202, 212.0213],
+    },
+    "Toy Field": {
+        "starting_x": [-59.952, -48.8736, -31.9, -11.0787, 11.0788, 31.9, 48.8737],
+        "ending_x": [-48.8736, -31.9, -11.0787, 11.0788, 31.9, 48.8737, 59.9522],
+        "wall_height": [10.5, 10.5, 10.5, 10.5, 10.5, 10.5, 10.5],
+        "m": [1.732452, 0.839099, 0.36397, 0.0, -0.36397, -0.839101, -1.732419],
+        "c": [163.8159, 120.1545, 104.9979, 100.9656, 104.9979, 120.1546, 163.8143],
+    },
+    "Wario Palace": {
+        "starting_x": [-51.5685, -48.557, -39.5839, -25.8365, -9.0992, 9.099, 25.8365, 39.5839, 48.5569],
+        "ending_x": [-48.557, -39.5839, -25.8365, -9.0992, 9.099, 25.8365, 39.5839, 48.5569, 51.5685],
+        "wall_height": [5.0, 5.0, 5.0, 5.0, 5.0, 5.0, 5.0, 5.0, 5.0],
+        "m": [4.224211, 1.714382, 0.837241, 0.377298, 3e-06, -0.377295, -0.837241, -1.714382, -4.224211],
+        "c": [269.32, 147.4504, 112.7297, 100.8463, 97.4133, 100.8463, 112.7297, 147.4504, 269.32],
+    },
+    "Yoshi Park": {
+        "starting_x": [-58.1086, -52.2813, -40.1169, -25.2185, -8.6016, 8.6016, 25.2185, 40.1169, 52.2813],
+        "ending_x": [-52.2813, -40.1169, -25.2185, -8.6016, 8.6016, 25.2185, 40.1169, 52.2813, 58.1086],
+        "wall_height": [3.2, 3.2, 3.2, 3.2, 3.2, 3.2, 3.2, 3.2, 3.2],
+        "m": [1.732051, 0.999999, 0.57735, 0.26795, 0.0, -0.26795, -0.577353, -1.000001, -1.732049],
+        "c": [158.6707, 120.3981, 103.4428, 95.6402, 93.3354, 95.6402, 103.4429, 120.3982, 158.6706],
     },
 }
-
-# Stadiums pyrio can answer wall questions about. Not every stadium: Toy Field
-# is absent, inherited from the JS `stadiums` constant this table mirrors.
-# Its collision model does have a normal outfield fence (z 101 at centre
-# tapering to ~84 down the lines), so the distance could be derived -- but the
-# wall-typed triangles carry no usable height, and is_home_run needs one. See
-# tools/compare_stadium_walls.py.
+# Every stadium, including Toy Field. Toy Field used to be absent, inherited
+# from the JS `stadiums` constant: its height looked unrecoverable because the
+# wall triangles all report max(y) == 0. They do, because mesh y is inverted
+# world height and the wall top IS y = 0 -- its fence is 10.5 high throughout.
 STADIUM_NAMES = list(STADIUM_WALLS)
 
 
 def has_wall_data(stadium: str) -> bool:
     """True if pyrio knows this stadium's outfield wall.
 
-    Call this before wall_at, is_home_run or wall_collision_point when the
-    stadium comes from a stat file, since Toy Field is a real StadiumID that
-    has no wall data here.
+    Every stadium is covered now, so this is True for any name StadiumID can
+    produce. It is kept because callers guard on it, and because an unknown or
+    misspelled name still has to answer False.
     """
     return stadium in STADIUM_WALLS
 
