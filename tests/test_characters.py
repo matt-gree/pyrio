@@ -116,6 +116,7 @@ DEFAULTS = [
     ("bones", Character.DRY_BONES_G),
     ("drybones", Character.DRY_BONES_G),
     ("para", Character.PARATROOPA_G),
+    ("parag", Character.PARATROOPA_G),
     ("paratroopa", Character.PARATROOPA_G),
     ("pt", Character.TOAD_P),
     ("bb", Character.BRO_B),
