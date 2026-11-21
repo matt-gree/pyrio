@@ -32,6 +32,10 @@ _CORRECTED_RESULT_LABELS_FROM = (2, 3, 0)
 # HudObj.game_over so the post-hoc and live predicates cannot drift apart.
 MERCY_MARGIN = 10
 
+# "Num Outs During Play" on an event that never finished, like the last one in
+# a quit file.
+UNFINISHED_PLAY_NUM_OUTS = 255
+
 # Renames: the same result, spelled differently. Safe to apply to any file,
 # because neither old name exists in the 2.3.0 tables.
 RENAMED_RESULT_LABELS = {

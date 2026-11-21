@@ -1377,16 +1377,13 @@ def hit_inputs_from_event(event: EventObj, active_tags=frozenset()) -> HitInputs
     if pitch_code == 0:
         pitch_type_val = 0
     elif pitch_code == 1:
-        # Charge Type: 1 ChargedStar / 2 Slider / 3 Perfect. Older stat files
-        # couldn't decode ChargedStar and log "Unable to Decode. Invalid Value
-        # (1)." instead -- map that legacy string back to 1.
+        # Charge Type: 1 Charged Captain Star / 2 Slider / 3 Perfect. The
+        # accessor corrects the labels older stat files used for 1, so this no
+        # longer carries its own guess at which strings mean a charged star.
         try:
-            charge_code = G.to_encoded(G.CHARGE_PITCH_TYPE, pitch.get("Charge Type"))
-        except KeyError:
-            if "(1)" in str(pitch.get("Charge Type")):
-                charge_code = 1  # ChargedStar
-            else:
-                raise ValueError(f"undecodable Charge Type {pitch.get('Charge Type')!r}")
+            charge_code = event.charge_type().id
+        except (ValueError, AttributeError):
+            raise ValueError(f"undecodable Charge Type {pitch.get('Charge Type')!r}")
         # 1 ChargedStar -> 4, 3 Perfect -> 2, else (Slider) -> 1.
         pitch_type_val = {1: 4, 3: 2}.get(charge_code, 1)
     else:

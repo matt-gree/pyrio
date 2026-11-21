@@ -10,7 +10,10 @@ from ..rio_value import (
     MoonShotStatus,
 )
 from .error_checking import ErrorChecker
-from .stat_obj import StatObj
+from .stat_obj import StatObj, UNFINISHED_PLAY_NUM_OUTS
+
+# Rio 2.3.0 is also where the contact-result mislabels below were fixed.
+_CORRECTED_CONTACT_RESULTS_FROM = (2, 3, 0)
 from .runner import RunnerObj
 
 
@@ -20,6 +23,7 @@ class EventObj():
         self.all_events = rioStat.events()
         if abs(eventNum) > len(self.all_events):
             raise IndexError(f'Invalid event num: Event {eventNum} does not exist in game')
+        self.eventIndex = eventNum if eventNum >= 0 else len(self.all_events) + eventNum
         self.eventDict = self.all_events[eventNum]
 
     def safe_int(self, value) -> Optional[int]:
@@ -207,10 +211,16 @@ class EventObj():
         return PitchType.from_raw(self.pitch_dict().get('Pitch Type'))
 
     def charge_type(self) -> Optional[ChargeType]:
+        """The charge-pitch type, or None if the event has no pitch.
+
+        Rio before 2.3.0 could not decode a charged captain star and wrote
+        'Unable to Decode. Invalid Value (1).' in its place, so that is
+        corrected on read -- otherwise a strict lookup raises on it.
         """
-        Returns None if no pitch in event
-        """
-        return ChargeType.from_raw(self.pitch_dict().get('Charge Type'))
+        charge_type = self.pitch_dict().get('Charge Type')
+        if charge_type in ('ChargedStar', 'Unable to Decode. Invalid Value (1).'):
+            charge_type = 1  # Charged Captain Star
+        return ChargeType.from_raw(charge_type)
 
     def star_pitch(self) -> Optional[int]:
         """
@@ -392,19 +402,79 @@ class EventObj():
         """
         return self.safe_int(self.contact_dict().get('Ball Hang Time'))
 
+    def nextEventContinuesAtBat(self) -> bool:
+        """True if the next event is the same at-bat carrying on.
+
+        A foul keeps the same batter up with the same outs and balls, and adds
+        a strike unless there are already two. The last event in a file cannot
+        be confirmed either way.
+        """
+        if self.eventIndex + 1 >= len(self.all_events):
+            return False
+        next_event = self.all_events[self.eventIndex + 1]
+        if any(next_event.get(key) != self.eventDict.get(key)
+               for key in ('Inning', 'Half Inning', 'Batter Roster Loc', 'Outs', 'Balls')):
+            return False
+        return next_event.get('Strikes') == min(self.eventDict.get('Strikes', 0) + 1, 2)
+
+    def foulLoggedAsFair(self) -> bool:
+        """True for a foul that Rio before 2.3.0 recorded as fair.
+
+        It did that when the ball landed before the game called it foul. A
+        strikeout with contact is always a foul bunt. No result alone is not
+        enough -- some real hits logged none -- so that case also has to
+        continue the at-bat.
+        """
+        contact = self.contact_dict()
+        if (not self.rioStat.versionBefore(*_CORRECTED_CONTACT_RESULTS_FROM)
+                or contact.get('Contact Result - Primary') not in ('Fair', 'Fielded')
+                or contact.get('Contact Result - Secondary') != 'Out-caught'
+                or self.num_outs_during_play() == UNFINISHED_PLAY_NUM_OUTS):
+            return False
+        result = self.result_of_AB().name
+        return result == 'Strikeout' or (result == 'None' and self.nextEventContinuesAtBat())
+
     def contact_result_primary(self) -> Optional[PrimaryContactResult]:
+        """The primary contact result, with pre-2.3.0 mislabels corrected.
+
+        Returns None if the event has no contact.
+
+        Rio before 2.3.0 logged every result from Single through double play as
+        'Fair'. A sac fly is always caught, so that one is corrected to 'Out'.
+        The rest cannot be: the file does not say which of those balls were
+        fielded before landing.
         """
-        Returns None if no contact in event.
-        """
-        return PrimaryContactResult.from_raw(self.contact_dict().get('Contact Result - Primary'))
+        primary = self.contact_dict().get('Contact Result - Primary')
+        if primary is None:
+            return None
+        if self.foulLoggedAsFair():
+            return PrimaryContactResult.from_raw('Foul')
+        if (primary == 'Fair' and self.rioStat.versionBefore(*_CORRECTED_CONTACT_RESULTS_FROM)
+                and self.result_of_AB().name == 'SacFly'):
+            return PrimaryContactResult.from_raw('Out')
+        return PrimaryContactResult.from_raw(primary)
 
     def contact_result_secondary(self) -> Optional[SecondaryContactResult]:
-        """
-        Returns None if no contact in event.
+        """The secondary contact result, with pre-2.3.0 mislabels corrected.
+
+        Returns None if the event has no contact.
+
+        Rio before 2.3.0 logged a force out as 'Out-tag', a tag out as 'Foul',
+        and a foul that landed first as 'Out-caught'. The renames that 2.3.0
+        made to this field are handled by correctedResultLabel.
         """
         raw = self.contact_dict().get('Contact Result - Secondary')
         if raw is None:
             return None
+        if self.foulLoggedAsFair():
+            return SecondaryContactResult.from_raw('Foul')
+        if self.rioStat.versionBefore(*_CORRECTED_CONTACT_RESULTS_FROM) \
+                and self.result_of_AB().name in ('Out', 'None'):
+            out_type = self.runner_dict(0).get('Out Type')
+            if out_type == 'Force':
+                return SecondaryContactResult.from_raw('Out-force')
+            if out_type == 'Tag':
+                return SecondaryContactResult.from_raw('Out-tag')
         return SecondaryContactResult.from_raw(self.rioStat.correctedResultLabel(raw))
 
     def first_fielder_dict(self) -> dict:
