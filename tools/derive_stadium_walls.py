@@ -21,22 +21,32 @@ BALL_COLLISION_TYPE_WALL. Collision semantics are taken from the decomp
 Each wall panel is a quad split into two triangles; the edge at maximum y gives
 the panel's (x, z) line.
 
+Corners project onto overlapping x ranges, so at each x this keeps the NEAREST
+wall (minimum z) and that panel's height -- the surface the ball meets first.
+
+Segments are built from the panel lines directly, never sampled. The nearest
+panel can only change at a panel edge or where two panels cross, so taking
+both as breakpoints yields intervals on which one panel is nearest throughout,
+and its exact (m, c, height) is emitted. All seven stadiums then reproduce the
+model to 0.000m in distance and height. An earlier version flattened on a
+0.25m grid and fitted lines through consecutive samples; where panels are
+under a metre wide a run could hold only two samples drawn from *different*
+panels, and the chord between them became the segment -- that is where Bowser
+Castle's m=-11.1 slivers and its reported 2.774m error came from, not from the
+geometry.
+
 Caveat on provenance: the game never does a geometric "did it clear the wall"
 test. It integrates the trajectory and probes the collision mesh each frame
 (checkCollision), and a home run is a ball that never struck a wall or
 foul-line triangle. A one-dimensional wall_at(x) is therefore an approximation
-of a 3-D mesh by construction, which is why overlapping corner panels cannot be
-represented exactly. The models themselves come from RioVisualizer's
-extraction; ZZZZ.dat is not in the decomp checkout, so they have not been
-re-extracted from the disc independently.
+of a 3-D mesh by construction: it holds one surface per x, so it would hide a
+tall far panel behind a short near one. That case does not arise here -- only
+Bowser Castle has overlaps, and its nearer corner panel is also its taller
+one -- but the table cannot express it if a future model set has it.
 
-Corners project onto overlapping x ranges, which a one-dimensional
-``wall_at(x)`` cannot represent, so at each x this keeps the NEAREST wall
-(minimum z) and that panel's height -- the surface the ball meets first.
-
-Fine samples are merged back into linear runs, and the result is re-sampled
-against the model to prove the segments reproduce it. Emits a STADIUM_WALLS
-block for src/pyrio/stadiums.py.
+The models themselves come from RioVisualizer's extraction; ZZZZ.dat is not in
+the decomp checkout, so they have not been re-extracted from the disc
+independently. Emits a STADIUM_WALLS block for src/pyrio/stadiums.py.
 
 Usage:
     python tools/derive_stadium_walls.py <models-dir> [--validate-only]
@@ -55,8 +65,8 @@ WALL_COLLISION = 0x02        # BALL_COLLISION_TYPE_WALL
 FOUL_FLAG = 0x80             # BALL_COLLISION_TYPE_FOUL, a flag not a type
 TYPE_MASK = 0x7F             # what the game masks with (ball_physics.c:2295)
 MIN_WALL_DISTANCE = 40.0   # nearer than this is backstop / dugout
-SAMPLE_STEP = 0.25         # x resolution when flattening corners
-SLOPE_TOLERANCE = 2e-2     # when to start a new linear run
+MERGE_TOLERANCE = 1e-3     # when two adjacent intervals are the same line
+MIN_SEGMENT_WIDTH = 1e-3   # narrower than this is a numerical sliver
 
 
 def wall_panels(doc):
@@ -101,82 +111,124 @@ def nearest_wall(panels, x):
     return best
 
 
+def _z_at(panel, x):
+    x0, x1, z0, z1, _ = panel
+    return z0 + (z1 - z0) * ((x - x0) / (x1 - x0))
+
+
+def _line(panel):
+    """(m, c) of a panel's top edge in the z = m*x + c form."""
+    x0, x1, z0, z1, _ = panel
+    m = (z1 - z0) / (x1 - x0)
+    return m, z0 - m * x0
+
+
+def _breakpoints(panels):
+    """Every x where the nearest panel can change.
+
+    Panels are exact line segments, so the nearest one changes only at a
+    panel's own edge or where two panels cross. Collecting both gives
+    intervals on which a single panel is nearest throughout, which is what
+    makes the output exact rather than sampled.
+    """
+    marks = set()
+    for x0, x1, *_ in panels:
+        marks.add(x0)
+        marks.add(x1)
+    for i, a in enumerate(panels):
+        for b in panels[i + 1:]:
+            lo, hi = max(a[0], b[0]), min(a[1], b[1])
+            if hi - lo <= MIN_SEGMENT_WIDTH:
+                continue
+            ma, ca = _line(a)
+            mb, cb = _line(b)
+            if abs(ma - mb) < 1e-12:
+                continue
+            x = (cb - ca) / (ma - mb)
+            if lo < x < hi:
+                marks.add(x)
+    return sorted(marks)
+
+
 def segments(panels):
-    """Merge fine samples into (start_x, end_x, height, m, c) runs."""
-    lo = min(p[0] for p in panels)
-    hi = max(p[1] for p in panels)
-    samples, x = [], lo
-    while x <= hi + 1e-9:
-        samples.append((round(x, 3), nearest_wall(panels, x)))
-        x += SAMPLE_STEP
+    """Exact (start_x, end_x, height, m, c) runs for the nearest wall surface.
 
-    runs, run, run_m = [], [], None
-    for x, s in samples:
-        if s is None:
-            if len(run) > 1:
-                runs.append(run)
-            run, run_m = [], None
+    Where panels overlap in x the nearest (minimum z) one wins: that is the
+    surface the ball meets first. In this model set only Bowser Castle has
+    overlaps, and there the nearer panel is also the taller one (the 16.64
+    corner tower in front of the 5.0 fence), so nearest-wins does not hide a
+    tall wall behind a short one. A one-dimensional table could not express
+    that case if it arose.
+    """
+    marks = _breakpoints(panels)
+    runs = []
+    for lo, hi in zip(marks, marks[1:]):
+        if hi - lo <= MIN_SEGMENT_WIDTH:
             continue
-        if run:
-            px, (pz, ph) = run[-1]
-            slope = (s[0] - pz) / (x - px)
-            new_height = abs(s[1] - ph) > 1e-6
-            new_slope = run_m is not None and abs(slope - run_m) > SLOPE_TOLERANCE
-            if new_height or new_slope:
-                runs.append(run)
-                run, run_m = [], None
-        run.append((x, s))
-        if len(run) == 2:
-            run_m = (run[1][1][0] - run[0][1][0]) / (run[1][0] - run[0][0])
-    if len(run) > 1:
-        runs.append(run)
+        mid = 0.5 * (lo + hi)
+        best = None
+        for panel in panels:
+            if panel[0] <= mid <= panel[1]:
+                z = _z_at(panel, mid)
+                if best is None or z < best[0]:
+                    best = (z, panel)
+        if best is None:
+            continue
+        m, c = _line(best[1])
+        height = best[1][4]
+        if runs:
+            px0, px1, ph, pm, pc = runs[-1]
+            same = (abs(pm - m) < MERGE_TOLERANCE
+                    and abs(pc - c) < MERGE_TOLERANCE
+                    and ph == height
+                    and abs(px1 - lo) < MIN_SEGMENT_WIDTH)
+            if same:
+                runs[-1] = (px0, hi, ph, pm, pc)
+                continue
+        runs.append((lo, hi, height, m, c))
 
-    out = []
-    for r in runs:
-        (x0, (z0, height)), (x1, (z1, _)) = r[0], r[-1]
-        m = (z1 - z0) / (x1 - x0) if x1 != x0 else 0.0
-        out.append((round(x0, 2), round(x1, 2), height, round(m, 4), round(z0 - m * x0, 2)))
-    return out
+    # x is rounded to 4dp, not 2dp. The breakpoints are panel edges, and at
+    # Bowser Castle's corner a 0.59m tower panel abuts the fence: 2dp moves a
+    # boundary by up to 5mm, enough to hand a slice of one segment the
+    # neighbouring surface's z (2.6m away) and height. 4dp bounds that at 50um.
+    return [(round(x0, 4), round(x1, 4), h, round(m, 6), round(c, 4))
+            for x0, x1, h, m, c in runs]
 
 
 def degenerate(segs):
     """Segments a one-dimensional wall_at cannot honestly represent.
 
-    Corner panels overlap in x, and flattening them can leave zero-width or
-    near-vertical runs. wall_at matches `sx <= x < ex`, so a zero-width segment
-    is simply dead, and a 0.25m-wide run with a slope of -11 is noise rather
-    than wall. These must be resolved before the table is used.
+    Only true slivers qualify. A steep slope does not: DK Jungle's wall really
+    does taper into the foul pole at m=-5.2, and wall_at reproduces that
+    exactly. An earlier version flagged steepness and so condemned a faithful
+    segment while passing the sampled-chord artifacts that were the real fault.
     """
-    return [s for s in segs if (s[1] - s[0]) < 0.5 or abs(s[3]) > 5.0]
+    return [s for s in segs if (s[1] - s[0]) < MIN_SEGMENT_WIDTH]
 
 
-def validate(panels, segs):
+def validate(panels, segs, per_segment=40):
     """Worst (distance, height) error of the segments against the model.
 
-    NOTE: this samples on a grid and matches `sx <= x < ex`, so it cannot see
-    inside segments narrower than the step -- exactly where the corner
-    degeneracy lives. Read it together with degenerate().
+    Samples strictly inside every segment, so narrow runs are checked as
+    closely as wide ones. The grid-based version this replaces stepped at a
+    fixed 0.25m and could not see inside a segment narrower than the step --
+    exactly where the corner artifacts lived.
     """
     worst_z = worst_h = 0.0
     n = 0
-    xs = []
-    x = min(p[0] for p in panels)
-    hi = max(p[1] for p in panels)
-    while x <= hi:
-        xs.append(x)
-        x += SAMPLE_STEP * 2
-    # Also sample just inside each segment, so narrow runs are not skipped.
-    xs.extend(s[0] + min(1e-3, max(0.0, (s[1] - s[0]) / 2)) for s in segs)
-    for x in sorted(xs):
-        truth = nearest_wall(panels, x)
-        if truth is None:
-            continue
-        for sx, ex, height, m, c in segs:
-            if sx <= x < ex:
-                worst_z = max(worst_z, abs(m * x + c - truth[0]))
-                worst_h = max(worst_h, abs(height - truth[1]))
-                n += 1
-                break
+    for sx, ex, height, m, c in segs:
+        # Step inside by the rounding slop, so a boundary that moved by half a
+        # unit in the last decimal is not scored as a segment-wide error.
+        margin = min(1e-3, 0.25 * (ex - sx))
+        lo, hi = sx + margin, ex - margin
+        for k in range(per_segment + 1):
+            x = lo + (hi - lo) * k / per_segment
+            truth = nearest_wall(panels, x)
+            if truth is None:
+                continue
+            worst_z = max(worst_z, abs(m * x + c - truth[0]))
+            worst_h = max(worst_h, abs(height - truth[1]))
+            n += 1
     return worst_z, worst_h, n
 
 
