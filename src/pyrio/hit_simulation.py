@@ -1512,6 +1512,7 @@ def _inputs_from_landing_row(row: dict, stadium_id: int, active_tags=frozenset()
         easy_batting=False,
         batter_stars_on=batter_stars_on,
         pitcher_stars_on=pitcher_stars_on,
+        five_star_attempt=five_star_attempt,
         ground_y=ground_y,
         bounce=bounce,
         rng1=int(row["rng1"]),  # endpoint serves the seeds as floats (e.g. 9747.0)

@@ -7,6 +7,7 @@ from ..rio_value import (
     Character, PitchType, ChargeType, SwingType, ContactType,
     FinalResult, PrimaryContactResult, SecondaryContactResult,
     Position, FielderAction, FielderBobble, ManualSelect, DeadBallReason,
+    MoonShotStatus,
 )
 from .error_checking import ErrorChecker
 from .stat_obj import StatObj
@@ -282,11 +283,14 @@ class EventObj():
         """
         return self.contact_dict().get('Charge Power Down')
 
-    def five_star_swing(self) -> Optional[int]:
+    def five_star_swing(self) -> Optional[MoonShotStatus]:
+        """A 5-star swing's outcome, or None if the event has no contact.
+
+        Rio 2.3.0 writes 2 for a failed Moonshot (a Texas Leaguer); older files
+        wrote 0 both for a failed attempt and for a swing that never was one,
+        which is why hit_simulation falls back to the launch angle there.
         """
-        Returns None if no contact in event
-        """
-        return self.contact_dict().get('Star Swing Five-Star')
+        return MoonShotStatus.from_raw(self.contact_dict().get('Star Swing Five-Star'))
 
     def input_direction_push_or_pull(self) -> Optional[str]:
         """
