@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from .event import EventObj
-from .stat_obj import StatObj
+from .stat_obj import StatObj, UNFINISHED_PLAY_NUM_OUTS
 from ..rio_value import (
     Tables, Character, PitchType, ChargeType, SwingType,
     ContactType, FinalResult, Position,
@@ -82,8 +82,10 @@ class EventSearch():
             self.character_action_dict[batter]['AtBat'].add(eventNum)
             self.character_action_dict[pitcher]['Pitching'].add(eventNum)
 
-            self._away_score_dict[currentEvent.score(0)].add(eventNum)
-            self._home_score_dict[currentEvent.score(1)].add(eventNum)
+            # setdefault: in an unfinished game the final score the buckets
+            # were sized from can be BEHIND the score on a live event.
+            self._away_score_dict.setdefault(currentEvent.score(0), set()).add(eventNum)
+            self._home_score_dict.setdefault(currentEvent.score(1), set()).add(eventNum)
 
             if currentEvent.score(0) > currentEvent.score(1):
                 self._away_team_winning.add(eventNum)
@@ -99,14 +101,18 @@ class EventSearch():
             self._chem_on_base_dict[currentEvent.chem_links_on_base()].add(eventNum)
             self._strikes_dict[currentEvent.strikes()].add(eventNum)
             self._balls_dict[currentEvent.balls()].add(eventNum)
-            self._inning_dict[currentEvent.inning()].add(eventNum)
+            # Same reason: "Innings Played" can be behind the current inning.
+            self._inning_dict.setdefault(currentEvent.inning(), set()).add(eventNum)
             self._rbi_dict[currentEvent.rbi()].add(eventNum)
             self._pitcher_stamina_dict[currentEvent.pitcher_stamina()].add(eventNum)
             self._star_chance_dict[currentEvent.star_chance()].add(eventNum)
-            self._outs_during_event_dict[currentEvent.num_outs_during_play()].add(eventNum)
+            if currentEvent.num_outs_during_play() != UNFINISHED_PLAY_NUM_OUTS:
+                self._outs_during_event_dict[currentEvent.num_outs_during_play()].add(eventNum)
 
             self._half_inning_dict[currentEvent.half_inning()].add(eventNum)
-            self._result_of_AB_dict[currentEvent.result_of_AB()].add(eventNum)
+            # setdefault so a label this version does not know about cannot
+            # stop the file from loading at all.
+            self._result_of_AB_dict.setdefault(currentEvent.result_of_AB(), set()).add(eventNum)
 
             if currentEvent.bool_runner_on_base(-1) == 0:
                 self._runners_on_base_dict[0].add(eventNum)
@@ -162,7 +168,10 @@ class EventSearch():
             self._contact_frame_dict[currentEvent.contact_frame()].add(eventNum)
 
 
-            if currentEvent.five_star_swing() == 1:
+            # .id, because five_star_swing returns a MoonShotStatus now; a bare
+            # `== 1` silently stopped matching and the bucket went empty.
+            five_star = currentEvent.five_star_swing()
+            if five_star is not None and five_star.id == 1:
                 self._five_star_dinger.add(eventNum)
 
             # Banded at two decimal places
@@ -177,7 +186,15 @@ class EventSearch():
             if not currentEvent.first_fielder_dict():
                 continue
 
-            self.character_action_dict[currentEvent.first_fielder_character()]['Fielding'].add(eventNum)
+            # setdefault, because the fielder is logged separately from the
+            # rosters and some files disagree: a Fielder Character who is on
+            # neither team raised KeyError here and made the whole file
+            # unloadable. The batter and pitcher come from the rosters, so only
+            # the fielder can miss.
+            self.character_action_dict.setdefault(
+                currentEvent.first_fielder_character(),
+                {'AtBat': set(), 'Pitching': set(), 'Fielding': set()},
+            )['Fielding'].add(eventNum)
 
             if currentEvent.first_fielder_bobble().name != 'None':
                 self._bobble.add(eventNum)
