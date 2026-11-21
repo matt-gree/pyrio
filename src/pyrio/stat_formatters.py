@@ -105,16 +105,20 @@ def derive_pitching(**kwargs) -> dict:
 # ── Line score formatters ─────────────────────────────────────────────────────
 
 def format_batting_line(*, at_bats=0, hits=0, homeruns=0, triples=0, doubles=0,
-                        walks_bb=0, walks_hbp=0, rbi=0, stolen_bases=0, **_) -> str:
+                        walks_bb=0, walks_hbp=0, strikeouts=0, rbi=0, stolen_bases=0,
+                        **_) -> str:
     """Format a single-game batting line.
 
     Convention: H-for-AB[, count stat]...
-    Stat order (nonzero only): HR → 3B → 2B → BB → HBP → RBI → SB
+    Stat order (nonzero only): HR → 3B → 2B → BB → HBP → K → RBI → SB
     Singles are implied. Count prefix only when value > 1 (e.g. "2 HR").
+    The plate-appearance outcomes (hits, walks, strikeouts) come first, then what
+    the batter produced — so "1-for-4" says where the other three went.
 
     Examples:
         4 AB, 2 H, 1 HR, 1 2B  → "2-for-4, HR, 2B"
         5 AB, 4 H, 0 HR, 2 2B  → "4-for-5, 2 2B"
+        4 AB, 1 H, 1 HR, 2 K   → "1-for-4, HR, 2 K"
         3 AB, 0 H               → "0-for-3"
     """
     line = f"{hits}-for-{at_bats}"
@@ -124,6 +128,7 @@ def format_batting_line(*, at_bats=0, hits=0, homeruns=0, triples=0, doubles=0,
         (doubles,      "2B"),
         (walks_bb,     "BB"),
         (walks_hbp,    "HBP"),
+        (strikeouts,   "K"),
         (rbi,          "RBI"),
         (stolen_bases, "SB"),
     ]:
@@ -140,11 +145,18 @@ def format_pitching_line(*, outs_pitched=0, hits_allowed=0, runs_allowed=0,
     All fields are always shown even if zero (omission is ambiguous in a pitcher line).
     Order: IP, H, R, ER, BB, K, HR, P
 
-    Example: "6.0, 3 H, 1 R, 1 ER, 2 BB, 4 K, 0 HR, 87 P"
+    EVERY TERM CARRIES ITS UNIT, INCLUDING THE FIRST. The innings used to print
+    bare — "6.0, 3 H, 1 R, …" — which made it the only number on the line that
+    did not say what it was, sat beside seven that did, and read as a stray
+    decimal rather than as a count of innings. That is not the batting line's
+    convention leaking across: its leading term is "2-for-4", which needs no
+    unit because it already names itself.
+
+    Example: "6.0 IP, 3 H, 1 R, 1 ER, 2 BB, 4 K, 0 HR, 87 P"
     """
     ip = innings_pitched(outs_pitched=outs_pitched)
     bb = walks_bb + walks_hbp
     return (
-        f"{ip}, {hits_allowed} H, {runs_allowed} R, {earned_runs} ER, "
+        f"{ip} IP, {hits_allowed} H, {runs_allowed} R, {earned_runs} ER, "
         f"{bb} BB, {strikeouts_pitched} K, {hrs_allowed} HR, {total_pitches} P"
     )

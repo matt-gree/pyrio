@@ -45,6 +45,27 @@ SWAPPED_CAUGHT_LABELS = {
 }
 
 
+def per_position(values: list) -> dict:
+    """A per-position stat as {position: count}.
+
+    Rio writes these as a list holding one object, or an empty list when the
+    character has none at any position -- so indexing [0] raises on, say, a
+    pitcher who never fielded.
+    """
+    return values[0] if values else {}
+
+
+def rate(numerator: float, denominator: float) -> float:
+    """numerator / denominator, or 0.0 when there is nothing to divide by.
+
+    A character with no at-bats, or who never pitched, has no rate rather than
+    an undefined one.
+    """
+    if denominator <= 0:
+        return 0.0
+    return float(numerator) / float(denominator)
+
+
 class StatObj:
     def __init__(self, statJson: dict):
         self.statJson = statJson
@@ -307,11 +328,29 @@ class StatObj:
 
     # defensive stats
     def era(self, teamNum: int, rosterNum: int = -1) -> float:
-        # tells the era of a character
-        # if no character given, returns era of that team
-        # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
-        teamNum = self.teamNumVersionCorrection(teamNum)
-        return 9 * float(self.runsAllowed(teamNum, rosterNum)) / self.inningsPitched(teamNum, rosterNum)
+        """Earned run average, on a 27-out (9-inning) scale.
+
+        Earned runs, not runs allowed: an unearned run is by definition not the
+        pitcher's to answer for. 0.0 for someone who never pitched, rather than
+        a ZeroDivisionError.
+
+        rosterNum: optional (no arg == all characters on team), 0 -> 8.
+        """
+        return rate(27 * self.earnedRuns(teamNum, rosterNum),
+                    self.outsPitched(teamNum, rosterNum))
+
+    def earnedRuns(self, teamNum: int, rosterNum: int = -1) -> int:
+        """Earned runs a character allowed while pitching.
+
+        Files written before Rio logged "Earned Runs" have no such key; those
+        count every run allowed instead, which is what was available.
+
+        rosterNum: optional (no arg == all characters on team), 0 -> 8.
+        """
+        if rosterNum == -1:
+            return sum(self.earnedRuns(teamNum, x) for x in range(0, 9))
+        stats = self.defensiveStats(teamNum, rosterNum)
+        return stats.get("Earned Runs", stats["Runs Allowed"])
 
     def battersFaced(self, teamNum: int, rosterNum: int = -1) -> int:
         # tells how many batters were faced by character
@@ -490,19 +529,30 @@ class StatObj:
         teamNum = self.teamNumVersionCorrection(teamNum)
         return float(self.outsPitched(teamNum, rosterNum)) / 3
 
-    def pitchesPerPosition(self, teamNum: int, rosterNum: int) -> dict:
-        # returns a dict which tracks how many pitches a character was at a position for
-        # rosterNum: 0 -> 8 for each of the 9 roster spots
+    def battersPerPosition(self, teamNum: int, rosterNum: int) -> dict:
+        """How many batters a character faced at each position.
+
+        Rio renamed "Pitches Per Position" to "Batters Per Position" in 2022;
+        older files still carry the old key.
+
+        rosterNum: 0 -> 8 for each of the 9 roster spots.
+        """
         teamNum = self.teamNumVersionCorrection(teamNum)
         ErrorChecker.check_roster_num_no_neg(rosterNum)
-        return self.defensiveStats(teamNum, rosterNum)["Pitches Per Position"][0]
+        stats = self.defensiveStats(teamNum, rosterNum)
+        key = "Batters Per Position" if "Batters Per Position" in stats else "Pitches Per Position"
+        return per_position(stats[key])
+
+    def pitchesPerPosition(self, teamNum: int, rosterNum: int) -> dict:
+        # the old name for battersPerPosition, kept so existing callers still work
+        return self.battersPerPosition(teamNum, rosterNum)
 
     def outsPerPosition(self, teamNum: int, rosterNum: int) -> dict:
         # returns a dict which tracks how many outs a character was at a position for
         # rosterNum: 0 -> 8 for each of the 9 roster spots
         teamNum = self.teamNumVersionCorrection(teamNum)
         ErrorChecker.check_roster_num_no_neg(rosterNum)
-        return self.defensiveStats(teamNum, rosterNum)["Outs Per Position"][0]
+        return per_position(self.defensiveStats(teamNum, rosterNum)["Outs Per Position"])
 
     # offensive stats
 
@@ -699,41 +749,41 @@ class StatObj:
 
     def battingAvg(self, teamNum: int, rosterNum: int = -1) -> float:
         # returns the batting average of a character
+        # 0.0 with no at-bats
         # if no character given, returns the batting average of a team
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
-        teamNum = self.teamNumVersionCorrection(teamNum)
         nAtBats = self.atBats(teamNum, rosterNum)
         nHits = self.hits(teamNum, rosterNum)
-        return float(nHits) / float(nAtBats)
+        return rate(nHits, nAtBats)
 
     def obp(self, teamNum: int, rosterNum: int = -1) -> float:
         # returns the on base percentage of a character
+        # (H + BB + HBP) / (AB + BB + HBP + SF). At Bats doesn't include walks or hit by pitches
+        # 0.0 with no plate appearances
         # if no character given, returns the on base percentage of a team
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
-        teamNum = self.teamNumVersionCorrection(teamNum)
         nAtBats = self.atBats(teamNum, rosterNum)
         nHits = self.hits(teamNum, rosterNum)
-        nWalks = self.walks(teamNum, rosterNum)
-        return float(nHits + nWalks) / float(nAtBats)
+        nWalks = self.walks(teamNum, rosterNum)  # ball four and hit by pitch
+        nSacFlys = self.sacFlys(teamNum, rosterNum)
+        return rate(nHits + nWalks, nAtBats + nWalks + nSacFlys)
 
     def slg(self, teamNum: int, rosterNum: int = -1) -> float:
-        # returns the SLG of a character
+        # returns the SLG of a character: total bases / at-bats
+        # 0.0 with no at-bats
         # if no character given, returns the SLG of a team
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
-        teamNum = self.teamNumVersionCorrection(teamNum)
         nAtBats = self.atBats(teamNum, rosterNum)
         nSingles = self.singles(teamNum, rosterNum)
         nDoubles = self.doubles(teamNum, rosterNum)
         nTriples = self.triples(teamNum, rosterNum)
         nHomeruns = self.homeruns(teamNum, rosterNum)
-        nWalks = self.walks(teamNum, rosterNum)
-        return float(nSingles + nDoubles * 2 + nTriples * 3 + nHomeruns * 4) / float(nAtBats - nWalks)
+        return rate(nSingles + nDoubles * 2 + nTriples * 3 + nHomeruns * 4, nAtBats)
 
     def ops(self, teamNum: int, rosterNum: int = -1) -> float:
         # returns the OPS of a character
         # if no character given, returns the OPS of a team
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
-        teamNum = self.teamNumVersionCorrection(teamNum)
         return self.obp(teamNum, rosterNum) + self.slg(teamNum, rosterNum)
     
     def events(self) -> list[dict]:
