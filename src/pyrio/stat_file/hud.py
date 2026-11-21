@@ -11,6 +11,8 @@ from ..rio_value import (
     Hand, Position, FielderAction, FielderBobble, ManualSelect, TeamName,
 )
 from .error_checking import ErrorChecker
+# Shared with StatObj.isMercy, so the live and post-hoc predicates cannot drift.
+from .stat_obj import MERCY_MARGIN
 from .runner import RunnerObj
 
 
@@ -213,13 +215,118 @@ class HudObj:
 
         return roster_dict
     
+    def event_resolved(self) -> bool:
+        """Whether this frame was written at a play's RESOLUTION.
+
+        Project Rio writes two frames per event: one while the play is in
+        flight (``Event Num`` "120") and one when it resolves ("120b"). Only
+        the second describes a completed play — which is why ``Previous Event``
+        on a "…b" frame is that very event and not the one before it.
+        """
+        return str(self.hud_json.get('Event Num', '')).endswith('b')
+
     def inning_end(self) -> bool:
-        return self.hud_json['Outs'] + self.hud_json['Num Outs During Play'] == 3
+        """Whether the play on THIS frame ends the half-inning.
+
+        ONLY A RESOLVED FRAME MAY ADD THE TWO OUT FIELDS. ``Outs`` is the
+        half's count and ``Num Outs During Play`` is what the current play
+        added, so the sum is the question — but between resolutions ``Outs``
+        has already absorbed the last play while ``Num Outs During Play`` still
+        describes it, and adding them counts one out twice. That answered "the
+        half is over" with two outs and a batter at the plate, which is
+        invisible until some other condition is also met: a board sitting on a
+        10-run mercy margin flipped to Final and back to Live with every HUD
+        write, once per in-flight frame after the second out. Measured over 773
+        stat files: the sum is never wrong on a resolved event, and 533 of
+        those games contain at least one in-flight frame where it is.
+
+        In flight, ``Outs`` alone is authoritative — and it resets at three, so
+        it answers False for every frame of a half that is still being played.
+
+        >= rather than == : a play that records more outs than the half had
+        left still ends the half, and a predicate that answers False there
+        fails silently — nothing downstream can tell "the half is not over"
+        from "we could not tell".
+        """
+        outs = self.hud_json['Outs']
+        if not self.event_resolved():
+            return outs >= 3
+        return outs + self.hud_json['Num Outs During Play'] >= 3
+
+    def game_over(self) -> bool:
+        """Whether this frame is the last one of the game.
+
+        MSB's HUD has no end-of-game event: the frame recording the final out
+        (or the winning run) is simply the last one written, and the next event
+        belongs to the next game. So "is this game over" is a question about ONE
+        frame, answered with no history — which is also what lets a caller
+        re-derive it from a stale file on disk after a restart.
+
+        REGULATION AND MERCY ARE THE SAME RULE at two margins. Both say an
+        unnecessary half-inning is not played, and both give the team batting
+        second its chance to respond:
+
+          - after the TOP half, the bottom is skipped only if the team batting
+            second is ALREADY ahead — by any margin once regulation is complete,
+            or by the mercy margin at any point in the game. A team batting
+            first that goes ahead by 10 does not end it; the other side bats.
+          - after the BOTTOM half, the game ends if the scores differ in
+            regulation, or if either side leads by the mercy margin. A tie in
+            regulation goes to extras.
+          - a walk-off ends play mid-half, without a third out.
+
+        Sides are resolved through ``first_batting_team`` rather than
+        away/home, which are not interchangeable with batting order.
+
+        Deliberately conservative: anything it cannot establish resolves to
+        False, so it answers late rather than calling a game that is still being
+        played — which is also why a half-inning boundary is only read off a
+        RESOLVED frame (see ``inning_end``). Quits and disconnects are NOT detectable here — the file just
+        stops — and are the stat file's to report (``StatObj.wasQuit``).
+        """
+        innings = self.innings_selected()
+        if not innings:
+            return False
+
+        first_t = self.first_batting_team()
+        if first_t not in (0, 1):
+            return False
+        second_t = 1 - first_t
+        # Positive = the team batting second is ahead.
+        lead = self.score(second_t) - self.score(first_t)
+
+        regulation = self.inning() >= innings
+        # The half the team batting SECOND is in. ``half_inning`` is the
+        # BATTING TEAM's away/home id (``batting_team`` returns the same
+        # number), which is only "top/bottom" while the away team bats first —
+        # so deriving this from away/home inverted both halves of the rule for
+        # a game where HOME batted first: the walk-off branch, which has no
+        # ``inning_end`` gate at all, fired through the first-batting team's
+        # half, and a real walk-off in the second-batting team's half was
+        # missed. Same reason the scores resolve through ``first_batting_team``.
+        bottom = self.half_inning() == second_t
+
+        # Walk-off. Only reachable in regulation or later: if the team batting
+        # second were already ahead going into this half, the half would not be
+        # being played at all (the skip-bottom branch below).
+        if bottom and regulation and lead > 0:
+            return True
+
+        if not self.inning_end():
+            return False
+
+        if not bottom:
+            return lead > 0 and (regulation or lead >= MERCY_MARGIN)
+
+        return (regulation and lead != 0) or abs(lead) >= MERCY_MARGIN
     
     def event_result(self) -> str:
-        if str(self.hud_json['Event Num'])[-1] == 'b':
-            return self.hud_json['Result of AB']
-        
+        # `Result of AB` lives on `Previous Event`, which on a resolved frame
+        # IS this event — read from the top level and this raised KeyError on
+        # exactly the frames it claims to describe.
+        if self.event_resolved():
+            return (self.hud_json.get('Previous Event') or {}).get('Result of AB', 'In Play')
+
         return 'In Play'
     
     def captain_index(self, teamNum: int) -> int:

@@ -28,6 +28,10 @@ _HEX_GAME_ID_FROM = (2, 3, 0)
 # names have to be corrected on read or an older file decodes to the wrong id.
 _CORRECTED_RESULT_LABELS_FROM = (2, 3, 0)
 
+# A lead of this much ends the game. Shared between StatObj.isMercy and
+# HudObj.game_over so the post-hoc and live predicates cannot drift apart.
+MERCY_MARGIN = 10
+
 # Renames: the same result, spelled differently. Safe to apply to any file,
 # because neither old name exists in the 2.3.0 tables.
 RENAMED_RESULT_LABELS = {
@@ -188,12 +192,22 @@ class StatObj:
         return self.statJson["Innings Played"]
 
     def isMercy(self) -> bool:
-        # returns if the game ended in a mercy or not
-        return self.inningsSelected() - self.inningsPlayed() >= 1 and abs(self.score(0) - self.score(1)) > 10
+        """True if the game ended on the mercy rule.
+
+        MERCY_MARGIN and >=, because the rule is a lead OF 10 -- `> 10` missed
+        every game mercied by exactly the margin.
+        """
+        return (self.inningsSelected() - self.inningsPlayed() >= 1
+                and abs(self.score(0) - self.score(1)) >= MERCY_MARGIN)
 
     def wasQuit(self) -> bool:
-        # returns if the game was quit out early
-        return self.statJson["Quitter Team"] != ""
+        """True if the game was quit out early, a "Crash" cut-off included.
+
+        No quitter is spelled three ways depending on the file: "None" in a
+        decoded file, 255 in an encoded one, and "" in old ones. Testing only
+        for "" reported every decoded and encoded game as quit.
+        """
+        return self.statJson["Quitter Team"] not in ("", "None", 255)
 
     def quitter(self) -> str:
         # returns the name of the quitter if the game was quit. empty string if no quitter
