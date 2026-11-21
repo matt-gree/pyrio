@@ -1,6 +1,7 @@
 """StatObj: read-only view over a decoded Project Rio stat file."""
 from __future__ import annotations
 
+import re
 from datetime import datetime
 from typing import Optional, Union
 
@@ -13,14 +14,34 @@ from ..rio_value import (
 )
 from .error_checking import ErrorChecker
 
+# Version strings carry prefixes and suffixes ("Pre 0.1.7", "0.1.7.a"), so the
+# numbers are matched out of the string rather than compared literally.
+_VERSION_RE = re.compile(r"(\d+)\.(\d+)(?:\.(\d+))?")
+
+# Rio 2.3.0 generates a random 64-bit GameID and writes it as lowercase hex
+# (StatTracker::gameIDToHex). Every earlier release read a u32 out of game
+# memory and wrote it in decimal. Both arrive as a quoted string.
+_HEX_GAME_ID_FROM = (2, 3, 0)
+
 
 class StatObj:
     def __init__(self, statJson: dict):
         self.statJson = statJson
 
     def gameID(self) -> int:
-        # returns it in int form
-        return int(self.statJson["GameID"].replace(',', ''), 16)
+        """The game's id as an int.
+
+        The base depends on the version that wrote the file: Rio 2.3.0 writes
+        lowercase hex, every release before it wrote decimal. Parsing a decimal
+        id as hex silently returns a different number -- "3896251267" reads as
+        243037180519 -- which breaks any join against server records.
+        """
+        raw = str(self.statJson["GameID"]).replace(',', '')
+        return int(raw, 16 if self.hexGameID() else 10)
+
+    def hexGameID(self) -> bool:
+        """True if this file writes GameID in hex (Rio 2.3.0 and later)."""
+        return not self.versionBefore(*_HEX_GAME_ID_FROM)
 
     def game_mode(self) -> int:
         """Game mode id for this game (the stat file's raw TagSetID).
@@ -46,6 +67,19 @@ class StatObj:
 
     def version(self) -> str:
         return self.statJson.get('Version', 'Pre 0.1.7')
+
+    def versionBefore(self, major: int, minor: int, patch: int = 0) -> bool:
+        """True if Project Rio wrote this file before version major.minor.patch.
+
+        Compares the numbers in the version string, so it handles the prefixed
+        and suffixed releases ("Pre 0.1.7", "0.1.7.a") that an exact-string
+        match misses. A version with no numbers in it -- including a missing
+        key, which reads as "Pre 0.1.7" -- is treated as older than anything.
+        """
+        match = _VERSION_RE.search(self.version() or '')
+        if match is None:
+            return True
+        return tuple(int(n or 0) for n in match.groups()) < (major, minor, patch)
 
     def stadium(self) -> Stadium:
         # returns the stadium that was played on

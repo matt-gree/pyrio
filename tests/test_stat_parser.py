@@ -121,3 +121,40 @@ def test_dead_ball_reason_source_agnostic():
     dec_d = EventObj(dec, idx).dead_ball_reason()
     assert isinstance(enc_d, DeadBallReason)
     assert enc_d == dec_d
+
+
+# --- GameID base, and the version comparison it depends on ---------------------
+
+def test_game_id_is_decimal_before_2_3():
+    # The fixture is Version 2.2.0 and its filename carries the same id, so the
+    # expected value is independent of the parser.
+    dec = pyrio.load_stat_file(DECODED)
+    assert dec.version() == "2.2.0"
+    assert dec.gameID() == 3896251267
+    assert dec.hexGameID() is False
+
+
+def test_game_id_is_hex_from_2_3():
+    # Rio 2.3.0 writes lowercase hex via gameIDToHex.
+    stat = StatObj({"Version": "2.3.0", "GameID": "e84a9bc3"})
+    assert stat.hexGameID() is True
+    assert stat.gameID() == 0xE84A9BC3
+
+
+def test_game_id_hex_boundary_is_2_3_0():
+    assert StatObj({"Version": "2.2.9", "GameID": "10"}).gameID() == 10
+    assert StatObj({"Version": "2.3.0", "GameID": "10"}).gameID() == 16
+
+
+def test_version_before_matches_numbers_not_strings():
+    # The prefixed and suffixed releases an exact-string match misses.
+    assert StatObj({"Version": "Pre 0.1.7"}).versionBefore(2, 3)
+    assert StatObj({"Version": "0.1.7.a"}).versionBefore(2, 3)
+    assert StatObj({}).versionBefore(2, 3)                 # missing key
+    assert StatObj({"Version": None}).versionBefore(2, 3)   # present but null
+    assert StatObj({"Version": "Unknown"}).versionBefore(2, 3)
+    # 1.9.5 vs 1.9.6 and the no-patch form, where off-by-one-release hurts.
+    assert StatObj({"Version": "1.9.5"}).versionBefore(1, 9, 6)
+    assert not StatObj({"Version": "1.9.6"}).versionBefore(1, 9, 6)
+    assert not StatObj({"Version": "2.3"}).versionBefore(2, 3)
+    assert not StatObj({"Version": "2.10.0"}).versionBefore(2, 3)
