@@ -1,53 +1,98 @@
-"""Parity check: pyrio's Tables vs Project Rio's canonical C++ maps.
+"""Parity check: pyrio's enums vs Project Rio's canonical C++ maps.
 
-The canonical id/name mappings live in the Project Rio repo at
+The canonical id/label maps live in the Project Rio repo at
 ``Source/Core/Core/MSB_StatTracker.h``. This test parses those C++ maps and
-asserts pyrio's tables match, so drift (e.g. a new character or a renamed
-result) is caught.
+checks each ``CodeEnum`` against its map in both directions, so drift (a new
+character, a renamed result) fails with the line to paste.
 
 Point it at a local Project Rio checkout with the PYRIO_PROJECTRIO_PATH env
 var, which makes a missing checkout an error (CI's parity job sets it).
 Without it the test looks for a sibling ``../ProjectRio`` and skips if absent.
 """
+
 import os
-import re
 import pathlib
+import re
 import subprocess
 import tempfile
 
 import pytest
 
-from pyrio.rio_value import Tables
+import pyrio
+from pyrio import (
+    AtBatResult,
+    CaptainStar,
+    Character,
+    CharacterClass,
+    ChargeType,
+    CodeEnum,
+    ContactType,
+    DeadBallReason,
+    FielderAction,
+    FielderBobble,
+    Hand,
+    HorizontalHitTrajectory,
+    ManualSelect,
+    MoonshotStatus,
+    OutType,
+    PitchResult,
+    PitchType,
+    Position,
+    PrimaryContactResult,
+    PushPull,
+    SecondaryContactResult,
+    Stadium,
+    StarPitch,
+    StarSwing,
+    StealType,
+    SwingType,
+    TeamName,
+    VerticalHitTrajectory,
+)
 
-# canonical C++ map name -> Tables attribute. Only maps describing the
-# SAME field are listed here.
-CANON_TO_PYRIO = {
-    "cCharIdToCharName": "CHAR_NAME",
-    "cStadiumIdToStadiumName": "STADIUM",
-    "cLogoIdToTeamName": "TEAM_NAME",
-    "cTypeOfContactToHR": "CONTACT_TYPE",
-    "cHandToHR": "HAND",
-    "cPitchTypeToHR": "PITCH_TYPE",
-    "cChargePitchTypeToHR": "CHARGE_TYPE",
-    "cTypeOfSwing": "TYPE_OF_SWING",
-    "cPosition": "POSITION",
-    "cFielderActions": "FIELDER_ACTIONS",
-    "cFielderBobbles": "FIELDER_BOBBLES",
-    "cStealType": "STEAL_TYPE",
-    "cOutType": "OUT_TYPE",
-    "cPitchResult": "PITCH_RESULT",
-    "cPrimaryContactResult": "PRIMARY_CONTACT_RESULT",
-    "cSecondaryContactResult": "SECONDARY_CONTACT_RESULT",
-    "cAtBatResult": "FINAL_RESULT",
-    "cManualSelectDecode": "MANUAL_SELECT",
-    "cDeadBallReason": "DEAD_BALL_REASON",
+# Canonical C++ map -> the enum that mirrors it.
+CANON_TO_ENUM: dict[str, type[CodeEnum]] = {
+    "cCharIdToCharName": Character,
+    "cStadiumIdToStadiumName": Stadium,
+    "cLogoIdToTeamName": TeamName,
+    "cTypeOfContactToHR": ContactType,
+    "cHandToHR": Hand,
+    "cInputDirectionToHR": PushPull,
+    "cPitchTypeToHR": PitchType,
+    "cChargePitchTypeToHR": ChargeType,
+    "cTypeOfSwing": SwingType,
+    "cMoonShotStatus": MoonshotStatus,
+    "cPosition": Position,
+    "cFielderActions": FielderAction,
+    "cFielderBobbles": FielderBobble,
+    "cStealType": StealType,
+    "cOutType": OutType,
+    "cPitchResult": PitchResult,
+    "cPrimaryContactResult": PrimaryContactResult,
+    "cSecondaryContactResult": SecondaryContactResult,
+    "cAtBatResult": AtBatResult,
+    "cDeadBallReason": DeadBallReason,
+    "cManualSelectDecode": ManualSelect,
 }
 
-# INPUT_DIRECTION is NOT compared here: it mirrors the C++ "StickVec" decoder
-# (a computed 0-15 bitmask), not a header std::map -- it is checked directly in
-# test_lookup_values.py. The header's cInputDirectionToHR is a *different* field
-# (Input Direction - Push/Pull: None/Towards/Away), which pyrio has no dict for.
+# Coded values whose ids come from the character attribute sheet, not the header.
+NOT_IN_HEADER: set[type[CodeEnum]] = {
+    CharacterClass,
+    HorizontalHitTrajectory,
+    VerticalHitTrajectory,
+    CaptainStar,
+    StarPitch,
+    StarSwing,
+}
 
+# Upstream ids that pyrio reads as None rather than as a member.
+READ_AS_NONE = {
+    ("cPosition", 0xFF),  # "Inv": no position, so Position | None
+}
+
+# InputDirection is not compared here: it mirrors the C++ "StickVec" decoder (a
+# computed 0-15 bitmask), not a header std::map, and tests/test_codes.py checks
+# it against that decoder's rules.
 
 HEADER_REL = "Source/Core/Core/MSB_StatTracker.h"
 CPP_REL = "Source/Core/Core/MSB_StatTracker.cpp"
@@ -76,7 +121,9 @@ def _materialize(repo, ref):
     try:
         rev = subprocess.run(
             ["git", "-C", str(repo), "rev-parse", "--verify", f"{ref}^{{commit}}"],
-            capture_output=True, text=True, timeout=10,
+            capture_output=True,
+            text=True,
+            timeout=10,
         )
         if rev.returncode != 0:
             return None, None
@@ -84,7 +131,9 @@ def _materialize(repo, ref):
         for rel in (HEADER_REL, CPP_REL):
             blob = subprocess.run(
                 ["git", "-C", str(repo), "show", f"{ref}:{rel}"],
-                capture_output=True, text=True, timeout=30,
+                capture_output=True,
+                text=True,
+                timeout=30,
             )
             if blob.returncode != 0:
                 if rel == HEADER_REL:
@@ -100,6 +149,8 @@ def _materialize(repo, ref):
 
 REPO = _find_repo()
 REF = os.environ.get("PYRIO_PROJECTRIO_REF", DEFAULT_REF)
+HEADER = None
+SOURCE = "no Project Rio checkout found"
 
 # An explicit path means the caller (CI's parity job) wants the comparison, so a
 # wrong path is an error, not a skip.
@@ -107,13 +158,11 @@ if os.environ.get("PYRIO_PROJECTRIO_PATH") and REPO is None:
     raise RuntimeError(
         f"PYRIO_PROJECTRIO_PATH={os.environ['PYRIO_PROJECTRIO_PATH']!r} has no {HEADER_REL}"
     )
-HEADER = None
-SOURCE = "no Project Rio checkout found"
 
 if REPO is not None:
     HEADER, _commit = _materialize(REPO, REF)
-    if HEADER is not None:
-        SOURCE = f"{REPO} at {REF} ({_commit[:10]})"
+    if HEADER is not None and _commit is not None:
+        SOURCE = f"ProjectRio @ {REF}, {_commit[:10]}"
     else:
         # No git, or the ref is absent (e.g. a bare copy of the sources).
         HEADER = REPO / HEADER_REL
@@ -122,14 +171,14 @@ if REPO is not None:
             "this may include uncommitted local edits"
         )
 
-pytestmark = pytest.mark.skipif(
+needs_header = pytest.mark.skipif(
     HEADER is None,
     reason="Project Rio repo not found; set PYRIO_PROJECTRIO_PATH to enable parity tests",
 )
 
 
 # Divergences pyrio carries deliberately, because it has adopted a correction
-# that is not merged upstream yet. (canonical map, id) -> pyrio's value.
+# that is not merged upstream yet. (canonical map, id) -> pyrio's label.
 # Each entry must cite why; remove it once upstream agrees -- the test fails
 # with a "remove this entry" message when that happens, so these cannot rot.
 PENDING_UPSTREAM = {
@@ -154,43 +203,104 @@ def _parse_canonical(path):
 _CANON = _parse_canonical(HEADER) if HEADER else {}
 
 
-@pytest.mark.parametrize("canon_name,pyrio_name", sorted(CANON_TO_PYRIO.items()))
-def test_lookupdict_matches_canonical(canon_name, pyrio_name):
+def _member_name(label):
+    """A member name for a new upstream label: 'Captain Toad' -> 'CAPTAIN_TOAD'."""
+    return re.sub(r"[^A-Z0-9]+", "_", label.upper()).strip("_")
+
+
+def _enum_ids(cls):
+    """id -> member, including the extra ids a member accepts (0xFF for NONE)."""
+    ids = {member.id: member for member in cls}
+    for member in cls:
+        for alias in member._aliases:
+            if isinstance(alias, int):
+                ids[alias] = member
+    return ids
+
+
+def _literal(member, label):
+    """The member's declaration with ``label`` first, keeping its other labels as aliases."""
+    labels = [label] + [
+        old for old in (member.label, *member._aliases) if isinstance(old, str) and old != label
+    ]
+    values = [str(member.id), *(f'"{x}"' for x in labels)]
+    return f"{member.name} = {', '.join(values)}"
+
+
+@needs_header
+@pytest.mark.parametrize(
+    ("canon_name", "cls"), sorted(CANON_TO_ENUM.items()), ids=sorted(CANON_TO_ENUM)
+)
+def test_enum_matches_canonical(canon_name, cls):
     canon = _CANON.get(canon_name)
     assert canon, f"canonical map {canon_name} not found in {HEADER}"
-    pymap = getattr(Tables, pyrio_name)
-    # compare on int keys (skip pyrio-only non-int keys like None/bool)
-    py_int = {k: v for k, v in pymap.items() if isinstance(k, int) and not isinstance(k, bool)}
+    ours = _enum_ids(cls)
 
-    diffs, stale = [], []
-    for k in sorted(set(canon) | set(py_int)):
-        c, p = canon.get(k), py_int.get(k)
-        pending = PENDING_UPSTREAM.get((canon_name, k))
-        if pending is not None:
-            if c == pending:
-                stale.append(
-                    f"  id {k}: upstream now says {c!r} too -- "
-                    f"remove the PENDING_UPSTREAM entry for ({canon_name!r}, {k})"
-                )
-                continue
-            if p == pending:
-                continue        # deliberate divergence, still pending upstream
-        if c != p:
-            diffs.append(f"  id {k}: canonical={c!r} pyrio={p!r}")
+    problems = []
+    for code in sorted(set(canon) | set(ours)):
+        upstream, member = canon.get(code), ours.get(code)
+        pending = PENDING_UPSTREAM.get((canon_name, code))
+        if pending is not None and upstream == pending:
+            problems.append(
+                f"  id {code}: upstream now says {upstream!r} too -- "
+                f"remove the PENDING_UPSTREAM entry for ({canon_name!r}, {code})"
+            )
+        elif (canon_name, code) in READ_AS_NONE:
+            if member is not None:
+                problems.append(f"  id {code} is read as None; remove {member.name}")
+        elif member is None:
+            problems.append(
+                f"  missing id {code} {upstream!r} -- add:    "
+                f'{_member_name(upstream)} = {code}, "{upstream}"'
+            )
+        elif upstream is None:
+            problems.append(
+                f"  id {code} {member.label!r} is not upstream -- remove {member.name}, "
+                "or list it in PENDING_UPSTREAM with the reason"
+            )
+        elif pending is not None and member.label == pending:
+            continue  # deliberate divergence, still pending upstream
+        elif member.label != upstream:
+            problems.append(
+                f"  id {code}: upstream says {upstream!r}, pyrio says {member.label!r} -- "
+                f"change to:    {_literal(member, upstream)}"
+            )
 
-    if diffs or stale:
-        parts = [f"{pyrio_name} vs canonical {canon_name}", f"source: {SOURCE}"]
-        if diffs:
-            parts.append("diverges:\n" + "\n".join(diffs))
-        if stale:
-            parts.append("stale exceptions:\n" + "\n".join(stale))
-        pytest.fail("\n".join(parts))
+    if problems:
+        pytest.fail(f"{cls.__name__} vs canonical {canon_name} ({SOURCE})\n" + "\n".join(problems))
+
+
+@needs_header
+def test_every_canonical_map_is_mirrored():
+    """A map upstream adds fails here until an enum mirrors it."""
+    unmirrored = sorted(
+        name for name, entries in _CANON.items() if entries and name not in CANON_TO_ENUM
+    )
+    assert not unmirrored, f"canonical maps with no enum in CANON_TO_ENUM: {unmirrored}"
+
+
+def _subclasses(cls):
+    for sub in cls.__subclasses__():
+        yield sub
+        yield from _subclasses(sub)
+
+
+def test_every_code_enum_is_checked():
+    """Each public CodeEnum is compared with the header, or says where its ids come from."""
+    public = {getattr(pyrio, name) for name in pyrio.__all__}
+    enums = {cls for cls in _subclasses(CodeEnum) if cls in public}
+    unchecked = enums - set(CANON_TO_ENUM.values()) - NOT_IN_HEADER
+    assert not unchecked, (
+        f"add to CANON_TO_ENUM or NOT_IN_HEADER: {sorted(c.__name__ for c in unchecked)}"
+    )
 
 
 # --- field-name (schema) parity ---------------------------------------------
 
+
 def _canonical_field_names():
     """Field names MSB_StatTracker emits (hardcoded JSON writes + TrackerValue names)."""
+    assert HEADER is not None
     fields = set(re.findall(r'Tracker(?:Value|Adr)<[^>]*>\("([^"]+)"', HEADER.read_text()))
     cpp = HEADER.with_suffix(".cpp")
     if cpp.is_file():
@@ -234,14 +344,18 @@ _LEGACY_FIELDS: dict[str, str] = {
 }
 
 
+@needs_header
 def test_pyrio_fields_are_canonical():
     """Every field the parser reads must exist in MSB_StatTracker (catches renames)."""
     canonical = _canonical_field_names()
     literals = _pyrio_field_literals()
     # Guard against scanning nothing: a moved package once made this pass vacuously.
-    assert len(literals) > 50, f"only {len(literals)} field literals found; is the parser path right?"
+    assert len(literals) > 50, (
+        f"only {len(literals)} field literals found; is the parser path right?"
+    )
     unknown = sorted(
-        k for k in literals
+        k
+        for k in literals
         if k not in canonical and k not in _FIELD_ALLOWLIST and k not in _LEGACY_FIELDS
     )
     assert not unknown, (
@@ -251,6 +365,7 @@ def test_pyrio_fields_are_canonical():
     )
 
 
+@needs_header
 def test_legacy_fields_are_still_legacy():
     """A legacy field the current client writes again is no longer legacy."""
     canonical = _canonical_field_names()

@@ -1,12 +1,8 @@
 import re
 
-
-class RioError(Exception):
-    """Base class for everything pyrio deliberately raises.
-
-    Catch this to handle any pyrio-specific failure (API errors, unknown
-    coded values, ...) without swallowing unrelated exceptions.
-    """
+# The one base class, shared with the 1.0 core so `except pyrio.RioError`
+# catches both while the pre-1.0 modules remain.
+from ._errors import RioError
 
 
 class RioAPIError(RioError):

@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 
 from pyrio.stat_file import StatObj, EventSearch
-from pyrio import Character
+from pyrio.rio_value import Character
 
 FIXTURE = Path(__file__).parent / "fixtures" / (
     "decoded.20260618T191655_SpiceOrange-Vs-MattGree_3896251267.json"
@@ -164,7 +164,7 @@ def test_renamed_result_methods_and_aliases(search):
 def test_caught_buckets_follow_the_corrected_ids(search):
     """These look up by name, so the 5/6 correction moves them to the right
     ids: caughtResultEvents is genuinely-caught balls (6), not line drives."""
-    from pyrio import FinalResult
+    from pyrio.rio_value import FinalResult
     assert search.caughtResultEvents() == search._result_of_AB_dict[FinalResult.from_raw(6)]
     assert (search.caughtLineDriveResultsEvents()
             == search._result_of_AB_dict[FinalResult.from_raw(5)])

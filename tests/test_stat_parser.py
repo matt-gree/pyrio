@@ -3,9 +3,8 @@ import pathlib
 import pytest
 
 import pyrio
-from pyrio import (
-    StatObj, Character, Stadium, PitchType, FinalResult, Hand, RunnerObj, DeadBallReason,
-)
+from pyrio import StatObj, RunnerObj
+from pyrio.rio_value import Character, Stadium, PitchType, FinalResult, Hand, DeadBallReason
 from pyrio.stat_file_parser import EventObj
 
 FIXTURES = pathlib.Path(__file__).parent / "fixtures"

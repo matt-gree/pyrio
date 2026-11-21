@@ -3,7 +3,8 @@ import pathlib
 
 import pytest
 
-from pyrio import HudObj, Stadium, TeamName, Character, Position, Hand, RunnerObj
+from pyrio import HudObj, RunnerObj
+from pyrio.rio_value import Stadium, TeamName, Character, Position, Hand
 
 FIXTURES = pathlib.Path(__file__).parent / "fixtures"
 ENCODED = FIXTURES / "hud.json"            # ids stored as ints

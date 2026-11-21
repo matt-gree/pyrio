@@ -3,7 +3,7 @@ from dataclasses import fields
 
 import pytest
 
-from pyrio import Character, Tables
+from pyrio.rio_value import Character, Tables
 from pyrio.constants.character_data import (
     AttributeSpec, ATTRIBUTES, ATTRIBUTES_BY_KEY, CharacterAttributes,
     character_attributes,
@@ -104,7 +104,7 @@ def test_with_superstar_matches_spec_for_every_character():
 
 
 def test_base_character_dedups_variants():
-    from pyrio import Character, BaseCharacter
+    from pyrio.rio_value import Character, BaseCharacter
     # All Pianta variants share one BaseCharacter.
     assert Character.from_raw("Pianta(R)").base == Character.from_raw("Pianta(B)").base
     assert BaseCharacter.from_raw("Pianta(R)") == BaseCharacter("Pianta")

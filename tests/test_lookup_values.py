@@ -1,13 +1,13 @@
 import pytest
 
-from pyrio import (
+from pyrio.exceptions import RioError, RioAPIError, UnknownRioValueError
+from pyrio.rio_value import (
     Character, BaseCharacter, RioValue, Tables, Stadium,
     PitchType, ChargeType, SwingType, ContactType,
     FinalResult, PrimaryContactResult, SecondaryContactResult,
     OutType, StealType, PitchResult,
     Hand, Position, FielderAction, FielderBobble, ManualSelect, TeamName,
     DeadBallReason,
-    RioError, RioAPIError, UnknownRioValueError,
     lookup, userInputToCharacter,
 )
 

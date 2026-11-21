@@ -22,7 +22,7 @@ from .character_data import (
 _DIR = Path(__file__).parent
 
 # Per-character base (star-OFF) attribute table.
-CHARACTER_ATTRIBUTES_CSV = _DIR / "character_attributes.csv"
+CHARACTER_ATTRIBUTES_CSV = _DIR.parent / "_data" / "character_attributes.csv"
 
 # Directory of per-stadium boundary coordinate files.
 STADIUMS_DIR = _DIR / "stadiums"

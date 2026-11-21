@@ -1,0 +1,125 @@
+# What people type for characters and stadiums, read by Character.parse,
+# CharacterFamily.parse and Stadium.parse.
+#
+# Names are matched after folding case and dropping spaces and punctuation, so
+# "Bowser Jr.", "bowser-jr" and "BOWSERJR" are the same name. Labels and the
+# forms below are generated, so don't list them here:
+#
+#   - every canonical label ("Toad(B)") and family name ("Toad");
+#   - for each variant, its suffix and words before or after each family stem:
+#     "btoad", "toadb", "bluetoad", "toadblue" (and "r!toad", "toad (red)", ...).
+#
+# A name may mean only one thing. tests/test_characters.py fails on a clash, on
+# a name that a rule already generates, and on a family with no default.
+
+# Words for each variant suffix. A family can replace them with its own.
+[variant_words]
+R = ["red"]
+B = ["blue"]
+Y = ["yellow"]
+G = ["green"]
+P = ["purple"]
+Bk = ["black"]
+Gy = ["grey", "gray"]
+
+# Families with variants. `default` is what the bare family name means
+# (decided 2026-11-21). `nicknames` are other names for the family, and variant
+# forms are built on them too ("mag" gives "bluemag", "magb", "bmag", ...).
+[families.Koopa]
+default = "Koopa(R)"
+
+[families.Toad]
+default = "Toad(R)"
+
+[families."Shy Guy"]
+default = "Shy Guy(R)"
+
+[families.Paratroopa]
+default = "Paratroopa(G)"
+nicknames = ["para"]
+
+[families.Pianta]
+default = "Pianta(R)"
+
+[families.Noki]
+default = "Noki(G)"
+
+[families.Bro]
+default = "Bro(H)"
+variant_words = { H = ["hammer"], F = ["fire"], B = ["boomerang"] }
+
+[families.Magikoopa]
+default = "Magikoopa(B)"
+nicknames = ["mag"]
+
+[families."Dry Bones"]
+default = "Dry Bones(G)"
+nicknames = ["bones"]
+
+# Codes and nicknames, keyed by canonical label.
+[characters]
+"Mario" = ["m"]
+"Luigi" = ["l"]
+"DK" = ["Donkey Kong"]
+"Diddy" = ["dy", "Diddy Kong"]
+"Peach" = ["p"]
+"Daisy" = ["d"]
+"Yoshi" = ["y"]
+"Baby Mario" = ["bym", "bmario"]
+"Baby Luigi" = ["byl", "bluigi"]
+"Bowser" = ["bw"]
+"Wario" = ["w"]
+"Waluigi" = ["wl", "walu"]
+"Koopa(G)" = ["gk", "greg"]
+"Toad(R)" = ["rt"]
+"Boo" = ["b"]
+"Toadette" = ["te"]
+"Shy Guy(R)" = ["rsg"]
+"Birdo" = ["bi", "bo", "bd"]
+"Monty" = ["my", "mn", "Monty Mole", "moonball"]
+"Bowser Jr" = ["bj", "Bowser Junior"]
+"Paratroopa(R)" = ["rpt"]
+"Pianta(B)" = ["bp"]
+"Pianta(R)" = ["pm", "rp"]
+"Pianta(Y)" = ["yp"]
+"Noki(B)" = ["bn"]
+"Noki(R)" = ["rn"]
+"Noki(G)" = ["gn"]
+"Bro(H)" = ["hb"]
+"Toadsworth" = ["tw", "sworth"]
+"Toad(B)" = ["bt", "teardrop"]
+"Toad(Y)" = ["yt", "cornpop"]
+"Toad(G)" = ["gt", "John Deere"]
+"Toad(P)" = ["pt", "Lean Toad", "lean"]
+"Magikoopa(B)" = ["bm"]
+"Magikoopa(R)" = ["rm"]
+"Magikoopa(G)" = ["gm"]
+"Magikoopa(Y)" = ["ym", "pisswizard"]
+"King Boo" = ["kb"]
+"Petey" = ["py", "Petey Piranha"]
+"Dixie" = ["dx", "dix", "Dixie Kong"]
+"Goomba" = ["g"]
+"Paragoomba" = ["pg"]
+"Koopa(R)" = ["rk", "rkt", "ron"]
+"Paratroopa(G)" = ["gpt"]
+"Shy Guy(B)" = ["bsg"]
+"Shy Guy(Y)" = ["ysg"]
+"Shy Guy(G)" = ["gsg"]
+"Shy Guy(Bk)" = ["bksg"]
+"Dry Bones(Gy)" = ["gydb"]
+"Dry Bones(G)" = ["gdb"]
+"Dry Bones(R)" = ["rdb"]
+"Dry Bones(B)" = ["bdb"]
+"Bro(F)" = ["fb"]
+"Bro(B)" = ["bb", "boomer"]
+
+# Shorthand for stadiums, keyed by canonical label. Labels and the older
+# names in Stadium's aliases ("Bowser's Castle") are matched already.
+[stadiums]
+"Mario Stadium" = ["ms", "mario"]
+"Bowser Castle" = ["bc", "bowser"]
+"Wario Palace" = ["wp", "wario"]
+"Yoshi Park" = ["yp", "yoshi"]
+"Peach Garden" = ["pg", "peach"]
+"DK Jungle" = ["dkj", "dk", "jungle"]
+"Toy Field" = ["tf", "toy"]

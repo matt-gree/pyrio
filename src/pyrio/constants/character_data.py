@@ -19,7 +19,7 @@ from typing import Callable, ClassVar, Optional
 
 from ..rio_value import Tables
 
-_CSV = Path(__file__).parent / "character_attributes.csv"
+_CSV = Path(__file__).parent.parent / "_data" / "character_attributes.csv"
 
 
 # --------------------------------------------------------------------------

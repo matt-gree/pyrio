@@ -113,7 +113,6 @@ extend-exclude = [
     "src/pyrio/stat_formatters.py",
     "src/pyrio/team_name_algo.py",
     "src/pyrio/web_caching.py",
-    "tests/test_canonical_parity.py",
     "tests/test_character_data.py",
     "tests/test_draw_stadium.py",
     "tests/test_event_search.py",
@@ -152,6 +151,8 @@ select = [
     "PTH",      # pathlib over os.path
     "RUF",
 ]
+# TC006 wants the type in cast() quoted, which buys nothing under PEP 563.
+ignore = ["TC006"]
 
 [tool.ruff.lint.isort]
 known-first-party = ["pyrio"]
@@ -183,7 +184,6 @@ exclude = [
     "src/pyrio/stat_formatters.py",
     "src/pyrio/team_name_algo.py",
     "src/pyrio/web_caching.py",
-    "tests/test_canonical_parity.py",
     "tests/test_character_data.py",
     "tests/test_draw_stadium.py",
     "tests/test_event_search.py",
@@ -202,6 +202,7 @@ exclude = [
 pythonVersion = "3.11"
 typeCheckingMode = "standard"
 strict = ["src"]
+reportUnnecessaryTypeIgnoreComment = "error"
 venvPath = "."
 venv = ".venv"
 
@@ -209,11 +210,11 @@ venv = ".venv"
 # The layering from docs/v1.0.0-audit.md, section 7. A layer in parentheses is
 # optional, so a contract can name a module before the step that writes it.
 # Contracts that need a module to exist (forbidden, independence) arrive with
-# the step that writes the module: the core's ban on httpx, pandas, numpy and
-# matplotlib in step 2, and pyrio.web's isolation in step 5.
+# the step that writes the module: pyrio.web's isolation comes in step 5.
 
 [tool.importlinter]
 root_package = "pyrio"
+include_external_packages = true
 
 [[tool.importlinter.contracts]]
 name = "Core layers"
@@ -235,4 +236,34 @@ layers = [
     "(pyrio.svg) | (pyrio.sim)",
     "(pyrio.geometry)",
     "(pyrio._errors) : (pyrio._enum) : (pyrio._codes) : (pyrio._characters) : (pyrio._names) : (pyrio._stats) : (pyrio._team_names) : (pyrio._game) : (pyrio._decode) : (pyrio._serialize)",
+]
+
+[[tool.importlinter.contracts]]
+name = "The core needs only the standard library, and none of the pre-1.0 modules"
+type = "forbidden"
+# A forbidden contract needs its modules to exist, so each step adds the core
+# modules it writes here.
+source_modules = [
+    "pyrio._characters",
+    "pyrio._codes",
+    "pyrio._enum",
+    "pyrio._errors",
+    "pyrio._names",
+    "pyrio._team_names",
+]
+forbidden_modules = [
+    "httpx",
+    "matplotlib",
+    "numpy",
+    "pandas",
+    "requests",
+    "scipy",
+    "pyrio.api",
+    "pyrio.constants",
+    "pyrio.exceptions",
+    "pyrio.rio_value",
+    "pyrio.rio_web",
+    "pyrio.stat_file",
+    "pyrio.stat_file_parser",
+    "pyrio.team_name_algo",
 ]
