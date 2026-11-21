@@ -8,9 +8,9 @@ BALL_COLLISION_TYPE_WALL. Collision semantics are taken from the decomp
     0x80 is a FOUL flag rather than part of the type. Wall panels in foul
     territory are 0x82 and do not belong in a fair-territory table -- at Mario
     Stadium they are the 2.0-high wall out past the pole.
-  * BALL_COLLISION_TYPE_UNCLIMBABLE_WALL (5) is also treated as a wall for
-    bouncing (ball_physics.c:2783), but in these models its panels are
-    0.3-1.6m kerbs sitting at the same z as the fence, not the fence itself.
+  * BALL_COLLISION_TYPE_UNCLIMBABLE_WALL (5) is also a wall for bouncing
+    (ball_physics.c:2783: `kind == WALL || kind == UNCLIMBABLE_WALL ||
+    kind == 0x20`), and EXCLUDING IT HERE IS AN OPEN QUESTION -- see below.
   * Mesh y is inverted world height: the game probes with
     ``-(ball.y - groundYForBounces)`` (ball_physics.c:2750), so the wall top is
     y=0 and a point's height above the field is -y. A naive max(y) reads 0.0 at
@@ -33,6 +33,31 @@ that x. Segments are then built from the panel lines exactly, never sampled:
 the nearest panel can only change at a panel edge or where two panels cross, so
 taking those plus every triangle corner as breakpoints yields intervals on
 which one panel is nearest and the height is constant.
+
+KNOWN GAP: type 5 is excluded, so this table understates the barrier.
+
+An earlier version of this file justified the exclusion by saying type 5's
+panels are "0.3-1.6m kerbs at the same z as the fence". That was measured with
+the y-span reading, and it is wrong for the same reason the wall heights were:
+a span is one course's thickness. Measured as the wall's top, type 5 panels are
+TALLER than the fence beside them:
+
+    Yoshi Park     fence 3.2    type 5  3.5 / 3.6 / 4.2
+    Bowser Castle  fence 16.64  type 5  12.98 / 14.5 / 17.56 / 19.14
+    Peach Garden   fence 23.0   type 5  up to 30.0
+    (Mario Stadium, Wario Palace, DK Jungle and Toy Field have none in fair
+     territory, so they are unaffected either way.)
+
+Some sit demonstrably IN the fence line, at the same z -- Yoshi Park at
+x +/-57.4..58.1 is 4.2 against the fence's 3.2 at z 58.02, and at x -2.9..-1.4
+it is 3.5 against 3.2 at z 93.34; Peach Garden at x -5..0 is 30.0 against the
+wall's 23.0 at z 87.60. At those x the real barrier is higher than this table
+says and is_home_run is too generous.
+
+Including them is not a one-line change, though: it moves Peach Garden's centre
+from 23 to 30 and replaces Bowser Castle's corner heights, which is a large
+shift in home-run calls that should be checked against recorded games first.
+RioVisualizer's physics.py:627 does it the game's way and needs no table.
 
 Caveat on provenance: the game never does a geometric "did it clear the wall"
 test. It integrates the trajectory and probes the collision mesh each frame
