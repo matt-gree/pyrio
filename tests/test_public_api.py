@@ -10,6 +10,7 @@ CORE = [
     "Ability",
     "AtBatResult",
     "Bases",
+    "BattingLine",
     "CaptainStar",
     "Character",
     "CharacterAttributes",
@@ -29,6 +30,7 @@ CORE = [
     "OutType",
     "PitchResult",
     "PitchType",
+    "PitchingLine",
     "Position",
     "PrimaryContactResult",
     "PushPull",
@@ -44,6 +46,8 @@ CORE = [
     "UnknownCodeError",
     "UnknownNameError",
     "VerticalHitTrajectory",
+    "format_batting_line",
+    "format_pitching_line",
 ]
 
 

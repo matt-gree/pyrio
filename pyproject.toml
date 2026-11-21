@@ -249,6 +249,7 @@ source_modules = [
     "pyrio._enum",
     "pyrio._errors",
     "pyrio._names",
+    "pyrio._stats",
     "pyrio._team_names",
 ]
 forbidden_modules = [

@@ -17,6 +17,7 @@ from ._characters import (
     StarSwing,
     VerticalHitTrajectory,
 )
+from ._stats import BattingLine, PitchingLine, format_batting_line, format_pitching_line
 from ._codes import (
     AtBatResult,
     Bases,
@@ -51,6 +52,7 @@ __all__ = [
     "Ability",
     "AtBatResult",
     "Bases",
+    "BattingLine",
     "CaptainStar",
     "Character",
     "CharacterAttributes",
@@ -70,6 +72,7 @@ __all__ = [
     "OutType",
     "PitchResult",
     "PitchType",
+    "PitchingLine",
     "Position",
     "PrimaryContactResult",
     "PushPull",
@@ -85,6 +88,8 @@ __all__ = [
     "UnknownCodeError",
     "UnknownNameError",
     "VerticalHitTrajectory",
+    "format_batting_line",
+    "format_pitching_line",
 ]
 
 # --- Pre-1.0 -----------------------------------------------------------------
@@ -142,8 +147,6 @@ from .stat_formatters import (
     k_pct,
     opp_avg,
     derive_pitching,
-    format_batting_line,
-    format_pitching_line,
 )
 
 # Glicko-2 rating
