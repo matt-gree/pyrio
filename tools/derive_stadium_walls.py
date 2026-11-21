@@ -110,22 +110,44 @@ def segments(panels):
     return out
 
 
+def degenerate(segs):
+    """Segments a one-dimensional wall_at cannot honestly represent.
+
+    Corner panels overlap in x, and flattening them can leave zero-width or
+    near-vertical runs. wall_at matches `sx <= x < ex`, so a zero-width segment
+    is simply dead, and a 0.25m-wide run with a slope of -11 is noise rather
+    than wall. These must be resolved before the table is used.
+    """
+    return [s for s in segs if (s[1] - s[0]) < 0.5 or abs(s[3]) > 5.0]
+
+
 def validate(panels, segs):
-    """Worst (distance, height) error of the segments against the model."""
+    """Worst (distance, height) error of the segments against the model.
+
+    NOTE: this samples on a grid and matches `sx <= x < ex`, so it cannot see
+    inside segments narrower than the step -- exactly where the corner
+    degeneracy lives. Read it together with degenerate().
+    """
     worst_z = worst_h = 0.0
     n = 0
+    xs = []
     x = min(p[0] for p in panels)
     hi = max(p[1] for p in panels)
     while x <= hi:
-        truth = nearest_wall(panels, x)
-        if truth:
-            for sx, ex, height, m, c in segs:
-                if sx <= x < ex:
-                    worst_z = max(worst_z, abs(m * x + c - truth[0]))
-                    worst_h = max(worst_h, abs(height - truth[1]))
-                    n += 1
-                    break
+        xs.append(x)
         x += SAMPLE_STEP * 2
+    # Also sample just inside each segment, so narrow runs are not skipped.
+    xs.extend(s[0] + min(1e-3, max(0.0, (s[1] - s[0]) / 2)) for s in segs)
+    for x in sorted(xs):
+        truth = nearest_wall(panels, x)
+        if truth is None:
+            continue
+        for sx, ex, height, m, c in segs:
+            if sx <= x < ex:
+                worst_z = max(worst_z, abs(m * x + c - truth[0]))
+                worst_h = max(worst_h, abs(height - truth[1]))
+                n += 1
+                break
     return worst_z, worst_h, n
 
 
@@ -159,8 +181,10 @@ def main(argv):
             continue
         segs = segments(panels)
         dz, dh, n = validate(panels, segs)
+        bad = degenerate(segs)
+        note = f"   NOT USABLE: {len(bad)} degenerate segment(s)" if bad else ""
         report.append(f"{path.stem:16} {len(panels):>3} panels -> {len(segs):>3} segments"
-                      f"   max dz={dz:.3f}m  max dh={dh:.3f}  ({n} samples)")
+                      f"   max dz={dz:.3f}m  max dh={dh:.3f}  ({n} samples){note}")
         blocks.append(emit(path.stem, segs))
 
     print("\n".join(report), file=sys.stderr)
