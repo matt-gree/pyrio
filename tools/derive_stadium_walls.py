@@ -67,6 +67,7 @@ TYPE_MASK = 0x7F             # what the game masks with (ball_physics.c:2295)
 MIN_WALL_DISTANCE = 40.0   # nearer than this is backstop / dugout
 MERGE_TOLERANCE = 1e-3     # when two adjacent intervals are the same line
 MIN_SEGMENT_WIDTH = 1e-3   # narrower than this is a numerical sliver
+COINCIDENT_Z = 1e-3        # panels this close in z are the same surface
 
 
 def wall_panels(doc):
@@ -101,12 +102,19 @@ def wall_panels(doc):
 
 
 def nearest_wall(panels, x):
-    """(z, height) of the closest wall at x, or None if x has no wall."""
+    """(z, height) of the wall at x, or None if x has no wall.
+
+    Nearest in z wins, and coincident panels tie-break on the greater height.
+    This is the single definition of "the wall at x" -- segments() builds from
+    it and validate() checks against it, so the two cannot drift apart.
+    """
     best = None
     for x0, x1, z0, z1, height in panels:
         if x0 <= x <= x1:
             z = z0 + (z1 - z0) * ((x - x0) / (x1 - x0))
-            if best is None or z < best[0]:
+            if best is None or z < best[0] - COINCIDENT_Z:
+                best = (z, height)
+            elif z < best[0] + COINCIDENT_Z and height > best[1]:
                 best = (z, height)
     return best
 
@@ -166,16 +174,24 @@ def segments(panels):
         if hi - lo <= MIN_SEGMENT_WIDTH:
             continue
         mid = 0.5 * (lo + hi)
+        chosen = nearest_wall(panels, mid)
+        if chosen is None:
+            continue
+        height = chosen[1]
+        # Recover the winning panel's exact line. Coincident panels tie-break
+        # on height (see nearest_wall): without that, Peach Garden came out
+        # h=2.01 for x -5..0 against h=18.0 for x 0..7, asymmetric in a
+        # symmetric stadium, because a 2.01 panel lies on the same line as the
+        # 18.0 wall at z=87.6. A ball here must clear the taller surface.
         best = None
         for panel in panels:
-            if panel[0] <= mid <= panel[1]:
+            if panel[0] <= mid <= panel[1] and panel[4] == height:
                 z = _z_at(panel, mid)
-                if best is None or z < best[0]:
+                if abs(z - chosen[0]) < COINCIDENT_Z and (best is None or z < best[0]):
                     best = (z, panel)
         if best is None:
             continue
         m, c = _line(best[1])
-        height = best[1][4]
         if runs:
             px0, px1, ph, pm, pc = runs[-1]
             same = (abs(pm - m) < MERGE_TOLERANCE
