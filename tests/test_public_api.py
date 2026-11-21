@@ -11,7 +11,9 @@ CORE = [
     "AtBatResult",
     "Bases",
     "BattingLine",
+    "CAPTAIN_TEAMS",
     "CaptainStar",
+    "CaptainTeams",
     "Character",
     "CharacterAttributes",
     "CharacterClass",
@@ -37,6 +39,7 @@ CORE = [
     "RioError",
     "SecondaryContactResult",
     "Side",
+    "SignatureTeam",
     "Stadium",
     "StarPitch",
     "StarSwing",
@@ -48,6 +51,7 @@ CORE = [
     "VerticalHitTrajectory",
     "format_batting_line",
     "format_pitching_line",
+    "team_name",
 ]
 
 

@@ -287,7 +287,7 @@ def _subclasses(cls):
 
 def test_every_code_enum_is_checked():
     """Each public CodeEnum is compared with the header, or says where its ids come from."""
-    public = {getattr(pyrio, name) for name in pyrio.__all__}
+    public = [getattr(pyrio, name) for name in pyrio.__all__]  # a list: not every name is hashable
     enums = {cls for cls in _subclasses(CodeEnum) if cls in public}
     unchecked = enums - set(CANON_TO_ENUM.values()) - NOT_IN_HEADER
     assert not unchecked, (

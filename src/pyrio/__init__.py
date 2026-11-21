@@ -44,7 +44,7 @@ from ._codes import (
 )
 from ._enum import CodeEnum
 from ._errors import RioError, UnknownCodeError, UnknownNameError
-from ._team_names import TeamName
+from ._team_names import CAPTAIN_TEAMS, CaptainTeams, SignatureTeam, TeamName, team_name
 
 __version__ = _version("projectrio")
 
@@ -53,7 +53,9 @@ __all__ = [
     "AtBatResult",
     "Bases",
     "BattingLine",
+    "CAPTAIN_TEAMS",
     "CaptainStar",
+    "CaptainTeams",
     "Character",
     "CharacterAttributes",
     "CharacterClass",
@@ -79,6 +81,7 @@ __all__ = [
     "RioError",
     "SecondaryContactResult",
     "Side",
+    "SignatureTeam",
     "Stadium",
     "StarPitch",
     "StarSwing",
@@ -90,6 +93,7 @@ __all__ = [
     "VerticalHitTrajectory",
     "format_batting_line",
     "format_pitching_line",
+    "team_name",
 ]
 
 # --- Pre-1.0 -----------------------------------------------------------------
@@ -130,9 +134,6 @@ from .exceptions import (
     RioNotFoundError,
     UnknownRioValueError,
 )
-
-# Team name resolution: the algorithm plus the captain-teams data itself
-from .team_name_algo import team_name, CaptainTeams, Signature, CAPTAIN_TEAMS
 
 # Stat formatters and derived stat calculators
 from .stat_formatters import (
