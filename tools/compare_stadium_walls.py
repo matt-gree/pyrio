@@ -3,7 +3,10 @@
 STADIUM_WALLS is transcribed from the JS `stadiums` constant: piecewise-linear
 segments in field x, each with a slope/intercept for the wall's z and a wall
 height. The authoritative geometry is the stadium collision model, where the
-outfield wall is the set of triangles whose CollisionType low nibble is 0x02.
+outfield wall is the set of triangles of type BALL_COLLISION_TYPE_WALL.
+
+The type is masked `& 0x7F`, as the game does (ball_physics.c:2295); 0x80 is a
+FOUL flag, so 0x82 is a wall panel in foul territory and is excluded here.
 
 This reads those triangles and reports, per stadium, how far the hand-typed
 wall sits from the modelled one. It changes nothing -- `is_home_run` and
@@ -31,8 +34,10 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent / "src"))
 
 from pyrio.stadiums import STADIUM_WALLS  # noqa: E402
 
-# Low nibble of CollisionType that marks a wall surface.
+# CollisionType that marks an outfield wall surface (BALL_COLLISION_TYPE_WALL).
 WALL_COLLISION = 0x02
+FOUL_FLAG = 0x80
+TYPE_MASK = 0x7F
 # Triangles nearer than this to home are the backstop and dugout walls, not the
 # outfield fence.
 MIN_WALL_DISTANCE = 40.0
@@ -52,7 +57,10 @@ def wall_triangles(doc):
             step = 3 if collection["CollectionType"] == 0 else 1
             for i in range(0, len(points) - 2, step):
                 tri = points[i:i + 3]
-                if (tri[2]["CollisionType"] & 0x0F) != WALL_COLLISION:
+                coll_type = tri[2]["CollisionType"]
+                if coll_type & FOUL_FLAG:
+                    continue
+                if (coll_type & TYPE_MASK) != WALL_COLLISION:
                     continue
                 xs = [p["Point"]["X"] for p in tri]
                 ys = [p["Point"]["Y"] for p in tri]

@@ -1,10 +1,34 @@
 """Derive STADIUM_WALLS from the game's stadium collision models.
 
-The outfield wall is the set of collision triangles whose CollisionType low
-nibble is 0x02. Each wall panel is a quad spanning y=-height to y=0, split into
-two triangles: the edge at maximum y gives the panel's (x, z) line, and the
-triangle's y-span gives the wall height there. That is why a naive max(y) reads
-0 at every stadium -- the wall top IS y=0.
+The outfield wall is the set of collision triangles of type
+BALL_COLLISION_TYPE_WALL. Collision semantics are taken from the decomp
+(include/game/ball/collision_primitives.h, src/game/ball/ball_physics.c):
+
+  * The game masks the type as ``collType & 0x7F`` (ball_physics.c:2295), so
+    0x80 is a FOUL flag rather than part of the type. Wall panels in foul
+    territory are 0x82 and do not belong in a fair-territory table -- at Mario
+    Stadium they are the 2.0-high wall out past the pole, and including them
+    corrupted both the segmentation and the height.
+  * BALL_COLLISION_TYPE_UNCLIMBABLE_WALL (5) is also treated as a wall for
+    bouncing (ball_physics.c:2783), but in these models its panels are
+    0.3-1.6m kerbs sitting at the same z as the fence, not the fence itself.
+    Including them makes the nearest-surface pick lose the real wall height.
+  * Mesh y is inverted world height: the game probes with
+    ``-(ball.y - groundYForBounces)`` (ball_physics.c:2750), so a panel spans
+    y=-height to y=0 and the wall top IS y=0. A naive max(y) therefore reads
+    0.0 at every stadium; the triangle's y-SPAN is the height.
+
+Each wall panel is a quad split into two triangles; the edge at maximum y gives
+the panel's (x, z) line.
+
+Caveat on provenance: the game never does a geometric "did it clear the wall"
+test. It integrates the trajectory and probes the collision mesh each frame
+(checkCollision), and a home run is a ball that never struck a wall or
+foul-line triangle. A one-dimensional wall_at(x) is therefore an approximation
+of a 3-D mesh by construction, which is why overlapping corner panels cannot be
+represented exactly. The models themselves come from RioVisualizer's
+extraction; ZZZZ.dat is not in the decomp checkout, so they have not been
+re-extracted from the disc independently.
 
 Corners project onto overlapping x ranges, which a one-dimensional
 ``wall_at(x)`` cannot represent, so at each x this keeps the NEAREST wall
@@ -27,7 +51,9 @@ import math
 import pathlib
 import sys
 
-WALL_COLLISION = 0x02
+WALL_COLLISION = 0x02        # BALL_COLLISION_TYPE_WALL
+FOUL_FLAG = 0x80             # BALL_COLLISION_TYPE_FOUL, a flag not a type
+TYPE_MASK = 0x7F             # what the game masks with (ball_physics.c:2295)
 MIN_WALL_DISTANCE = 40.0   # nearer than this is backstop / dugout
 SAMPLE_STEP = 0.25         # x resolution when flattening corners
 SLOPE_TOLERANCE = 2e-2     # when to start a new linear run
@@ -42,7 +68,10 @@ def wall_panels(doc):
             step = 3 if collection["CollectionType"] == 0 else 1
             for i in range(0, len(points) - 2, step):
                 tri = points[i:i + 3]
-                if (tri[2]["CollisionType"] & 0x0F) != WALL_COLLISION:
+                coll_type = tri[2]["CollisionType"]
+                if coll_type & FOUL_FLAG:
+                    continue        # wall, but in foul territory
+                if (coll_type & TYPE_MASK) != WALL_COLLISION:
                     continue
                 pts = [(p["Point"]["X"], p["Point"]["Y"], p["Point"]["Z"]) for p in tri]
                 cx = sum(p[0] for p in pts) / 3
