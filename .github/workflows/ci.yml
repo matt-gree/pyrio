@@ -1,0 +1,90 @@
+name: CI
+
+on:
+  push:
+    branches: [main, v1.0.0-prep]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  FORCE_COLOR: "1"
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - run: python -m pip install --upgrade pip && pip install -e . --group dev
+      - run: ruff check .
+      - run: ruff format --check .
+      - run: pyright
+      - run: lint-imports
+
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: python -m pip install --upgrade pip && pip install -e . --group dev
+      - run: pytest --cov --cov-report=term
+
+  # Tests run from the checkout can't see a file the wheel leaves out, so this
+  # job builds the wheel, installs it into a clean venv and tests that.
+  wheel:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - run: python -m pip install --upgrade pip build twine
+      - run: python -m build
+      - run: twine check --strict dist/*
+      - name: Install the wheel into a clean venv
+        run: |
+          python -m venv /tmp/wheel-env
+          /tmp/wheel-env/bin/python -m pip install --upgrade pip
+          /tmp/wheel-env/bin/pip install --group dev dist/*.whl
+      - name: Check pyrio comes from the wheel, not src/
+        run: /tmp/wheel-env/bin/python -c "import pyrio; assert 'site-packages' in pyrio.__file__, pyrio.__file__"
+      - run: /tmp/wheel-env/bin/pytest
+
+  # The id/name tables against Project Rio's own C++ maps. Setting
+  # PYRIO_PROJECTRIO_PATH makes the test fail, not skip, if the checkout is missing.
+  parity:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/checkout@v5
+        with:
+          repository: ProjectRio/ProjectRio
+          ref: 2.3.0_release
+          path: ProjectRio
+          filter: blob:none
+          sparse-checkout: |
+            Source/Core/Core/MSB_StatTracker.h
+            Source/Core/Core/MSB_StatTracker.cpp
+          sparse-checkout-cone-mode: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - run: python -m pip install --upgrade pip && pip install -e . --group dev
+      - run: pytest tests/test_canonical_parity.py
+        env:
+          PYRIO_PROJECTRIO_PATH: ${{ github.workspace }}/ProjectRio

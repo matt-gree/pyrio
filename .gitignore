@@ -21,3 +21,6 @@ output/
 # production DB dumps - never commit
 *.dump
 production_snapshot_*
+.import_linter_cache/
+.coverage
+dist/

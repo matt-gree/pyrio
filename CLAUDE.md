@@ -116,7 +116,7 @@ Guidelines, with the reasoning so you can judge edge cases. Existing code violat
 
 ## Testing, releases, contribution
 
-**Current state:** there are no tests, no CI, no versioning discipline beyond a manual `setup.py` bump. The `setup.py` / flat layout is also non-standard.
+**Current state (1.0 rebuild, step 1 of `docs/v1.0.0-audit.md` section 9):** `pyproject.toml` with hatchling, Python ≥ 3.11 and the `web`/`pandas`/`plot` extras. Set up with `pip install -e . --group dev`, then run `ruff check .`, `ruff format --check .`, `pyright` (strict on `src/`), `lint-imports` (the section 7 layering) and `pytest`. CI (`.github/workflows/ci.yml`) runs all of these on 3.11–3.14, tests the built wheel in a clean venv, and runs the canonical-parity test against a ProjectRio checkout. The pre-1.0 files are excluded from ruff and pyright by an explicit list in `pyproject.toml`; a file leaves the list when a rebuild step rewrites it, and nothing is ever added to it.
 
 **Target state — adopt as we go, not all at once:**
 

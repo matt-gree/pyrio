@@ -1,3 +1,9 @@
+"""Project Rio for Python. Install with ``pip install projectrio``."""
+
+from importlib.metadata import version as _version
+
+__version__ = _version("projectrio")
+
 # Stat file parsing
 from .stat_file_parser import (
     StatObj, EventSearch, EventObj, HudObj, RunnerObj,

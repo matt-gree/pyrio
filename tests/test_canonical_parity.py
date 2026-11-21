@@ -6,7 +6,8 @@ asserts pyrio's tables match, so drift (e.g. a new character or a renamed
 result) is caught.
 
 Point it at a local Project Rio checkout with the PYRIO_PROJECTRIO_PATH env
-var; otherwise it falls back to a sibling ``../ProjectRio`` and skips if absent.
+var, which makes a missing checkout an error (CI's parity job sets it).
+Without it the test looks for a sibling ``../ProjectRio`` and skips if absent.
 """
 import os
 import re
@@ -60,11 +61,11 @@ DEFAULT_REF = "origin/2.3.0_release"
 
 def _find_repo():
     env = os.environ.get("PYRIO_PROJECTRIO_PATH")
-    candidates = []
     if env:
-        candidates.append(pathlib.Path(env))
-    candidates.append(pathlib.Path(__file__).resolve().parent.parent.parent / "ProjectRio")
-    return next((c for c in candidates if (c / HEADER_REL).is_file()), None)
+        candidate = pathlib.Path(env)
+    else:
+        candidate = pathlib.Path(__file__).resolve().parent.parent.parent / "ProjectRio"
+    return candidate if (candidate / HEADER_REL).is_file() else None
 
 
 def _materialize(repo, ref):
@@ -99,6 +100,13 @@ def _materialize(repo, ref):
 
 REPO = _find_repo()
 REF = os.environ.get("PYRIO_PROJECTRIO_REF", DEFAULT_REF)
+
+# An explicit path means the caller (CI's parity job) wants the comparison, so a
+# wrong path is an error, not a skip.
+if os.environ.get("PYRIO_PROJECTRIO_PATH") and REPO is None:
+    raise RuntimeError(
+        f"PYRIO_PROJECTRIO_PATH={os.environ['PYRIO_PROJECTRIO_PATH']!r} has no {HEADER_REL}"
+    )
 HEADER = None
 SOURCE = "no Project Rio checkout found"
 
