@@ -38,6 +38,7 @@ CANON_TO_PYRIO = {
     "cAtBatResult": "FINAL_RESULT",
     "cManualSelectDecode": "MANUAL_SELECT",
     "cDeadBallReason": "DEAD_BALL_REASON",
+    "cMoonShotStatus": "MOON_SHOT_STATUS",
 }
 
 # INPUT_DIRECTION is NOT compared here: it mirrors the C++ "StickVec" decoder

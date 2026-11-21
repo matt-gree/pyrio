@@ -267,6 +267,15 @@ class Tables:
         4: "Closest to Drop",
     }
 
+    # Rio's stat tracker writes this, the game does not: MOONSHOT is the game's
+    # own moonShotInd, and FAILED_MOONSHOT is the tracker noticing that
+    # non-perfect contact cleared it (a Texas Leaguer).
+    MOON_SHOT_STATUS = {
+        0: "None",
+        1: "Moonshot",
+        2: "Failed Moonshot",
+    }
+
     DEAD_BALL_REASON = {
         0: "N/A",
         1: "Home Run",
@@ -775,6 +784,12 @@ class TeamName(RioValue):
     """A team (logo) name, e.g. 'Mario Fireballs'."""
 
     _lookup = Tables.TEAM_NAME
+
+
+class MoonShotStatus(RioValue):
+    """A 5-star swing's outcome: None / Moonshot / Failed Moonshot."""
+
+    _lookup = Tables.MOON_SHOT_STATUS
 
 
 class DeadBallReason(RioValue):

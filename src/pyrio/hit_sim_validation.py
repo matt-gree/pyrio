@@ -36,9 +36,6 @@ from . import hit_simulation as hs
 from .constants import game_constants as G
 from .stat_file_parser import StatObj, EventObj
 
-# game Type of Swing codes that the simulator supports: 1 Slap, 2 Charge, 3 Star.
-_SUPPORTED_SWING_CODES = (1, 2, 3)
-
 
 def _ci(value) -> int:
     """Parse a possibly comma-grouped integer string, e.g. '1,181' -> 1181."""
@@ -235,10 +232,10 @@ def _ball_reached_ground(contact: dict) -> bool:
     'Ball Landing Position', so those events must be excluded from any landing
     comparison.
     """
-    sec = contact.get("Contact Result - Secondary")
-    if sec is None:
-        return True
-    return G.to_encoded(G.SECONDARY_CONTACT_RESULT, sec) != 0  # 0 = Out-caught
+    # Compared raw rather than through the table: an older file's secondary
+    # result can carry a label 2.3.0 no longer has, which to_encoded would raise
+    # on. "Out-caught" (0) is spelled the same in every version.
+    return contact.get("Contact Result - Secondary") not in ("Out-caught", 0)
 
 
 # ---------------------------------------------------------------- known mod exceptions
@@ -352,12 +349,11 @@ def validate_statobj(stat: StatObj, *, include_landing: bool = False,
             continue
         report.contact_events += 1
 
-        swing = event.pitch_dict().get("Type of Swing")
-        swing_code = G.to_encoded(G.TYPE_OF_SWING, swing) if swing is not None else None
-        if swing_code not in _SUPPORTED_SWING_CODES:
-            report.skipped.append((game_id, i, f"unsupported swing: {swing!r}"))
-            continue
-
+        # Every swing the simulator models (bunt/slap/charge/star) is simulated,
+        # Texas Leaguers included -- they used to be excluded here as unmodeled.
+        # A genuinely unsupported swing raises in hit_inputs_from_event and is
+        # caught as a skip by the try block below, so there is nothing to screen
+        # on up front.
         try:
             result = hs.simulate_hit_from_event(event, active_tags)
         except ValueError as ex:

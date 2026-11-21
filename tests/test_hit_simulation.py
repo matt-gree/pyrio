@@ -69,10 +69,10 @@ def test_wario_garlic_star_splits_the_trajectory():
     assert result.garlic_trajectory[0] != result.trajectory[0]
 
 
-def test_five_star_dinger_moonshot_boosts_power():
+def test_five_star_attempt_moonshot_boosts_power():
     inputs = dict(_BASE_INPUTS, is_star=True, charge_up=1.0)
     normal = simulate_hit(HitInputs(**inputs)).power
-    dinger = simulate_hit(HitInputs(**inputs, five_star_dinger=True)).power
+    dinger = simulate_hit(HitInputs(**inputs, five_star_attempt=True)).power
     assert dinger > normal
 
 

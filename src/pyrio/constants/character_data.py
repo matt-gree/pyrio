@@ -149,7 +149,10 @@ ATTRIBUTES: list[AttributeSpec] = [
     AttributeSpec("batting_stance", "Batting Stance", "batting", decode=Tables.HAND),
     AttributeSpec("slap_hit_power", "Slap Hit Power", "batting", superstar_delta=50, cap=100),
     AttributeSpec("charge_hit_power", "Charge Hit Power", "batting", superstar_delta=50, cap=100),
-    AttributeSpec("bunting", "Bunting", "batting", superstar_delta=50, cap=100),
+    # No cap: the game applies the superstar bonus as a bare += with no clamp
+    # (orderchange.c starring routine; only the four StatBar display values clamp).
+    AttributeSpec("bunt_contact_size", "Bunt Contact Size Multiplier", "batting",
+                  superstar_delta=50, cap=None),
     AttributeSpec("horizontal_hit_trajectory", "Horizontal Hit Trajectory", "batting", decode=HORIZONTAL_HIT_TRAJECTORY),
     AttributeSpec("vertical_hit_trajectory", "Vertical Hit Trajectory", "batting", decode=VERTICAL_HIT_TRAJECTORY),
     AttributeSpec("slap_contact_size_multiplier", "Slap Contact Size Multiplier", "batting", superstar_delta=50, cap=100),
@@ -217,7 +220,7 @@ class CharacterAttributes:
     batting_stance: str
     slap_hit_power: int
     charge_hit_power: int
-    bunting: int
+    bunt_contact_size: int
     horizontal_hit_trajectory: str
     vertical_hit_trajectory: str
     slap_contact_size_multiplier: int

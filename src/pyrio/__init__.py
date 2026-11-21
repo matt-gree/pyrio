@@ -15,6 +15,7 @@ from .rio_value import (
     OutType, StealType, PitchResult,
     Hand, Position, FielderAction, FielderBobble, ManualSelect, TeamName,
     DeadBallReason,
+    MoonShotStatus,
 )
 
 # API parameter lists and endpoint constants
