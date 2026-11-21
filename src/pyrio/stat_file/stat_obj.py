@@ -374,7 +374,6 @@ class StatObj:
         # tells how many batters were faced by character
         # if no character given, returns batters faced by that team
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
-        teamNum = self.teamNumVersionCorrection(teamNum)
         if rosterNum == -1:
             total = 0
             for x in range(0, 9):
@@ -387,7 +386,6 @@ class StatObj:
         # tells how many runs a character allowed when pitching
         # if no character given, returns runs allowed by that team
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
-        teamNum = self.teamNumVersionCorrection(teamNum)
         if rosterNum == -1:
             total = 0
             for x in range(0, 9):
@@ -400,14 +398,12 @@ class StatObj:
         # tells how many walks a character allowed when pitching
         # if no character given, returns walks by that team
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
-        teamNum = self.teamNumVersionCorrection(teamNum)
         return self.battersWalkedBallFour(teamNum, rosterNum) + self.battersHitByPitch(teamNum, rosterNum)
 
     def battersWalkedBallFour(self, teamNum: int, rosterNum: int = -1) -> int:
         # returns how many times a character has walked a batter via 4 balls
         # if no character given, returns how many times the team walked via 4 balls
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
-        teamNum = self.teamNumVersionCorrection(teamNum)
         if rosterNum == -1:
             total = 0
             for x in range(0, 9):
@@ -420,7 +416,6 @@ class StatObj:
         # returns how many times a character walked a batter by hitting them by a pitch
         # if no character given, returns walked via HBP for the team
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
-        teamNum = self.teamNumVersionCorrection(teamNum)
         if rosterNum == -1:
             total = 0
             for x in range(0, 9):
@@ -433,7 +428,6 @@ class StatObj:
         # returns how many hits a character allowed as pitcher
         # if no character given, returns how many hits a team allowed
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
-        teamNum = self.teamNumVersionCorrection(teamNum)
         if rosterNum == -1:
             total = 0
             for x in range(0, 9):
@@ -446,7 +440,6 @@ class StatObj:
         # returns how many homeruns a character allowed as pitcher
         # if no character given, returns how many homeruns a team allowed
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
-        teamNum = self.teamNumVersionCorrection(teamNum)
         if rosterNum == -1:
             total = 0
             for x in range(0, 9):
@@ -459,7 +452,6 @@ class StatObj:
         # returns how many pitches a character threw
         # if no character given, returns how many pitches a team threw
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
-        teamNum = self.teamNumVersionCorrection(teamNum)
         if rosterNum == -1:
             total = 0
             for x in range(0, 9):
@@ -472,7 +464,6 @@ class StatObj:
         # returns final pitching stamina of a pitcher
         # if no character given, returns total stamina of a team
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
-        teamNum = self.teamNumVersionCorrection(teamNum)
         if rosterNum == -1:
             total = 0
             for x in range(0, 9):
@@ -484,7 +475,6 @@ class StatObj:
     def wasPitcher(self, teamNum: int, rosterNum: int) -> bool:
         # returns if a character was a pitcher
         # rosterNum: 0 -> 8 for each of the 9 roster spots
-        teamNum = self.teamNumVersionCorrection(teamNum)
         ErrorChecker.check_roster_num_no_neg(rosterNum)
         return self.defensiveStats(teamNum, rosterNum)["Was Pitcher"] == 1
 
@@ -492,7 +482,6 @@ class StatObj:
         # returns how many strikeouts a character pitched
         # if no character given, returns how mnany strikeouts a team pitched
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
-        teamNum = self.teamNumVersionCorrection(teamNum)
         if rosterNum == -1:
             total = 0
             for x in range(0, 9):
@@ -505,7 +494,6 @@ class StatObj:
         # returns how many star pitches a character threw
         # if no character given, returns how many star pitches a team threw
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
-        teamNum = self.teamNumVersionCorrection(teamNum)
         if rosterNum == -1:
             total = 0
             for x in range(0, 9):
@@ -518,7 +506,6 @@ class StatObj:
         # returns how many big plays a character had
         # if no character given, returns how many big plays a team had
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
-        teamNum = self.teamNumVersionCorrection(teamNum)
         if rosterNum == -1:
             total = 0
             for x in range(0, 9):
@@ -531,7 +518,6 @@ class StatObj:
         # returns how many outs a character was pitching for
         # if no character given, returns how many outs a team pitched for
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
-        teamNum = self.teamNumVersionCorrection(teamNum)
         if rosterNum == -1:
             total = 0
             for x in range(0, 9):
@@ -544,7 +530,6 @@ class StatObj:
         # returns how many innings a character was pitching for
         # if no character given, returns how many innings a team pitched for
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
-        teamNum = self.teamNumVersionCorrection(teamNum)
         return float(self.outsPitched(teamNum, rosterNum)) / 3
 
     def battersPerPosition(self, teamNum: int, rosterNum: int) -> dict:
@@ -555,7 +540,6 @@ class StatObj:
 
         rosterNum: 0 -> 8 for each of the 9 roster spots.
         """
-        teamNum = self.teamNumVersionCorrection(teamNum)
         ErrorChecker.check_roster_num_no_neg(rosterNum)
         stats = self.defensiveStats(teamNum, rosterNum)
         key = "Batters Per Position" if "Batters Per Position" in stats else "Pitches Per Position"
@@ -568,7 +552,6 @@ class StatObj:
     def outsPerPosition(self, teamNum: int, rosterNum: int) -> dict:
         # returns a dict which tracks how many outs a character was at a position for
         # rosterNum: 0 -> 8 for each of the 9 roster spots
-        teamNum = self.teamNumVersionCorrection(teamNum)
         ErrorChecker.check_roster_num_no_neg(rosterNum)
         return per_position(self.defensiveStats(teamNum, rosterNum)["Outs Per Position"])
 
@@ -578,7 +561,6 @@ class StatObj:
         # returns how many at bats a character had
         # if no character given, returns how many at bats a team had
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
-        teamNum = self.teamNumVersionCorrection(teamNum)
         if rosterNum == -1:
             total = 0
             for x in range(0, 9):
@@ -591,7 +573,6 @@ class StatObj:
         # returns how many hits a character had
         # if no character given, returns how many hits a team had
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
-        teamNum = self.teamNumVersionCorrection(teamNum)
         if rosterNum == -1:
             total = 0
             for x in range(0, 9):
@@ -604,7 +585,6 @@ class StatObj:
         # returns how many singles a character had
         # if no character given, returns how many singles a team had
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
-        teamNum = self.teamNumVersionCorrection(teamNum)
         if rosterNum == -1:
             total = 0
             for x in range(0, 9):
@@ -617,7 +597,6 @@ class StatObj:
         # returns how many doubles a character had
         # if no character given, returns how many doubles a team had
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
-        teamNum = self.teamNumVersionCorrection(teamNum)
         if rosterNum == -1:
             total = 0
             for x in range(0, 9):
@@ -630,7 +609,6 @@ class StatObj:
         # returns how many triples a character had
         # if no character given, returns how many triples a teams had
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
-        teamNum = self.teamNumVersionCorrection(teamNum)
         if rosterNum == -1:
             total = 0
             for x in range(0, 9):
@@ -643,7 +621,6 @@ class StatObj:
         # returns how many homeruns a character had
         # if no character given, returns how many homeruns a team had
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
-        teamNum = self.teamNumVersionCorrection(teamNum)
         if rosterNum == -1:
             total = 0
             for x in range(0, 9):
@@ -656,7 +633,6 @@ class StatObj:
         # returns how many successful bunts a character had
         # if no character given, returns how many successful bunts a team had
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
-        teamNum = self.teamNumVersionCorrection(teamNum)
         if rosterNum == -1:
             total = 0
             for x in range(0, 9):
@@ -669,7 +645,6 @@ class StatObj:
         # returns how many sac flys a character had
         # if no character given, returns how many sac flys a team had
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
-        teamNum = self.teamNumVersionCorrection(teamNum)
         if rosterNum == -1:
             total = 0
             for x in range(0, 9):
@@ -682,7 +657,6 @@ class StatObj:
         # returns how many times a character struck out when batting
         # if no character given, returns how many times a team struck out when batting
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
-        teamNum = self.teamNumVersionCorrection(teamNum)
         if rosterNum == -1:
             total = 0
             for x in range(0, 9):
@@ -695,14 +669,12 @@ class StatObj:
         # returns how many times a character was walked when batting
         # if no character given, returns how many times a team was walked when batting
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
-        teamNum = self.teamNumVersionCorrection(teamNum)
         return self.walksBallFour(teamNum, rosterNum) + self.walksHitByPitch(teamNum, rosterNum)
 
     def walksBallFour(self, teamNum: int, rosterNum: int = -1) -> int:
         # returns how many times a character was walked via 4 balls when batting
         # if no character given, returns how many times a team was walked via 4 balls when batting
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
-        teamNum = self.teamNumVersionCorrection(teamNum)
         if rosterNum == -1:
             total = 0
             for x in range(0, 9):
@@ -715,7 +687,6 @@ class StatObj:
         # returns how many times a character was walked via hit by pitch when batting
         # if no character given, returns how many times a team was walked via hit by pitch when batting
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
-        teamNum = self.teamNumVersionCorrection(teamNum)
         if rosterNum == -1:
             total = 0
             for x in range(0, 9):
@@ -728,7 +699,6 @@ class StatObj:
         # returns how many RBI's a character had
         # if no character given, returns how many RBI's a team had
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
-        teamNum = self.teamNumVersionCorrection(teamNum)
         if rosterNum == -1:
             total = 0
             for x in range(0, 9):
@@ -741,7 +711,6 @@ class StatObj:
         # returns how many times a character successfully stole a base
         # if no character given, returns how many times a team successfully stole a base
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
-        teamNum = self.teamNumVersionCorrection(teamNum)
         if rosterNum == -1:
             total = 0
             for x in range(0, 9):
@@ -754,7 +723,6 @@ class StatObj:
         # returns how many star hits a character used
         # if no character given, returns how many star hits a team used
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
-        teamNum = self.teamNumVersionCorrection(teamNum)
         if rosterNum == -1:
             total = 0
             for x in range(0, 9):

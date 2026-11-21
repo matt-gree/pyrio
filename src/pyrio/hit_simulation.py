@@ -1347,6 +1347,11 @@ def hit_inputs_from_event(event: EventObj, active_tags=frozenset()) -> HitInputs
             f"Can't simulate swing {pitch.get('Type of Swing')!r} "
             f"from Rio {event.rioStat.version()}"
         )
+    if pitch.get("Bat Contact Pos - X") is None:
+        # 1.9.2 and thereabouts didn't log it, and the whole contact stage is
+        # built on it. Raising lets a caller skip the event; carrying on would
+        # silently simulate from a bat that was nowhere.
+        raise ValueError(f"Rio {event.rioStat.version()} didn't log the bat position")
 
     charge_up = float(contact.get("Charge Power Up", 0.0))
     charge_down = float(contact.get("Charge Power Down", 0.0))
