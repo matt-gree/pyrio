@@ -1,0 +1,37 @@
+{
+  "Bowser Castle.json": {
+    "bytes": 1137677,
+    "gz": 64881,
+    "sha256": "31e95491adef56f206c4e34c897a0bed16569cfd0edde941435e3a03e57e05c4"
+  },
+  "DK Jungle.json": {
+    "bytes": 612538,
+    "gz": 34884,
+    "sha256": "a7d3841ee52ccaddd523e0322746250e3a2abc20c3ca2147301314eaa88079bc"
+  },
+  "Mario Stadium.json": {
+    "bytes": 642083,
+    "gz": 29878,
+    "sha256": "cc8a01e4f6577df66ebf0aa0dd71d0613507435c84aa96e72e116df756a6b7f9"
+  },
+  "Peach Garden.json": {
+    "bytes": 817373,
+    "gz": 33688,
+    "sha256": "276868aa041686c4d89fc2899856857ac203caab7eb76be7f877ebae9c2e1e8a"
+  },
+  "Toy Field.json": {
+    "bytes": 259031,
+    "gz": 11504,
+    "sha256": "253b80f08ae29996be420fb98ed9bf48ee4e4cc089c5d72cc77c793c42093c65"
+  },
+  "Wario Palace.json": {
+    "bytes": 1044266,
+    "gz": 61611,
+    "sha256": "eec8faceb3e2cb4f05c7537bfbc2c7286ab8d75dafaa41191591ccb377e1ea18"
+  },
+  "Yoshi Park.json": {
+    "bytes": 1067193,
+    "gz": 75033,
+    "sha256": "58775aa9204cf6f6e4ac45396a928f4fccc3c4eb9c179eac21aeafa8f26a04c2"
+  }
+}

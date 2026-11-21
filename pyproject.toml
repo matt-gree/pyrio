@@ -27,5 +27,8 @@ where = ["src"]
     "CharNames.csv",
     "constants/character_attributes.csv",
     "constants/stadiums/*.txt",
+    "constants/collision/*.json.gz",
+    "constants/collision/MANIFEST.json",
+    "constants/parks/*.park.json",
     "py.typed",
 ]

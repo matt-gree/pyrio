@@ -61,11 +61,13 @@ Current layout (flat, at repo root) and the role each module is *meant* to play.
 | `stat_formatters.py` | Pure functions: derived stats (AVG, OPS, ERA, …) and human-readable line formatters. |
 | `rio_value.py` | Coded-value layer: `Tables` (ID→name tables), `RioValue` value objects + `from_raw`, and the `lookup()` / `create_translated_columns()` translation helpers. Data + translator; imports nothing from `rio_web`/`stat_file`. |
 | `constants/character_data.py` | `AttributeSpec` + the `ATTRIBUTES` registry and the `CharacterAttributes` record loaded from `character_attributes.csv`. Single source of truth for per-character attributes (parsing, superstar, decoding). |
+| `live_ball.py` | Live-ball physics after contact — bounces, walls and stadium hazards — cast against the real collision mesh (`constants/collision/`, `constants/parks/`). Ported from RioVisualizer's `physics.py`, which stays the reference; `tools/check_live_ball_parity.py` holds the port to exact agreement. Standard library only. |
 | `team_name_algo.py` | Heuristic for naming a team from its captain/roster. |
 | `glicko2.py`, `glicko_calculator.py` | Rating math. Self-contained. |
 | `exceptions.py` | `RioAPIError` hierarchy and `raise_for_status`. |
 | `helpers.py` | **Legacy grab-bag** — currently fielder-geometry calculations. Target: dissolve this. New code should not land here. |
 | `draw/` | Stadium plotting helpers. |
+| `constants/collision/`, `constants/parks/` | The game's stadium collision meshes (gzipped, ~300KB) and hazard sheets, read by `live_ball`. Copied from RioVisualizer's extraction; `MANIFEST.json` records each mesh's sha256 so a damaged copy is caught. |
 
 **Boundaries we want to hold:**
 - `api.py` knows nothing about HTTP. `rio_web.py` owns all network calls.

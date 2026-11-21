@@ -9,7 +9,14 @@ calculator's index.js.
 
 A segment holds one height, so this cannot express a wall whose top slopes, nor
 a tall surface standing behind a shorter one. Neither occurs in the seven
-stadiums; the generator checks for both.
+stadiums; the generator checks for both. It also leaves out the
+UNCLIMBABLE_WALL panels the game bounces balls off, which is a real gap (see
+the comment above STADIUM_WALLS).
+
+``live_ball`` has none of those limits: it casts the ball's path against the
+actual collision mesh, the way the game does. Use this module for a fast
+approximation and that one for an answer -- ``live_ball.is_home_run`` is the
+same question asked of the mesh.
 
 Keys match ``StatObj.stadium()`` normalized names (e.g. "Peach Garden", not
 the JS's "Peach Gardens").
