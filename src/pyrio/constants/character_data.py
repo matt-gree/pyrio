@@ -5,9 +5,23 @@ source of truth for every character attribute: it drives CSV parsing, the
 superstar conversion, and categorical decoding. ``CharacterAttributes`` is the
 typed star-OFF (base) record; ``.with_superstar()`` returns the star-ON values.
 
-Superstar model: starring a character applies a flat per-stat ``+delta`` clamped
-to ``cap`` (``cap=None`` means uncapped). Stats with ``superstar_delta == 0`` are
-unaffected. Star-ON = ``min(base + delta, cap)``.
+Superstar model: starring a character adds a flat per-stat ``+delta``, with no
+clamp. The decomp settles this -- the starring routine applies the bonus as a
+bare ``+=`` to each of the twelve fields of ``SuperstarStatBonus``
+(mssb-dtk ``src/Unknown/orderchange.c``, and the same twelve in
+``src/game/minigame/minigame_framework.c``); only the four StatBar *display*
+values are clamped, at 10. Every stat is a ``u8``, so 100 + 50 = 150 stores
+fine (``StatTable`` in ``include/game/character_stats.h``).
+
+The game does clamp these stats elsewhere, but under different systems that are
+not the superstar bonus and are not modelled here:
+  - challenge-mode mission buffs scale and clamp at 100, and the two pitch
+    speeds at 200 (``scaleStat`` / ``capApplicationFunction`` in
+    ``src/Unknown/File_0x8004207c.c``)
+  - challenge shop items multiply, also unclamped (``roster_init.c``)
+
+``cap`` is kept on AttributeSpec for those cases; the superstar specs leave it
+None. Stats with ``superstar_delta == 0`` are unaffected by stars.
 """
 from __future__ import annotations
 
@@ -103,7 +117,12 @@ class AttributeSpec:
         raise KeyError(f"{value!r} is not a valid {self.column}")
 
     def to_star_on(self, base):
-        """Star-ON value for a numeric base (no-op for unboosted stats)."""
+        """Star-ON value for a numeric base (no-op for unboosted stats).
+
+        A bare add: the game does not clamp the superstar bonus (see this
+        module's docstring). ``cap`` is honoured if one is ever set, but no
+        superstar spec sets one.
+        """
         if not self.superstar_delta:
             return base
         boosted = base + self.superstar_delta
@@ -136,27 +155,25 @@ ATTRIBUTES: list[AttributeSpec] = [
     AttributeSpec("weight", "Weight", "pitching"),
     AttributeSpec("curve_ball_speed", "Curve Ball Speed", "pitching", superstar_delta=20),
     AttributeSpec("fast_ball_speed", "Fast Ball Speed", "pitching", superstar_delta=20),
-    AttributeSpec("curve", "Curve", "pitching", superstar_delta=50, cap=100),
-    AttributeSpec("cursed_ball", "Cursed Ball", "pitching", superstar_delta=50, cap=100),
+    AttributeSpec("curve", "Curve", "pitching", superstar_delta=50),
+    AttributeSpec("cursed_ball", "Cursed Ball", "pitching", superstar_delta=50),
     AttributeSpec("curve_control", "Curve Control", "pitching", superstar_delta=50),
     AttributeSpec("pitching_height", "Pitching Height", "pitching", cast=float),
     AttributeSpec("super_curve", "Super Curve", "pitching", cast=_bool),
     # fielding
     AttributeSpec("fielding_arm", "Fielding Arm", "fielding", decode=Tables.HAND),
-    AttributeSpec("throwing_power", "Throwing Power", "fielding", superstar_delta=50, cap=100),
+    AttributeSpec("throwing_power", "Throwing Power", "fielding", superstar_delta=50),
     AttributeSpec("speed", "Speed", "fielding", superstar_delta=50),
     # batting
     AttributeSpec("batting_stance", "Batting Stance", "batting", decode=Tables.HAND),
-    AttributeSpec("slap_hit_power", "Slap Hit Power", "batting", superstar_delta=50, cap=100),
-    AttributeSpec("charge_hit_power", "Charge Hit Power", "batting", superstar_delta=50, cap=100),
-    # No cap: the game applies the superstar bonus as a bare += with no clamp
-    # (orderchange.c starring routine; only the four StatBar display values clamp).
+    AttributeSpec("slap_hit_power", "Slap Hit Power", "batting", superstar_delta=50),
+    AttributeSpec("charge_hit_power", "Charge Hit Power", "batting", superstar_delta=50),
     AttributeSpec("bunt_contact_size", "Bunt Contact Size Multiplier", "batting",
-                  superstar_delta=50, cap=None),
+                  superstar_delta=50),
     AttributeSpec("horizontal_hit_trajectory", "Horizontal Hit Trajectory", "batting", decode=HORIZONTAL_HIT_TRAJECTORY),
     AttributeSpec("vertical_hit_trajectory", "Vertical Hit Trajectory", "batting", decode=VERTICAL_HIT_TRAJECTORY),
-    AttributeSpec("slap_contact_size_multiplier", "Slap Contact Size Multiplier", "batting", superstar_delta=50, cap=100),
-    AttributeSpec("charge_contact_size_multiplier", "Charge Contact Size Multiplier", "batting", superstar_delta=50, cap=100),
+    AttributeSpec("slap_contact_size_multiplier", "Slap Contact Size Multiplier", "batting", superstar_delta=50),
+    AttributeSpec("charge_contact_size_multiplier", "Charge Contact Size Multiplier", "batting", superstar_delta=50),
     AttributeSpec("horizontal_range_near", "Horizontal Range Near", "batting", cast=float),
     AttributeSpec("horizontal_range_far", "Horizontal Range Far", "batting", cast=float),
     AttributeSpec("trimmed_bat", "Trimmed Bat", "batting"),

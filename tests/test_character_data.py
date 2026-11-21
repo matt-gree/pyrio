@@ -76,20 +76,50 @@ def test_attribute_spec_encode_parse_round_trip():
         assert spec.parse(str(code)) == label
 
 
-def test_with_superstar_caps_and_uncapped():
+def test_with_superstar_is_a_bare_add_with_no_clamp():
+    """The game does not clamp the superstar bonus.
+
+    mssb-dtk's starring routine (src/Unknown/orderchange.c) applies each of
+    SuperstarStatBonus's twelve fields as a bare ``+=``; the only clamps there
+    are on the four StatBar display values, at 10. Every stat is a u8, so a
+    boosted value above 100 stores fine.
+
+    This used to assert a clamp at 100, which came from Project Rio's legacy
+    ston/stoff CSVs rather than from the game.
+    """
     mario = character_attributes("Mario")
     on = mario.with_superstar()
-    # capped: charge power 64 + 50 -> clamped to 100
+    # 64 + 50 = 114, past the 100 this was once clamped to.
     assert mario.charge_hit_power == 64
-    assert on.charge_hit_power == 100
-    # capped exactly at the cap
-    assert on.slap_hit_power == 100
-    # non-boosted stat is unchanged
+    assert on.charge_hit_power == 114
+    assert on.slap_hit_power == mario.slap_hit_power + 50
+    # a non-boosted stat is unchanged
     assert on.weight == mario.weight
 
-    # uncapped boosted stat exceeds 100
     diddy = character_attributes("Diddy")
     assert diddy.with_superstar().speed == diddy.speed + 50
+
+
+def test_every_superstar_stat_is_uncapped():
+    """The twelve boosted stats are exactly SuperstarStatBonus's twelve fields,
+    and none of them caps."""
+    boosted = [s for s in ATTRIBUTES if s.superstar_delta]
+    assert len(boosted) == 12
+    assert [s.cap for s in boosted] == [None] * 12
+    assert sorted({s.superstar_delta for s in boosted}) == [20, 50]
+
+
+def test_a_boosted_stat_can_exceed_100_for_a_real_character():
+    """Not a hypothetical: the old cap changed real values."""
+    over = [
+        (base.name, spec.column, getattr(base, spec.key), spec.to_star_on(getattr(base, spec.key)))
+        for char_id in Tables.CHAR_NAME
+        for base in [character_attributes(char_id)]
+        for spec in ATTRIBUTES
+        if spec.superstar_delta and getattr(base, spec.key) + spec.superstar_delta > 100
+    ]
+    assert over, "no character's boosted stat passes 100 -- the cap would be moot"
+    assert all(on > 100 for _, _, _, on in over)
 
 
 def test_with_superstar_matches_spec_for_every_character():
