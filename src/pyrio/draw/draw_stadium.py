@@ -1,6 +1,7 @@
 import matplotlib.pyplot as plt
 import numpy as np
 from pathlib import Path
+from scipy.spatial import ConvexHull
 
 # Stadium boundary-coordinate files live in the constants package.
 _STADIUMS_DIR = Path(__file__).resolve().parent.parent / "constants" / "stadiums"
@@ -245,10 +246,6 @@ if __name__ == '__main__':
     #
     # draw_stad('bowser_castle')
     # plt.show()
-    import numpy as np
-    from scipy.spatial import ConvexHull
-
-
     # Call the draw_stad() function for each stadium
     add_label = True
     # draw_stad_part('yoshi_park', add_label)

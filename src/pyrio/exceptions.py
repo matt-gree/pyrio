@@ -1,7 +1,15 @@
 import re
 
 
-class RioAPIError(Exception):
+class RioError(Exception):
+    """Base class for everything pyrio deliberately raises.
+
+    Catch this to handle any pyrio-specific failure (API errors, unknown
+    coded values, ...) without swallowing unrelated exceptions.
+    """
+
+
+class RioAPIError(RioError):
     """Base exception for Project Rio API errors."""
 
     def __init__(self, status_code: int, message: str):
@@ -17,6 +25,14 @@ class RioAuthError(RioAPIError):
 
 class RioNotFoundError(RioAPIError):
     """Raised for 404 not found errors."""
+    pass
+
+
+class UnknownRioValueError(RioError, ValueError):
+    """Raised when an id or name maps to no known Rio coded value.
+
+    Also a ValueError, so existing ``except ValueError`` callers keep working.
+    """
     pass
 
 

@@ -227,7 +227,12 @@ class EventSearch():
 
     def __errorCheck_halfInningNum(self, halfInningNum: int) -> None:
         if halfInningNum not in [0,1]:
-            raise ValueError(f'Invalid Half Inning num {halfInningNum}. Function only accepts base numbers of 0 or 1.')
+            raise ValueError(f'Invalid Half Inning num {halfInningNum}. Function only accepts half inning numbers of 0 or 1.')
+
+    def __errorCheck_outsNum(self, outsNum: int) -> None:
+        # tells if outsNum is valid; negatives select "this many outs or more"
+        if abs(outsNum) not in [0,1,2]:
+            raise ValueError(f'Invalid outs num {outsNum}. Function only accepts outs numbers of -2 to 2.')
 
     def noneResultEvents(self) -> set[int]:
         # returns a set of events who's result is none
@@ -379,7 +384,7 @@ class EventSearch():
             raise ValueError('Too many baseNums provided. runnerOnBaseEvents accepts at most 3 bases')
 
         if baseNums == [0]:
-            return self._runners_on_base_dict['None']
+            return self._runners_on_base_dict[0]
 
         runner_on_base = self._runners_on_base_dict
 
@@ -398,14 +403,14 @@ class EventSearch():
             raise ValueError(f'The argument 0 may only be provided alongside optional arguments or itself')
 
         if required_bases:
-            print('required_bases')
-            result = set(range(self.eventFinal()+1))
+            # Start from every event and narrow to those with a runner on each
+            # required base. Optional bases mean "don't care", so they are not
+            # unioned in -- they are simply left out of exclude_bases above.
+            result = set(range(self.rioStat.final_event() + 1))
             for base in required_bases:
                 result.intersection_update(runner_on_base[base])
         else:
             result = set()
-
-        if not result:
             for base in optional_bases:
                 result = result.union(runner_on_base[base])
 
@@ -496,7 +501,8 @@ class EventSearch():
           return self._half_inning_dict[halfInningNum]
 
     def outsInInningEvents(self, outsNum: int) -> set[int]:
-        self.__errorCheck_halfInningNum(outsNum)
+        # negative inputs return all events with that many outs OR MORE
+        self.__errorCheck_outsNum(outsNum)
         if outsNum >= 0:
             return self._outs_in_inning_dict[outsNum]
         else:

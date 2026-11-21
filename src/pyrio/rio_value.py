@@ -24,6 +24,8 @@ import sys
 from dataclasses import dataclass
 from typing import ClassVar, TYPE_CHECKING, TypeVar, overload
 
+from .exceptions import UnknownRioValueError
+
 if TYPE_CHECKING:
     from .constants.character_data import CharacterAttributes
 
@@ -412,7 +414,7 @@ def _resolve_dict(dictionary) -> dict:
         key = dictionary.lower()
         if key in _DICT_REGISTRY:
             return _DICT_REGISTRY[key]
-        raise ValueError(
+        raise UnknownRioValueError(
             f"Unknown dictionary name: '{dictionary}'. "
             f"Use list_dicts() to see available names."
         )
@@ -453,14 +455,21 @@ def _single_lookup(dictionary: dict, term):
         term = int(term)
 
     str_term = str(term).lower()
-    adjusted_dict = {str(k).lower(): str(v).lower() for k, v in dictionary.items()}
+    # Lowercased indexes onto the *real* keys, so a case-insensitive match
+    # resolves to the actual table entry in either direction. Matching a key
+    # (id -> name) wins over matching a value (name -> id); on a collision the
+    # first spelling in the table wins.
+    key_by_lower_key: dict[str, object] = {}
+    key_by_lower_value: dict[str, object] = {}
+    for k, v in dictionary.items():
+        key_by_lower_key.setdefault(str(k).lower(), k)
+        key_by_lower_value.setdefault(str(v).lower(), k)
 
-    if str_term in adjusted_dict:
-        return dictionary.get(term, f"Invalid ID or Name: {original_term}")
-    elif str_term in adjusted_dict.values():
-        return [key for key, value in dictionary.items() if value.lower() == str_term][0]
-    else:
-        return f"Invalid ID or Name: {original_term}"
+    if str_term in key_by_lower_key:
+        return dictionary[key_by_lower_key[str_term]]
+    if str_term in key_by_lower_value:
+        return key_by_lower_value[str_term]
+    return f"Invalid ID or Name: {original_term}"
 
 
 # -------------------------------------------------------------------------
@@ -468,6 +477,9 @@ def _single_lookup(dictionary: dict, term):
 # -------------------------------------------------------------------------
 
 _RV = TypeVar("_RV", bound="RioValue")
+
+# Distinguishes "id absent from the table" from "id maps to None".
+_MISSING = object()
 
 
 @dataclass(frozen=True, eq=False, repr=False)
@@ -489,6 +501,27 @@ class RioValue:
     # Subclasses point this at their Tables mapping.
     _lookup: ClassVar[dict] = {}
 
+    def __post_init__(self) -> None:
+        """Reject an id/name pair that does not agree with this type's table.
+
+        Equality and hashing use the id alone, so an inconsistent pair would
+        otherwise compare equal to the correctly-named value and silently
+        misreport its name. The bare ``RioValue`` has no table and stays
+        unvalidated, so it can still stand in for an unmapped value type.
+        """
+        if not self._lookup:
+            return
+        expected = self._lookup.get(self.id, _MISSING)
+        if expected is _MISSING:
+            raise UnknownRioValueError(
+                f"Unknown {type(self).__name__} id: {self.id!r}"
+            )
+        if self.name != expected:
+            raise UnknownRioValueError(
+                f"{type(self).__name__} id {self.id!r} is {expected!r}, "
+                f"not {self.name!r}"
+            )
+
     def __int__(self) -> int:
         return self.id
 
@@ -508,22 +541,28 @@ class RioValue:
 
     @classmethod
     @overload
-    def from_raw(cls: "type[_RV]", search_term: int | str) -> "_RV": ...
+    def from_raw(cls: "type[_RV]", search_term: "int | str | _RV") -> "_RV": ...
     @classmethod
     @overload
     def from_raw(cls: "type[_RV]", search_term: None) -> None: ...
     @classmethod
-    def from_raw(cls: "type[_RV]", search_term: int | str | None) -> "_RV | None":
+    def from_raw(cls: "type[_RV]", search_term: "int | str | _RV | None") -> "_RV | None":
         """Resolve a raw id or name to a value object (``None`` -> ``None``).
 
-        Accepts the canonical int id, a digit string, or the name string, so it
-        absorbs the encoded-vs-decoded difference. Raises ``ValueError`` for an
-        id/name that is not in this type's mapping.
+        Accepts the canonical int id, a digit string, the name string, or an
+        already-resolved value object of the same type (returned as-is), so it
+        absorbs the encoded-vs-decoded difference. Raises
+        ``UnknownRioValueError`` (a ``ValueError``) for an id/name that is not
+        in this type's mapping, or a value object of a different type.
         """
         if search_term is None:
             return None
+        if isinstance(search_term, (RioValue, BaseCharacter)):
+            if isinstance(search_term, cls):
+                return search_term
+            raise UnknownRioValueError(f"Cannot resolve {search_term!r} as a {cls.__name__}")
         if isinstance(search_term, bool):
-            raise ValueError(f"Unknown {cls.__name__}: {search_term!r}")
+            raise UnknownRioValueError(f"Unknown {cls.__name__}: {search_term!r}")
         d = cls._lookup
         if isinstance(search_term, int):
             id_ = search_term
@@ -532,10 +571,10 @@ class RioValue:
         else:
             id_ = _single_lookup(d, search_term)
             if not isinstance(id_, int):
-                raise ValueError(f"Unknown {cls.__name__}: {search_term!r}")
+                raise UnknownRioValueError(f"Unknown {cls.__name__}: {search_term!r}")
         name = _single_lookup(d, id_)
         if not isinstance(name, str) or name.startswith("Invalid"):
-            raise ValueError(f"Unknown {cls.__name__} id: {search_term!r}")
+            raise UnknownRioValueError(f"Unknown {cls.__name__} id: {search_term!r}")
         return cls(id_, name)
 
 
@@ -546,17 +585,17 @@ class Character(RioValue):
 
     @classmethod
     @overload
-    def from_raw(cls, search_term: int | str) -> "Character": ...
+    def from_raw(cls, search_term: "int | str | Character") -> "Character": ...
     @classmethod
     @overload
     def from_raw(cls, search_term: None) -> None: ...
     @classmethod
-    def from_raw(cls, search_term: int | str | None) -> "Character | None":
+    def from_raw(cls, search_term: "int | str | Character | None") -> "Character | None":
         """Resolve a char id or name (any alias) to a Character (None -> None)."""
         if search_term is None:
             return None
         if isinstance(search_term, str) and not search_term.isdigit():
-            name = userInputToCharacter(search_term)  # raises ValueError if unknown
+            name = userInputToCharacter(search_term)  # raises UnknownRioValueError if unknown
             return cls(_single_lookup(Tables.CHAR_NAME, name), name)
         return super().from_raw(search_term)
 
@@ -622,16 +661,18 @@ class BaseCharacter:
 
     @classmethod
     @overload
-    def from_raw(cls, value: int | str) -> "BaseCharacter": ...
+    def from_raw(cls, value: "int | str | Character | BaseCharacter") -> "BaseCharacter": ...
     @classmethod
     @overload
     def from_raw(cls, value: None) -> None: ...
     @classmethod
-    def from_raw(cls, value: int | str | None) -> "BaseCharacter | None":
-        """Resolve a simplified name, variant name, alias, or char id to a base
-        character (None -> None)."""
+    def from_raw(cls, value: "int | str | Character | BaseCharacter | None") -> "BaseCharacter | None":
+        """Resolve a simplified name, variant name, alias, char id, or Character
+        to a base character (None -> None)."""
         if value is None:
             return None
+        if isinstance(value, BaseCharacter):
+            return value
         if isinstance(value, str) and value in _SIMPLIFIED_NAMES:
             return cls(value)
         return Character.from_raw(value).base
@@ -668,12 +709,12 @@ class Stadium(RioValue):
 
     @classmethod
     @overload
-    def from_raw(cls, search_term: int | str) -> "Stadium": ...
+    def from_raw(cls, search_term: "int | str | Stadium") -> "Stadium": ...
     @classmethod
     @overload
     def from_raw(cls, search_term: None) -> None: ...
     @classmethod
-    def from_raw(cls, search_term: int | str | None) -> "Stadium | None":
+    def from_raw(cls, search_term: "int | str | Stadium | None") -> "Stadium | None":
         """Resolve a stadium id or name (incl. legacy names) to a Stadium."""
         if isinstance(search_term, str):
             search_term = _OLD_STADIUM_NAMES.get(search_term, search_term)
@@ -770,10 +811,30 @@ class ManualSelect(RioValue):
     _lookup = Tables.MANUAL_SELECT
 
 
+# The canonical logo table groups ids in fours per captain: id // 4 gives the
+# captain (in this order, which matches no other canonical sort) and id % 4
+# gives the role. team_name_algo's CAPTAIN_TEAMS is validated against this.
+_TEAM_LOGO_CAPTAINS = (
+    "Mario", "Luigi", "Peach", "Daisy", "Yoshi", "Birdo",
+    "Wario", "Waluigi", "DK", "Diddy", "Bowser", "Bowser Jr",
+)
+_TEAM_LOGO_ROLES = ("signature", "signature", "class_team", "default")
+
+
 class TeamName(RioValue):
     """A team (logo) name, e.g. 'Mario Fireballs'."""
 
     _lookup = Tables.TEAM_NAME
+
+    @property
+    def captain(self) -> "Character":
+        """The captain whose logo this is."""
+        return Character.from_raw(_TEAM_LOGO_CAPTAINS[self.id // 4])
+
+    @property
+    def role(self) -> str:
+        """This logo's role for its captain: 'signature', 'class_team', or 'default'."""
+        return _TEAM_LOGO_ROLES[self.id % 4]
 
 
 class DeadBallReason(RioValue):
@@ -871,11 +932,11 @@ def userInputToCharacter(user_input: str) -> str:
     """Convert user input (nickname, abbreviation, etc.) to canonical character name.
 
     Case-insensitive, space-insensitive.
-    Raises ValueError for unrecognized input.
+    Raises UnknownRioValueError for unrecognized input.
     """
     cleaned = user_input.replace(' ', '').lower()
     if cleaned not in _CHAR_ALIASES:
-        raise ValueError(f'{user_input} is an invalid character name')
+        raise UnknownRioValueError(f'{user_input} is an invalid character name')
     return lookup(Tables.CHAR_NAME, _CHAR_ALIASES[cleaned])
 
 

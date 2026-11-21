@@ -4,25 +4,37 @@ Each captain has four team logos (see ``Tables.TEAM_NAME``): two **signature**
 rosters (named when every one of their characters is on the roster), one
 **captain-class** team (chosen when the captain's character class is the roster's
 strict plurality), and a **default**. ``CAPTAIN_TEAMS`` models those roles with
-value objects: keyed by the captain :class:`Character`, holding :class:`TeamName`
-logos and :class:`BaseCharacter` signature sets.
+value objects: keyed by the captain :class:`Character`, each :class:`CaptainTeams`
+record holds :class:`TeamName` logos and :class:`Signature` rosters.
 """
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Optional
 
+from .constants.character_data import CHARACTER_CLASS
 from .rio_value import BaseCharacter, Character, Tables, TeamName
 
-CLASSES = ('Balance', 'Technique', 'Speed', 'Power')
+ROSTER_SIZE = 9
+
+# Character classes, derived from the canonical attribute decode table.
+CLASSES = tuple(CHARACTER_CLASS.values())
 
 # All in-game team logos, from the canonical logo table.
-in_game_team_names_list = [TeamName.from_raw(logo_id) for logo_id in Tables.TEAM_NAME]
+IN_GAME_TEAM_NAMES = tuple(TeamName.from_raw(logo_id) for logo_id in Tables.TEAM_NAME)
 
 
-def _signature(name: str, *members: str) -> tuple[TeamName, frozenset]:
-    """A signature: its team logo plus the base characters that must all appear."""
-    return TeamName.from_raw(name), frozenset(map(BaseCharacter.from_raw, members))
+@dataclass(frozen=True)
+class Signature:
+    """A signature roster: a team logo and the base characters that unlock it."""
+
+    team: TeamName
+    members: frozenset[BaseCharacter]
+
+
+def _signature(name: str, *members: str) -> Signature:
+    return Signature(TeamName.from_raw(name), frozenset(map(BaseCharacter.from_raw, members)))
 
 
 @dataclass(frozen=True)
@@ -31,7 +43,7 @@ class CaptainTeams:
 
     default: TeamName
     class_team: TeamName                                          # captain's-class plurality
-    signatures: tuple[tuple[TeamName, frozenset[BaseCharacter]], ...]
+    signatures: tuple[Signature, ...]
 
 
 # captain Character -> CaptainTeams, built straight from value objects. Names
@@ -90,13 +102,26 @@ CAPTAIN_TEAMS: dict[Character, CaptainTeams] = {
 }
 
 
-def team_name(roster: list[str], captain: str) -> Optional[TeamName]:
+def _is_blank(slot: object) -> bool:
+    """A not-yet-filled roster/captain slot: '' or None."""
+    return slot is None or (isinstance(slot, str) and slot == '')
+
+
+def team_name(
+    roster: Sequence[int | str | Character],
+    captain: int | str | Character | None,
+) -> Optional[TeamName]:
     """Resolve the in-game team name for a roster led by ``captain``.
 
-    Returns None for an incomplete roster or a non-captain. ``roster`` and
-    ``captain`` accept any name/alias/id the Character resolver understands.
+    Slots accept any id, name, or alias the Character resolver understands, or
+    a :class:`Character` itself. Returns None while the input is incomplete (a
+    roster slot or the captain is ``''``/``None``) or when ``captain`` cannot
+    lead a team. Raises ValueError for a roster that is not 9 slots, or for a
+    filled slot that resolves to no character.
     """
-    if '' in roster:
+    if len(roster) != ROSTER_SIZE:
+        raise ValueError(f"roster must have {ROSTER_SIZE} slots, got {len(roster)}")
+    if _is_blank(captain) or any(_is_blank(slot) for slot in roster):
         return None
 
     cap = Character.from_raw(captain)
@@ -104,13 +129,13 @@ def team_name(roster: list[str], captain: str) -> Optional[TeamName]:
         return None
     teams = CAPTAIN_TEAMS[cap]
 
-    chars = [Character.from_raw(name) for name in roster]
+    chars = [Character.from_raw(slot) for slot in roster]
     roster_bases = {c.base for c in chars}
 
     # Signature rosters: a named team if all of its characters are present.
-    for name, signature in teams.signatures:
-        if signature <= roster_bases:
-            return name
+    for signature in teams.signatures:
+        if signature.members <= roster_bases:
+            return signature.team
 
     # Otherwise: the captain's-class team if that class is the strict plurality.
     classes = [c.attributes.char_class for c in chars]

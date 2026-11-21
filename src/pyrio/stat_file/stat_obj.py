@@ -223,14 +223,16 @@ class StatObj:
         else:
             return self.statJson["Character Game Stats"][self.getTeamString(teamNum, rosterNum)]["Superstar"] == 1
 
-    def captain(self, teamNum: int) -> str:
-        # returns name of character who is the captain
+    def captain(self, teamNum: int) -> Character | None:
+        """The captain on a team, or None if the team has no captain.
+
+        teamNum: 0 == home team, 1 == away team
+        """
         teamNum = self.teamNumVersionCorrection(teamNum)
-        captain = ""
-        for character in self.characterGameStats():
+        for character in self.characterGameStats().values():
             if character["Captain"] == 1 and int(character["Team"]) == teamNum:
-                captain = character["CharID"]
-        return captain
+                return Character.from_raw(character["CharID"])
+        return None
 
     def offensiveStats(self, teamNum: int, rosterNum: int = -1) -> Union[dict, list[dict]]:
         # grabs offensive stats of a character as seen in the stat json

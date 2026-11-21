@@ -158,3 +158,27 @@ def test_version_before_matches_numbers_not_strings():
     assert not StatObj({"Version": "1.9.6"}).versionBefore(1, 9, 6)
     assert not StatObj({"Version": "2.3"}).versionBefore(2, 3)
     assert not StatObj({"Version": "2.10.0"}).versionBefore(2, 3)
+
+
+def test_statobj_captain_returns_the_captain():
+    """captain() iterated characterGameStats(), which is a dict, so it indexed
+    a string key and raised TypeError on every call."""
+    import json
+    for path in (ENCODED, DECODED):
+        with open(path) as f:
+            stat = StatObj(json.load(f))
+        for team in (0, 1):
+            cap = stat.captain(team)
+            assert isinstance(cap, Character)
+            assert cap.attributes.is_captain
+
+
+def test_statobj_captain_returns_none_when_no_captain():
+    cgs = {
+        f"Team {t} Roster {i}": {"CharID": i, "Team": t, "Captain": 0}
+        for t in (0, 1)
+        for i in range(9)
+    }
+    stat = StatObj({"Character Game Stats": cgs})
+    assert stat.captain(0) is None
+    assert stat.captain(1) is None

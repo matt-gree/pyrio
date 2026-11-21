@@ -1,12 +1,14 @@
 import pytest
 
 from pyrio import (
-    Character, RioValue, Tables, Stadium,
+    Character, BaseCharacter, RioValue, Tables, Stadium,
     PitchType, ChargeType, SwingType, ContactType,
     FinalResult, PrimaryContactResult, SecondaryContactResult,
     OutType, StealType, PitchResult,
     Hand, Position, FielderAction, FielderBobble, ManualSelect, TeamName,
     DeadBallReason,
+    RioError, RioAPIError, UnknownRioValueError,
+    lookup, userInputToCharacter,
 )
 
 
@@ -69,6 +71,44 @@ def test_lookup_character_rejects_unknown():
         Character.from_raw(999)
 
 
+def test_exception_hierarchy():
+    # RioError is the root of everything pyrio deliberately raises;
+    # UnknownRioValueError dual-inherits so legacy ValueError handlers survive.
+    assert issubclass(RioAPIError, RioError)
+    assert issubclass(UnknownRioValueError, RioError)
+    assert issubclass(UnknownRioValueError, ValueError)
+
+
+def test_unknown_values_raise_unknown_rio_value_error():
+    with pytest.raises(UnknownRioValueError):
+        Character.from_raw("not a character")
+    with pytest.raises(UnknownRioValueError):
+        Character.from_raw(999)
+    with pytest.raises(UnknownRioValueError):
+        Stadium.from_raw("Not A Stadium")
+    with pytest.raises(UnknownRioValueError):
+        userInputToCharacter("not a character")
+    with pytest.raises(UnknownRioValueError):
+        lookup("not_a_table", 0)
+
+
+def test_unknown_value_caught_by_value_error_and_rio_error():
+    # Both the pre-1.0 ``except ValueError`` contract and the new
+    # ``except RioError`` root must catch resolution failures.
+    with pytest.raises(ValueError):
+        Character.from_raw("not a character")
+    with pytest.raises(RioError):
+        Character.from_raw("not a character")
+    with pytest.raises(ValueError):
+        Stadium.from_raw(Character.from_raw("Mario"))   # cross-type resolution
+    with pytest.raises(RioError):
+        Stadium.from_raw(Character.from_raw("Mario"))
+    with pytest.raises(ValueError):
+        PitchType.from_raw("Knuckleball")
+    with pytest.raises(RioError):
+        PitchType.from_raw("Knuckleball")
+
+
 def test_lookup_stadium_by_id_name_and_legacy():
     s = Stadium.from_raw(1)
     assert isinstance(s, Stadium)
@@ -81,6 +121,49 @@ def test_lookup_stadium_by_id_name_and_legacy():
 def test_lookup_stadium_rejects_unknown():
     with pytest.raises(ValueError):
         Stadium.from_raw("Not A Stadium")
+
+
+def test_from_raw_is_idempotent_on_its_own_type():
+    # Re-feeding a value object to its own from_raw returns it unchanged, so
+    # code holding value objects can pass them wherever raw ids/names go.
+    mario = Character.from_raw("Mario")
+    assert Character.from_raw(mario) is mario
+    stadium = Stadium.from_raw(1)
+    assert Stadium.from_raw(stadium) is stadium
+    toad = BaseCharacter.from_raw("Toad")
+    assert BaseCharacter.from_raw(toad) is toad
+
+
+def test_from_raw_rejects_other_value_types():
+    # A value object of a different type is an error, not an accidental
+    # name-string lookup (a BaseCharacter names no single Character variant).
+    with pytest.raises(ValueError):
+        Stadium.from_raw(Character.from_raw("Mario"))
+    with pytest.raises(ValueError):
+        Character.from_raw(BaseCharacter.from_raw("Toad"))
+
+
+def test_base_character_from_raw_accepts_character():
+    # Character -> BaseCharacter is a well-defined narrowing (drop the variant).
+    assert BaseCharacter.from_raw(Character.from_raw("Toad(B)")) == BaseCharacter.from_raw("Toad")
+
+
+def test_team_name_captain_and_role():
+    # Logo ids encode the captain (id // 4) and role (id % 4) structurally.
+    fireballs = TeamName.from_raw("Mario Fireballs")
+    assert fireballs.captain == Character.from_raw("Mario")
+    assert fireballs.role == "class_team"
+    assert TeamName.from_raw("Mario Sunshines").role == "signature"
+    assert TeamName.from_raw("Mario Heroes").role == "default"
+    assert TeamName.from_raw("Jr Fangs").captain == Character.from_raw("Bowser Jr")
+    # Every logo's captain is a captain, and each captain owns exactly 4 logos.
+    per_captain = {}
+    for logo_id in Tables.TEAM_NAME:
+        team = TeamName.from_raw(logo_id)
+        assert team.captain.attributes.is_captain
+        per_captain.setdefault(team.captain, []).append(team)
+    assert all(len(teams) == 4 for teams in per_captain.values())
+    assert len(per_captain) == 12
 
 
 def test_input_direction_matches_stickvec_bitmask():
@@ -157,3 +240,79 @@ def test_roster_and_fielding_factories():
     assert DeadBallReason.from_raw(1).name == "Home Run"
     assert DeadBallReason.from_raw("Foul Ball").id == 2
     assert DeadBallReason.from_raw(None) is None
+
+
+# ---------------------------------------------------------------------------
+# Regression: lookup() was case-insensitive in only one direction
+# ---------------------------------------------------------------------------
+
+def test_lookup_is_case_insensitive_in_both_directions():
+    """id->name matched the raw term, so a lowercased key fell through.
+
+    lookup(CHAR_NAME, 'mario') resolved (name->id, which lowercased) but
+    lookup(SIMPLIFIED_NAME, 'mario') returned the "Invalid" sentinel, because
+    there the term matches a *key*, and the key branch did not lowercase.
+    """
+    assert lookup(Tables.CHAR_NAME, "mario") == 0
+    assert lookup(Tables.SIMPLIFIED_NAME, "mario") == "Mario"
+    assert lookup(Tables.SIMPLIFIED_NAME, "TOAD(R)") == "Toad"
+    assert lookup(Tables.STADIUM, "bowser castle") == 1
+    # id -> name still wins over name -> id, and ints are untouched
+    assert lookup(Tables.CHAR_NAME, 0) == "Mario"
+    assert lookup(Tables.CHAR_NAME, "0") == "Mario"
+    # a genuine miss still reports the sentinel
+    assert str(lookup(Tables.CHAR_NAME, 999)).startswith("Invalid")
+    assert str(lookup(Tables.CHAR_NAME, "Mendelbrot")).startswith("Invalid")
+
+
+def test_lookup_handles_non_str_keys_and_values():
+    # HAND_BOOL is keyed on bools; POSITION has a None key whose value is "None"
+    assert lookup(Tables.HAND_BOOL, True) == "Left"
+    assert lookup(Tables.HAND_BOOL, "true") == "Left"
+    assert lookup(Tables.POSITION, "None") == "None"
+
+
+# ---------------------------------------------------------------------------
+# Regression: RioValue accepted an id/name pair its table contradicts
+# ---------------------------------------------------------------------------
+
+def test_value_object_rejects_inconsistent_pair():
+    """Equality is by (type, id), so a wrong name compared equal to the right
+    one and silently misreported itself under str()."""
+    with pytest.raises(UnknownRioValueError):
+        Character(0, "Bowser")
+    with pytest.raises(UnknownRioValueError):
+        Stadium(1, "Mario Stadium")
+    with pytest.raises(UnknownRioValueError):
+        Character(999, "Mario")
+
+
+def test_value_object_accepts_consistent_pair():
+    assert Character(0, "Mario").name == "Mario"
+    assert Stadium(1, "Bowser Castle").id == 1
+    assert Position(None, "None").name == "None"      # None is a real key
+    # the bare base class has no table and stays unvalidated on purpose
+    assert RioValue(0, "Mario").name == "Mario"
+
+
+def test_from_raw_still_builds_every_value_class():
+    # from_raw resolves to the canonical name first, so validation is a no-op
+    assert Character.from_raw("bowser") == Character(9, "Bowser")
+    assert Stadium.from_raw("Bowser's Castle") == Stadium(1, "Bowser Castle")
+    for cls, table in [
+        (PitchType, Tables.PITCH_TYPE), (ChargeType, Tables.CHARGE_TYPE),
+        (SwingType, Tables.TYPE_OF_SWING), (ContactType, Tables.CONTACT_TYPE),
+        (FinalResult, Tables.FINAL_RESULT), (OutType, Tables.OUT_TYPE),
+        (PrimaryContactResult, Tables.PRIMARY_CONTACT_RESULT),
+        (SecondaryContactResult, Tables.SECONDARY_CONTACT_RESULT),
+        (StealType, Tables.STEAL_TYPE), (PitchResult, Tables.PITCH_RESULT),
+        (Hand, Tables.HAND), (Position, Tables.POSITION),
+        (FielderAction, Tables.FIELDER_ACTIONS),
+        (FielderBobble, Tables.FIELDER_BOBBLES),
+        (ManualSelect, Tables.MANUAL_SELECT), (TeamName, Tables.TEAM_NAME),
+        (DeadBallReason, Tables.DEAD_BALL_REASON),
+    ]:
+        for raw_id in table:
+            if raw_id is None:
+                continue
+            assert cls.from_raw(raw_id).id == raw_id

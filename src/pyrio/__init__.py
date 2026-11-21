@@ -33,10 +33,12 @@ from .api import (
 from .rio_web import RioWeb
 
 # Custom exceptions
-from .exceptions import RioAPIError, RioAuthError, RioNotFoundError
+from .exceptions import (
+    RioError, RioAPIError, RioAuthError, RioNotFoundError, UnknownRioValueError,
+)
 
-# Team name resolution
-from .team_name_algo import team_name
+# Team name resolution: the algorithm plus the captain-teams data itself
+from .team_name_algo import team_name, CaptainTeams, Signature, CAPTAIN_TEAMS
 
 # Stat formatters and derived stat calculators
 from .stat_formatters import (
