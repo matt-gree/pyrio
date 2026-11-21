@@ -11,6 +11,7 @@ from ..rio_value import (
     FinalResult, PrimaryContactResult, SecondaryContactResult,
     OutType, StealType, PitchResult,
     Hand, Position, FielderAction, FielderBobble, ManualSelect, TeamName,
+    LEGACY_SWAPPED_AB_LABELS,
 )
 from .error_checking import ErrorChecker
 
@@ -98,8 +99,25 @@ class StatObj:
 
         if self.version() in VERSION_LIST_HOME_AWAY_FLIPPED:
             return abs(teamNum-1)
-        
+
         return teamNum
+
+    def _correct_legacy_ab_label(self, value):
+        """Normalise a decoded at-bat result label onto its 2.3.0 spelling.
+
+        Rio 2.3.0 swapped at-bat result ids 5 and 6, so a decoded file written
+        before then spells id 5 "Caught" and id 6 "Caught line-drive" -- the
+        opposite of the current table. The label alone cannot say which id it
+        meant, which is why this is a version correction and not a ``from_raw``
+        alias, in the same spirit as :meth:`teamNumVersionCorrection`.
+
+        Only decoded strings are touched: an encoded id is unambiguous and
+        passes through. A file with no readable version is treated as legacy,
+        since every such file predates 2.3.0.
+        """
+        if isinstance(value, str) and self.versionBefore(2, 3, 0):
+            return LEGACY_SWAPPED_AB_LABELS.get(value, value)
+        return value
 
 
     def player(self, teamNum: int) -> str:

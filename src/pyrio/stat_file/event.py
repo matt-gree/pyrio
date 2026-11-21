@@ -123,7 +123,14 @@ class EventObj():
         return self.eventDict['Num Outs During Play']
 
     def result_of_AB(self) -> FinalResult:
-        return FinalResult.from_raw(self.eventDict['Result of AB'])
+        """The at-bat result.
+
+        Decoded labels are version-corrected first: Rio 2.3.0 swapped ids 5
+        and 6, so an older decoded file's "Caught" is today's "Caught
+        line-drive". See StatObj._correct_legacy_ab_label().
+        """
+        raw = self.rioStat._correct_legacy_ab_label(self.eventDict['Result of AB'])
+        return FinalResult.from_raw(raw)
 
     def dead_ball_reason(self) -> Optional[DeadBallReason]:
         """Why the ball went dead this event, or None if the field is absent."""

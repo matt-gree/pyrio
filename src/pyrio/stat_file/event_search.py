@@ -260,11 +260,17 @@ class EventSearch():
         return self._ab_bucket('Out')
 
     def caughtResultEvents(self) -> set[int]:
-        # returns a set of events where the result is caught
+        """Events whose result is a caught fly ball (id 6).
+
+        Looked up by name, so this follows the 2.3.0 correction that swapped
+        ids 5 and 6: it now returns genuinely-caught balls, where before it
+        returned line drives.
+        """
         return self._ab_bucket('Caught')
 
     def caughtLineDriveResultsEvents(self) -> set[int]:
-        # returns a set of events where the result is caught line drive
+        """Events whose result is a caught line drive (id 5). See
+        caughtResultEvents() on the 2.3.0 id correction."""
         return self._ab_bucket('Caught line-drive')
 
     def hitResultEvents(self, numberOfBases=0) -> set[int]:
@@ -282,13 +288,31 @@ class EventSearch():
         else:
             return self._ab_bucket('Single') | self._ab_bucket('Double') | self._ab_bucket('Triple') | self._ab_bucket('HR')
 
+    def errorResultEvents(self) -> set[int]:
+        """Events whose result is an error (id 11).
+
+        Rio 2.3.0 renamed this result from "Error - Input" to "Error".
+        """
+        return self._ab_bucket('Error')
+
     def inputErrorResultEvents(self) -> set[int]:
-        # returns a set of events where the result is a input error
-        return self._ab_bucket('Error - Input')
+        """Deprecated alias for errorResultEvents()."""
+        return self.errorResultEvents()
+
+    def batterSafeThrowElsewhereEvents(self) -> set[int]:
+        """Events whose result is "Batter safe, throw elsewhere" (id 12).
+
+        Formerly decoded as "Error - Chem", which was wrong: nothing in the
+        game sets this result from chemistry. It fires when a throw could
+        still have retired a runner but none was put out, so it is not a
+        fielder's choice either -- secondary result 4, "Batter safe, runner
+        out", is the play that is.
+        """
+        return self._ab_bucket('Batter safe, throw elsewhere')
 
     def chemErrorResultEvents(self) -> set[int]:
-        # returns a set of events where the result is a chem error
-        return self._ab_bucket('Error - Chem')
+        """Deprecated alias for batterSafeThrowElsewhereEvents()."""
+        return self.batterSafeThrowElsewhereEvents()
 
     def buntResultEvents(self) -> set[int]:
         #returns a set of events of successful bunts

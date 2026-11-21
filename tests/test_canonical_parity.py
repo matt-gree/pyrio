@@ -11,6 +11,8 @@ var; otherwise it falls back to a sibling ``../ProjectRio`` and skips if absent.
 import os
 import re
 import pathlib
+import subprocess
+import tempfile
 
 import pytest
 
@@ -46,22 +48,90 @@ CANON_TO_PYRIO = {
 # (Input Direction - Push/Pull: None/Towards/Away), which pyrio has no dict for.
 
 
-def _find_header():
+HEADER_REL = "Source/Core/Core/MSB_StatTracker.h"
+CPP_REL = "Source/Core/Core/MSB_StatTracker.cpp"
+
+# The Project Rio release pyrio tracks. Read from this ref rather than the
+# checkout's working tree, so the comparison cannot depend on whatever someone
+# happens to have modified or staged in another repository. Override with
+# PYRIO_PROJECTRIO_REF.
+DEFAULT_REF = "origin/2.3.0_release"
+
+
+def _find_repo():
     env = os.environ.get("PYRIO_PROJECTRIO_PATH")
     candidates = []
     if env:
-        candidates.append(pathlib.Path(env) / "Source/Core/Core/MSB_StatTracker.h")
-    repo_root = pathlib.Path(__file__).resolve().parent.parent
-    candidates.append(repo_root.parent / "ProjectRio" / "Source/Core/Core/MSB_StatTracker.h")
-    return next((c for c in candidates if c.is_file()), None)
+        candidates.append(pathlib.Path(env))
+    candidates.append(pathlib.Path(__file__).resolve().parent.parent.parent / "ProjectRio")
+    return next((c for c in candidates if (c / HEADER_REL).is_file()), None)
 
 
-HEADER = _find_header()
+def _materialize(repo, ref):
+    """Extract the tracker sources at ``ref`` into a temp dir.
+
+    Returns (header_path, commit) or (None, None) if the ref does not resolve.
+    """
+    try:
+        rev = subprocess.run(
+            ["git", "-C", str(repo), "rev-parse", "--verify", f"{ref}^{{commit}}"],
+            capture_output=True, text=True, timeout=10,
+        )
+        if rev.returncode != 0:
+            return None, None
+        tmp = pathlib.Path(tempfile.mkdtemp(prefix="pyrio-canonical-"))
+        for rel in (HEADER_REL, CPP_REL):
+            blob = subprocess.run(
+                ["git", "-C", str(repo), "show", f"{ref}:{rel}"],
+                capture_output=True, text=True, timeout=30,
+            )
+            if blob.returncode != 0:
+                if rel == HEADER_REL:
+                    return None, None
+                continue
+            dest = tmp / rel
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            dest.write_text(blob.stdout)
+        return tmp / HEADER_REL, rev.stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        return None, None
+
+
+REPO = _find_repo()
+REF = os.environ.get("PYRIO_PROJECTRIO_REF", DEFAULT_REF)
+HEADER = None
+SOURCE = "no Project Rio checkout found"
+
+if REPO is not None:
+    HEADER, _commit = _materialize(REPO, REF)
+    if HEADER is not None:
+        SOURCE = f"{REPO} at {REF} ({_commit[:10]})"
+    else:
+        # No git, or the ref is absent (e.g. a bare copy of the sources).
+        HEADER = REPO / HEADER_REL
+        SOURCE = (
+            f"{HEADER} -- WORKING TREE, because ref {REF!r} did not resolve; "
+            "this may include uncommitted local edits"
+        )
 
 pytestmark = pytest.mark.skipif(
     HEADER is None,
     reason="Project Rio repo not found; set PYRIO_PROJECTRIO_PATH to enable parity tests",
 )
+
+
+# Divergences pyrio carries deliberately, because it has adopted a correction
+# that is not merged upstream yet. (canonical map, id) -> pyrio's value.
+# Each entry must cite why; remove it once upstream agrees -- the test fails
+# with a "remove this entry" message when that happens, so these cannot rot.
+PENDING_UPSTREAM = {
+    # ProjectRio/ProjectRio#170 (open): 0xC is set when a throw could still
+    # have retired a runner but none was put out, so it is neither a chem
+    # error (2.2.0) nor a fielder's choice (2.3.0). Secondary result 0x4,
+    # "Batter safe, runner out", is the play that is a fielder's choice.
+    ("cAtBatResult", 12): "Batter safe, throw elsewhere",
+    ("cSecondaryContactResult", 12): "Batter safe, throw elsewhere",
+}
 
 
 def _parse_canonical(path):
@@ -83,13 +153,30 @@ def test_lookupdict_matches_canonical(canon_name, pyrio_name):
     pymap = getattr(Tables, pyrio_name)
     # compare on int keys (skip pyrio-only non-int keys like None/bool)
     py_int = {k: v for k, v in pymap.items() if isinstance(k, int) and not isinstance(k, bool)}
-    if py_int != canon:
-        lines = [
-            f"  id {k}: canonical={canon.get(k)!r} pyrio={py_int.get(k)!r}"
-            for k in sorted(set(canon) | set(py_int))
-            if canon.get(k) != py_int.get(k)
-        ]
-        pytest.fail(f"{pyrio_name} diverges from canonical {canon_name}:\n" + "\n".join(lines))
+
+    diffs, stale = [], []
+    for k in sorted(set(canon) | set(py_int)):
+        c, p = canon.get(k), py_int.get(k)
+        pending = PENDING_UPSTREAM.get((canon_name, k))
+        if pending is not None:
+            if c == pending:
+                stale.append(
+                    f"  id {k}: upstream now says {c!r} too -- "
+                    f"remove the PENDING_UPSTREAM entry for ({canon_name!r}, {k})"
+                )
+                continue
+            if p == pending:
+                continue        # deliberate divergence, still pending upstream
+        if c != p:
+            diffs.append(f"  id {k}: canonical={c!r} pyrio={p!r}")
+
+    if diffs or stale:
+        parts = [f"{pyrio_name} vs canonical {canon_name}", f"source: {SOURCE}"]
+        if diffs:
+            parts.append("diverges:\n" + "\n".join(diffs))
+        if stale:
+            parts.append("stale exceptions:\n" + "\n".join(stale))
+        pytest.fail("\n".join(parts))
 
 
 # --- field-name (schema) parity ---------------------------------------------

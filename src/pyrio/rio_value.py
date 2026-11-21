@@ -144,6 +144,7 @@ class Tables:
 
     CHARGE_TYPE = {
         0: "N/A",
+        1: "Charged Captain Star",
         2: "Slider",
         3: "Perfect"
     }
@@ -232,12 +233,14 @@ class Tables:
         8: "Double",
         9: "Triple",
         10: "HR",
-        11: "Error - Input",
-        12: "Error - Chem",
+        11: "Error",
+        12: "Batter safe, throw elsewhere",
         13: "Bunt",
         14: "SacFly",
         15: "Ground ball double Play",
-        16: "Foul catch",
+        # No 0x10: secondary results are only copied up to DOUBLE_PLAY, so
+        # "Foul catch" was unreachable here. It survives in FINAL_RESULT.
+        255: "None",
     }
 
     FINAL_RESULT = {
@@ -246,14 +249,18 @@ class Tables:
         2: "Walk (BB)",
         3: "Walk (HBP)",
         4: "Out",
-        5: "Caught",
-        6: "Caught line-drive",
+        # 5/6 are not a typo and not interchangeable: the game assigns 5 when
+        # Hit_VerticalAngle <= 160 (the flat, low-apex ball) and 6 above it.
+        # Decoded files from Rio <= 2.2.0 carry these two labels the other way
+        # round -- see docs/v1.0.0-audit.md.
+        5: "Caught line-drive",
+        6: "Caught",
         7: "Single",
         8: "Double",
         9: "Triple",
         10: "HR",
-        11: "Error - Input",
-        12: "Error - Chem",
+        11: "Error",
+        12: "Batter safe, throw elsewhere",
         13: "Bunt",
         14: "SacFly",
         15: "Ground ball double Play",
@@ -745,7 +752,42 @@ class ContactType(RioValue):
     _lookup = Tables.CONTACT_TYPE
 
 
-class FinalResult(RioValue):
+# Decoded result labels from Rio <= 2.2.0 that 2.3.0 renamed *at the same id*.
+# Accepting them on input keeps older decoded stat files readable, the same way
+# _OLD_STADIUM_NAMES does for stadiums.
+#
+# This deliberately does NOT cover FINAL_RESULT ids 5 and 6, which were
+# *swapped* rather than renamed: "Caught" denotes id 5 in a pre-2.3.0 decoded
+# file and id 6 in a 2.3.0 one, so the label alone cannot be resolved -- it
+# needs the producing file's version. See docs/v1.0.0-audit.md.
+_LEGACY_RESULT_NAMES = {
+    "Error - Input": "Error",
+    "Error - Chem": "Batter safe, throw elsewhere",
+}
+
+# The 5/6 half of the same change, which a label alone cannot resolve: Rio
+# 2.3.0 swapped these two ids, so a *decoded* file written before 2.3.0 spells
+# id 5 "Caught" and id 6 "Caught line-drive" -- the other way round from the
+# table above. Applying this needs the producing file's version, so it lives
+# behind StatObj._correct_legacy_ab_label() rather than in from_raw(). Encoded
+# ids are unambiguous and must never be passed through it.
+LEGACY_SWAPPED_AB_LABELS = {
+    "Caught": "Caught line-drive",
+    "Caught line-drive": "Caught",
+}
+
+
+class _ResultValue(RioValue):
+    """Shared legacy-label handling for the at-bat result tables."""
+
+    @classmethod
+    def from_raw(cls, search_term):
+        if isinstance(search_term, str):
+            search_term = _LEGACY_RESULT_NAMES.get(search_term, search_term)
+        return super().from_raw(search_term)
+
+
+class FinalResult(_ResultValue):
     """The final result of an at-bat (cAtBatResult)."""
 
     _lookup = Tables.FINAL_RESULT
@@ -757,7 +799,7 @@ class PrimaryContactResult(RioValue):
     _lookup = Tables.PRIMARY_CONTACT_RESULT
 
 
-class SecondaryContactResult(RioValue):
+class SecondaryContactResult(_ResultValue):
     """Secondary contact result: the detailed hit/out outcome."""
 
     _lookup = Tables.SECONDARY_CONTACT_RESULT

@@ -316,3 +316,51 @@ def test_from_raw_still_builds_every_value_class():
             if raw_id is None:
                 continue
             assert cls.from_raw(raw_id).id == raw_id
+
+
+# ---------------------------------------------------------------------------
+# Project Rio 2.3.0 result-table corrections (+ PR #170 for id 12)
+# ---------------------------------------------------------------------------
+
+def test_final_result_5_and_6_are_the_corrected_way_round():
+    """The game assigns 5 when Hit_VerticalAngle <= 160 (the flat, low-apex
+    ball) and 6 above it, so 5 is the line drive. Rio <= 2.2.0 had the two
+    labels swapped; pyrio followed it until 2.3.0."""
+    assert Tables.FINAL_RESULT[5] == "Caught line-drive"
+    assert Tables.FINAL_RESULT[6] == "Caught"
+    assert FinalResult.from_raw(5).name == "Caught line-drive"
+    assert FinalResult.from_raw(6).name == "Caught"
+    assert FinalResult.from_raw("Caught").id == 6
+    assert FinalResult.from_raw("Caught line-drive").id == 5
+
+
+def test_result_tables_match_2_3_0():
+    for table in (Tables.FINAL_RESULT, Tables.SECONDARY_CONTACT_RESULT):
+        assert table[11] == "Error"
+        assert table[12] == "Batter safe, throw elsewhere"
+    # 0x10 is unreachable as a secondary result (they are only copied up to
+    # DOUBLE_PLAY), so 2.3.0 dropped it there; it survives in FINAL_RESULT.
+    assert 16 not in Tables.SECONDARY_CONTACT_RESULT
+    assert Tables.FINAL_RESULT[16] == "Foul catch"
+    assert Tables.SECONDARY_CONTACT_RESULT[255] == "None"
+    with pytest.raises(UnknownRioValueError):
+        SecondaryContactResult.from_raw(16)
+
+
+def test_charge_type_has_charged_captain_star():
+    """id 1 was missing, so from_raw(1) raised -- which took out EventSearch
+    construction for the whole file, since its guard catches only KeyError."""
+    assert Tables.CHARGE_TYPE[1] == "Charged Captain Star"
+    assert ChargeType.from_raw(1).name == "Charged Captain Star"
+    assert ChargeType.from_raw("Charged Captain Star").id == 1
+
+
+def test_legacy_result_labels_still_resolve():
+    """Decoded files from Rio <= 2.2.0 carry the old labels for ids 11 and 12.
+    Those were renamed at a stable id, so they resolve unambiguously."""
+    for cls in (FinalResult, SecondaryContactResult):
+        assert cls.from_raw("Error - Input").id == 11
+        assert cls.from_raw("Error - Chem").id == 12
+        # and the canonical spellings, obviously
+        assert cls.from_raw("Error").id == 11
+        assert cls.from_raw("Batter safe, throw elsewhere").id == 12

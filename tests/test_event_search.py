@@ -145,3 +145,26 @@ def test_outs_in_inning_rejects_impossible_counts(search):
     for n in (3, -3, 4):
         with pytest.raises(ValueError):
             search.outsInInningEvents(n)
+
+
+# ---------------------------------------------------------------------------
+# 2.3.0 result renames: accurate names, with the old ones kept as aliases
+# ---------------------------------------------------------------------------
+
+def test_renamed_result_methods_and_aliases(search):
+    assert search.errorResultEvents() == search.inputErrorResultEvents()
+    assert (search.batterSafeThrowElsewhereEvents()
+            == search.chemErrorResultEvents())
+    for call in (search.errorResultEvents, search.batterSafeThrowElsewhereEvents,
+                 search.caughtResultEvents, search.caughtLineDriveResultsEvents,
+                 search.foulCatchResultEvents):
+        assert isinstance(call(), set)
+
+
+def test_caught_buckets_follow_the_corrected_ids(search):
+    """These look up by name, so the 5/6 correction moves them to the right
+    ids: caughtResultEvents is genuinely-caught balls (6), not line drives."""
+    from pyrio import FinalResult
+    assert search.caughtResultEvents() == search._result_of_AB_dict[FinalResult.from_raw(6)]
+    assert (search.caughtLineDriveResultsEvents()
+            == search._result_of_AB_dict[FinalResult.from_raw(5)])

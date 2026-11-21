@@ -182,3 +182,59 @@ def test_statobj_captain_returns_none_when_no_captain():
     stat = StatObj({"Character Game Stats": cgs})
     assert stat.captain(0) is None
     assert stat.captain(1) is None
+
+
+# ---------------------------------------------------------------------------
+# Rio 2.3.0 swapped at-bat ids 5 and 6: decoded labels need version context
+# ---------------------------------------------------------------------------
+
+def _ab_event(version, raw):
+    j = {"Events": [{"Result of AB": raw}]}
+    if version is not None:
+        j["Version"] = version
+    return EventObj(StatObj(j), 0).result_of_AB()
+
+
+def test_legacy_decoded_ab_labels_are_version_corrected():
+    """A pre-2.3.0 decoded file spells id 5 "Caught"; 2.3.0 spells it
+    "Caught line-drive". The label alone cannot say which, so the file's
+    version decides."""
+    for version in ("2.2.0", "1.9.5", None):      # None: unknown == legacy
+        assert _ab_event(version, "Caught").id == 5
+        assert _ab_event(version, "Caught line-drive").id == 6
+
+
+def test_modern_decoded_ab_labels_are_taken_at_face_value():
+    for version in ("2.3.0", "2.4.0"):
+        assert _ab_event(version, "Caught").id == 6
+        assert _ab_event(version, "Caught line-drive").id == 5
+
+
+def test_encoded_ab_ids_are_never_version_corrected():
+    """Stored numbers did not change, only the decoded text, so an encoded id
+    must pass through untouched whatever the version."""
+    for version in ("2.2.0", "1.9.5", "2.3.0", "2.4.0", None):
+        assert _ab_event(version, 5).id == 5
+        assert _ab_event(version, 6).id == 6
+
+
+def test_other_ab_labels_are_unaffected_by_the_correction():
+    for version in ("2.2.0", "2.3.0"):
+        assert _ab_event(version, "Single").id == 7
+        assert _ab_event(version, "HR").id == 10
+        assert _ab_event(version, "Foul catch").id == 16
+
+
+def test_encoded_and_decoded_fixtures_agree_on_every_result():
+    """The two fixtures are the same 2.2.0 game, one stored as ids and one as
+    the old labels. Before the version correction they disagreed on 28 of 211
+    events -- every caught ball and line drive in the game."""
+    import json
+    with open(ENCODED) as f:
+        enc = StatObj(json.load(f))
+    with open(DECODED) as f:
+        dec = StatObj(json.load(f))
+    for i in range(enc.final_event() + 1):
+        assert EventObj(enc, i).result_of_AB() == EventObj(dec, i).result_of_AB(), (
+            f"event {i} differs between the encoded and decoded copies"
+        )
