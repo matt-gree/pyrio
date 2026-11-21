@@ -194,12 +194,17 @@ def _pyrio_field_literals():
     """Explicit field names read off the stat/HUD JSON containers.
 
     Restricted to accesses on the raw-data objects (statJson/hud_json/eventDict/
-    runner_json and the *_dict() views) so it doesn't pick up pyrio's own output
+    runner_json, the *_dict() views and the offensiveStats()/defensiveStats()
+    helpers) so it doesn't pick up pyrio's own output
     dicts or value-string literals. Conservative: nested accesses (e.g. CharID
     on a sub-dict) may be missed, which is fine for a subset guard.
     """
-    pkg = pathlib.Path(__file__).resolve().parent.parent / "stat_file"
-    containers = r"(?:statJson|hud_json|eventDict|runner_json|pitch_dict\(\)|contact_dict\(\)|first_fielder_dict\(\))"
+    pkg = pathlib.Path(__file__).resolve().parent.parent / "src" / "pyrio" / "stat_file"
+    containers = (
+        r"(?:statJson|hud_json|eventDict|runner_json|character"
+        r"|pitch_dict\(\)|contact_dict\(\)|first_fielder_dict\(\)"
+        r"|offensiveStats\([^()]*\)|defensiveStats\([^()]*\))"
+    )
     pattern = containers + r"\s*(?:\[\s*|\.get\(\s*)['\"]([^'\"{}]+)['\"]"
     lits = set()
     for p in pkg.glob("*.py"):
@@ -211,15 +216,38 @@ def _pyrio_field_literals():
 # not literal in the header/cpp even though they exist in the files.
 _FIELD_ALLOWLIST: set[str] = {"Runner 1B", "Runner 2B", "Runner 3B"}
 
+# Fields older clients wrote and the current one no longer does. pyrio still reads them
+# so old stat files parse. Each entry names the release that dropped it and what
+# replaced it; checked against ProjectRio's history (`git log -S'<field>'`).
+_LEGACY_FIELDS: dict[str, str] = {
+    # Written by 0.1.6 through 1.9.1; renamed in 1.9.2 (ProjectRio ee757054f4), when the
+    # count changed from pitches to batters.
+    "Pitches Per Position": "replaced by 'Batters Per Position' in 1.9.2",
+}
+
 
 def test_pyrio_fields_are_canonical():
     """Every field the parser reads must exist in MSB_StatTracker (catches renames)."""
     canonical = _canonical_field_names()
+    literals = _pyrio_field_literals()
+    # Guard against scanning nothing: a moved package once made this pass vacuously.
+    assert len(literals) > 50, f"only {len(literals)} field literals found; is the parser path right?"
     unknown = sorted(
-        k for k in _pyrio_field_literals()
-        if k not in canonical and k not in _FIELD_ALLOWLIST
+        k for k in literals
+        if k not in canonical and k not in _FIELD_ALLOWLIST and k not in _LEGACY_FIELDS
     )
     assert not unknown, (
         "parser reads fields absent from canonical MSB_StatTracker "
-        "(field rename/typo, or add to _FIELD_ALLOWLIST):\n  " + "\n  ".join(unknown)
+        "(a typo, a field the client renamed -- add it to _LEGACY_FIELDS with the release "
+        "that dropped it -- or a constructed key for _FIELD_ALLOWLIST):\n  " + "\n  ".join(unknown)
+    )
+
+
+def test_legacy_fields_are_still_legacy():
+    """A legacy field the current client writes again is no longer legacy."""
+    canonical = _canonical_field_names()
+    revived = sorted(k for k in _LEGACY_FIELDS if k in canonical)
+    assert not revived, (
+        "canonical MSB_StatTracker writes these again; remove them from _LEGACY_FIELDS:\n  "
+        + "\n  ".join(revived)
     )

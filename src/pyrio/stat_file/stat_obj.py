@@ -479,19 +479,39 @@ class StatObj:
         teamNum = self.teamNumVersionCorrection(teamNum)
         return float(self.outsPitched(teamNum, rosterNum)) / 3
 
-    def pitchesPerPosition(self, teamNum: int, rosterNum: int) -> dict:
-        # returns a dict which tracks how many pitches a character was at a position for
+    @staticmethod
+    def _per_position(entries: list) -> dict:
+        # The client writes these as a one-element list holding a {position: count}
+        # dict, or as an empty list when every count is zero.
+        return dict(entries[0]) if entries else {}
+
+    def battersPerPosition(self, teamNum: int, rosterNum: int) -> dict:
+        # returns a dict of how many batters a character faced at each position
         # rosterNum: 0 -> 8 for each of the 9 roster spots
         teamNum = self.teamNumVersionCorrection(teamNum)
         ErrorChecker.check_roster_num_no_neg(rosterNum)
-        return self.defensiveStats(teamNum, rosterNum)["Pitches Per Position"][0]
+        return self._per_position(self.defensiveStats(teamNum, rosterNum)["Batters Per Position"])
+
+    def pitchesPerPosition(self, teamNum: int, rosterNum: int) -> dict:
+        # returns a dict of how many pitches a character was at each position for.
+        # Only clients 0.1.6 through 1.9.1 wrote this; 1.9.2 replaced it with
+        # "Batters Per Position", which counts batters instead (battersPerPosition).
+        teamNum = self.teamNumVersionCorrection(teamNum)
+        ErrorChecker.check_roster_num_no_neg(rosterNum)
+        stats = self.defensiveStats(teamNum, rosterNum)
+        if "Pitches Per Position" not in stats:
+            raise ValueError(
+                "this stat file has no 'Pitches Per Position': clients from 1.9.2 on "
+                "count batters per position instead; use battersPerPosition()"
+            )
+        return self._per_position(stats["Pitches Per Position"])
 
     def outsPerPosition(self, teamNum: int, rosterNum: int) -> dict:
-        # returns a dict which tracks how many outs a character was at a position for
+        # returns a dict of how many outs a character was at each position for
         # rosterNum: 0 -> 8 for each of the 9 roster spots
         teamNum = self.teamNumVersionCorrection(teamNum)
         ErrorChecker.check_roster_num_no_neg(rosterNum)
-        return self.defensiveStats(teamNum, rosterNum)["Outs Per Position"][0]
+        return self._per_position(self.defensiveStats(teamNum, rosterNum)["Outs Per Position"])
 
     # offensive stats
 

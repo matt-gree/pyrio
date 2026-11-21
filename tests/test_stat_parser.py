@@ -1,5 +1,7 @@
 import pathlib
 
+import pytest
+
 import pyrio
 from pyrio import (
     StatObj, Character, Stadium, PitchType, FinalResult, Hand, RunnerObj, DeadBallReason,
@@ -238,3 +240,32 @@ def test_encoded_and_decoded_fixtures_agree_on_every_result():
         assert EventObj(enc, i).result_of_AB() == EventObj(dec, i).result_of_AB(), (
             f"event {i} differs between the encoded and decoded copies"
         )
+
+
+# --- per-position defensive counts -------------------------------------------
+
+def test_batters_per_position_reads_the_current_key():
+    sf = pyrio.load_stat_file(DECODED)
+    counts = [sf.battersPerPosition(t, r) for t in (0, 1) for r in range(9)]
+    assert all(isinstance(c, dict) for c in counts)
+    assert sum(sum(c.values()) for c in counts) > 0
+
+
+def test_outs_per_position_is_empty_dict_when_no_outs():
+    # Four characters in this game recorded no outs; the client writes [] for them.
+    sf = pyrio.load_stat_file(DECODED)
+    counts = [sf.outsPerPosition(t, r) for t in (0, 1) for r in range(9)]
+    assert counts.count({}) == 4
+    assert all(isinstance(c, dict) for c in counts)
+
+
+def test_pitches_per_position_explains_the_1_9_2_rename():
+    sf = pyrio.load_stat_file(DECODED)
+    with pytest.raises(ValueError, match="battersPerPosition"):
+        sf.pitchesPerPosition(0, 0)
+
+
+def test_pitches_per_position_still_reads_pre_1_9_2_files():
+    stats = {"Defensive Stats": {"Pitches Per Position": [{"P": 87, "1B": 3}]}}
+    sf = StatObj({"Version": "1.9.1", "Character Game Stats": {"Team 0 Roster 0": stats}})
+    assert sf.pitchesPerPosition(0, 0) == {"P": 87, "1B": 3}
