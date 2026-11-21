@@ -564,10 +564,10 @@ class _HitSim:
             contact_size = self.Batter_BuntContactSize
         elif charge_up <= 0.0:
             if self.ChemLinksOnBase != 0:
-                    contact_size *= T.contact_ChemLinkMultipliers[self.ChemLinksOnBase]
+                contact_size *= T.contact_ChemLinkMultipliers[self.ChemLinksOnBase]
         else:
             contact_size = self.Batter_ChargeContactSize
-        
+
         diff = self.interstitialBallContact_X - self.posX
         if self.AtBat_BatterHand == T.Lefty:
             diff = -diff
@@ -689,10 +689,10 @@ class _HitSim:
                                 pullInd = 1
                     else:
                         if self.AtBat_BatterHand == T.Righty:
-                            pullInd = 1                       
+                            pullInd = 1
             else:
                 pullInd = 1
-            
+
             if (self.AtBat_BatterHand == T.Righty and pullInd == 1) or (self.AtBat_BatterHand != T.Righty and pullInd == 0):
                 if horizontalAngle < 0x801:
                     horizontalAngle = 0x800 - horizontalAngle
@@ -701,17 +701,18 @@ class _HitSim:
 
             self.Hit_HorizontalAngle = _adjust_ball_angle(horizontalAngle)
             if self.overrides.horizontal_angle is not None:
-                self.Hit_HorizontalAngle = self.overrides.horizontal_angle                        
+                self.Hit_HorizontalAngle = self.overrides.horizontal_angle
 
     # -- calculateVerticalAngle --
     def calculate_vertical_angle(self):
         if self.Batter_IsBunting:
-            randomBool = (self.s1 & 1 ^ self.s1 >> 0x1f) != self.s1 >> 0x1f
+            # The game picks the row on the seed's low bit:
+            # batter.c calculateBuntVerticalAngle -- "if (g_Ball.StaticRandomInt1 % 2) { rng = 1; }"
+            rng_row = self.s1 & 1
             contactType = self.Batter_ContactType
-            lower = T.BuntingVerticalAngleRanges[contactType][randomBool][0]
-            upper = T.BuntingVerticalAngleRanges[contactType][randomBool][1]
-            range = upper - lower
-            self.Hit_VerticalAngle = lower + (self.s1 - _jfloor(self.s1 / range) * range)
+            lower, upper = T.BuntingVerticalAngleRanges[contactType][rng_row]
+            span = upper - lower
+            self.Hit_VerticalAngle = lower + (self.s1 - _jfloor(self.s1 / span) * span)
         else: #non-bunts
             i_var5 = 0
             up_down = 0
@@ -833,14 +834,19 @@ class _HitSim:
         if self.Batter_IsBunting:
             lower = T.BuntHitPowerRanges[self.Batter_ContactType][0]
             upper = T.BuntHitPowerRanges[self.Batter_ContactType][1]
-            range = upper - lower
-            self.Hit_HorizontalPower = self.s1 - _jfloor(self.s1 / range) * range + lower
+            span = upper - lower
+            self.Hit_HorizontalPower = self.s1 - _jfloor(self.s1 / span) * span + lower
 
-            #set in game, but not needed for sim purposes
-            #self.isBuntedBall = True
-            #self.captainStarSwingActivated = False
+            # batter.c sets g_Ball.maybeBuntInd = 1 here. Nothing downstream of the
+            # launch reads it in this simulator, but it is what the game's own result
+            # classification keys on (stat_tracking.c -> runnerResultCd_bunt, and
+            # at_bat_results.c -> atBatBuntResult), so record it rather than drop it.
+            # The game also clears captainStarSwingActivated here; _resolve_star_swing
+            # already returns before the captain-star setup for a bunt, so that is
+            # implied rather than assigned.
+            self.isBuntedBall = True
             return
-        
+
         #non-bunts
         nice_sour = self.Batter_ContactType
         charged = self.BatterAtPlate_BatterCharge_Up

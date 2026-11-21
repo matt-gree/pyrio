@@ -1665,7 +1665,7 @@ class EventObj():
         'Unable to Decode. Invalid Value (1).' instead, so that's corrected on read.
         """
         charge_type = self.pitch_dict().get('Charge Type')
-        if charge_type == 'ChargedStar' or '(1)' in str(charge_type):
+        if charge_type in ('ChargedStar', 'Unable to Decode. Invalid Value (1).'):
             return LookupDicts.CHARGE_TYPE[1]
         return charge_type
     

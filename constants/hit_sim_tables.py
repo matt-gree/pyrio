@@ -119,7 +119,11 @@ RandomBattingFactors_ChemLinkMult0 = [1.0, 1.1, 1.25, 1.5]
 # Horizontal angle ranges, indexed [inputDirection][isCharge][frameOfContact] -> [low, high].
 BattingAngleRanges = [[[[0, 0], [0, 0], [-700, -500], [-500, -350], [-400, -250], [-350, -100], [-150, 250], [200, 300], [250, 400], [350, 550], [550, 700], [0, 0], [0, 0], [0, 0], [0, 0]], [[0, 0], [0, 0], [0, 0], [-600, -400], [-400, -200], [-300, -100], [-200, 200], [100, 400], [300, 450], [350, 600], [0, 0], [0, 0], [0, 0], [0, 0], [0, 0]]], [[[0, 0], [0, 0], [-750, -500], [-500, -300], [-300, -150], [-150, 200], [200, 400], [300, 450], [400, 600], [500, 600], [600, 700], [0, 0], [0, 0], [0, 0], [0, 0]], [[0, 0], [0, 0], [0, 0], [-600, -400], [-400, -200], [-300, 100], [100, 400], [100, 400], [200, 500], [500, 700], [0, 0], [0, 0], [0, 0], [0, 0], [0, 0]]], [[[0, 0], [0, 0], [-700, -600], [-600, -400], [-450, -350], [-400, -300], [-350, -200], [-200, 150], [150, 300], [300, 700], [0, 0], [0, 0], [0, 0], [0, 0], [0, 0]], [[0, 0], [0, 0], [0, 0], [-550, -300], [-400, -200], [-300, -100], [-300, -100], [-100, 200], [200, 450], [450, 650], [0, 0], [0, 0], [0, 0], [0, 0], [0, 0]]]]
 
-# Horizontal angle ranges for bunts, inxed [contactType][unusedIndex (ommitted)] -> [low, high].
+# Horizontal angle ranges for bunts, indexed [contactType] -> [low, high].
+# The game's table is [contactType][row] and it interpolates between row 0 and row 1
+# on the batter's SLAP contact size (batter.c calculateBuntHorizontalAngle). Both rows
+# are identical in gameplay_tables.c, so collapsing them is value-equivalent, not
+# structurally equivalent -- if that data ever diverges, this needs the second row.
 BuntingAngleRanges = [[256, 960], [480, 640], [512, 576], [480, 640], [256, 960]]
 
 # "Remove slice" gecko mod: vanilla leaves these [inputDirection][isCharge][frame]
