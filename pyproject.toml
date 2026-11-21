@@ -1,5 +1,5 @@
 [build-system]
-requires = ["hatchling>=1.26"]
+requires = ["hatchling>=1.27"]
 build-backend = "hatchling.build"
 
 [project]
@@ -7,6 +7,8 @@ name = "projectrio"
 version = "1.0.0.dev0"
 description = "Project Rio for Python: Mario Superstar Baseball stat files, game data and the Rio web API"
 readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [{ name = "MattGree", email = "MattGreeMSSB@gmail.com" }]
 requires-python = ">=3.11"
 classifiers = [
@@ -59,7 +61,7 @@ legacy = [
 ]
 
 [tool.hatch.build.targets.sdist]
-include = ["src/pyrio", "tests", "README.md", "CHANGELOG.md"]
+include = ["src/pyrio", "tests", "README.md", "CHANGELOG.md", "LICENSE"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/pyrio"]
