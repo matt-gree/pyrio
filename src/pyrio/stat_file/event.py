@@ -123,7 +123,15 @@ class EventObj():
         return self.eventDict['Num Outs During Play']
 
     def result_of_AB(self) -> FinalResult:
-        return FinalResult.from_raw(self.eventDict['Result of AB'])
+        """The at-bat result, with pre-2.3.0 labels corrected on read.
+
+        Only the decoded (string) form needs correcting. An encoded file holds
+        the game's own id, which never changed -- it was Rio's label table that
+        had 5 and 6 the wrong way round, so the maps match names only and an id
+        passes straight through.
+        """
+        return FinalResult.from_raw(
+            self.rioStat.correctedResultLabel(self.eventDict['Result of AB']))
 
     def dead_ball_reason(self) -> Optional[DeadBallReason]:
         """Why the ball went dead this event, or None if the field is absent."""
@@ -389,7 +397,10 @@ class EventObj():
         """
         Returns None if no contact in event.
         """
-        return SecondaryContactResult.from_raw(self.contact_dict().get('Contact Result - Secondary'))
+        raw = self.contact_dict().get('Contact Result - Secondary')
+        if raw is None:
+            return None
+        return SecondaryContactResult.from_raw(self.rioStat.correctedResultLabel(raw))
 
     def first_fielder_dict(self) -> dict:
         """

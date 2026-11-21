@@ -277,13 +277,13 @@ class EventSearch():
         else:
             return self._ab_bucket('Single') | self._ab_bucket('Double') | self._ab_bucket('Triple') | self._ab_bucket('HR')
 
-    def inputErrorResultEvents(self) -> set[int]:
-        # returns a set of events where the result is a input error
-        return self._ab_bucket('Error - Input')
+    def errorResultEvents(self) -> set[int]:
+        # returns a set of events where the result is an error
+        return self._ab_bucket('Error')
 
-    def chemErrorResultEvents(self) -> set[int]:
-        # returns a set of events where the result is a chem error
-        return self._ab_bucket('Error - Chem')
+    def fieldersChoiceResultEvents(self) -> set[int]:
+        # returns a set of events where the result is a fielder's choice
+        return self._ab_bucket('Fielders Choice')
 
     def buntResultEvents(self) -> set[int]:
         #returns a set of events of successful bunts

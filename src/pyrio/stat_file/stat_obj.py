@@ -23,6 +23,27 @@ _VERSION_RE = re.compile(r"(\d+)\.(\d+)(?:\.(\d+))?")
 # memory and wrote it in decimal. Both arrive as a quoted string.
 _HEX_GAME_ID_FROM = (2, 3, 0)
 
+# Rio 2.3.0 corrected the labels it writes for contact and at-bat results. A
+# decoded file keeps whatever labels the version that wrote it used, so the
+# names have to be corrected on read or an older file decodes to the wrong id.
+_CORRECTED_RESULT_LABELS_FROM = (2, 3, 0)
+
+# Renames: the same result, spelled differently. Safe to apply to any file,
+# because neither old name exists in the 2.3.0 tables.
+RENAMED_RESULT_LABELS = {
+    'Error - Input': 'Error',
+    'Error - Chem': 'Fielders Choice',
+}
+
+# A genuine swap: before 2.3.0 Rio wrote these two labels the wrong way round
+# (the game assigns 5 when Hit_VerticalAngle <= 160 and 6 when > 160). Both
+# names are valid in both eras, so this one has to be gated on the version --
+# applying it to a 2.3.0 file would reintroduce the bug.
+SWAPPED_CAUGHT_LABELS = {
+    'Caught': 'Caught line-drive',
+    'Caught line-drive': 'Caught',
+}
+
 
 class StatObj:
     def __init__(self, statJson: dict):
@@ -80,6 +101,16 @@ class StatObj:
         if match is None:
             return True
         return tuple(int(n or 0) for n in match.groups()) < (major, minor, patch)
+
+    def correctedResultLabel(self, label: str) -> str:
+        """A "Result of AB" / secondary-contact label corrected to 2.3.0 names.
+
+        Applied on read so one id means one thing regardless of which Rio wrote
+        the file. ``EventObj`` calls this before resolving the value object.
+        """
+        if self.versionBefore(*_CORRECTED_RESULT_LABELS_FROM):
+            label = SWAPPED_CAUGHT_LABELS.get(label, label)
+        return RENAMED_RESULT_LABELS.get(label, label)
 
     def stadium(self) -> Stadium:
         # returns the stadium that was played on
