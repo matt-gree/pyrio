@@ -201,14 +201,18 @@ def game_highlights(contacts: list[ContactRecord],
 
     Returns a dict with keys: hardest_hit, longest_flight, highest_apex,
     deepest_robbery (ContactRecord or None) and robbed_home_runs (list;
-    empty when no stadium given).
+    empty when no stadium is given, or when the stadium has no wall data --
+    Toy Field. ``robbed_home_runs`` raises for that stadium rather than
+    guessing, so the one highlight it feeds is dropped instead of taking the
+    whole package down with it).
     """
+    wall_known = bool(stadium) and stadiums.has_wall_data(stadium)
     return {
         "hardest_hit": hardest_hit(contacts),
         "longest_flight": longest_flight(contacts),
         "highest_apex": highest_apex(contacts),
         "deepest_robbery": deepest_robbery(contacts),
-        "robbed_home_runs": robbed_home_runs(contacts, stadium) if stadium else [],
+        "robbed_home_runs": robbed_home_runs(contacts, stadium) if wall_known else [],
     }
 
 

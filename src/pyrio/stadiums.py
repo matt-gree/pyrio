@@ -64,7 +64,23 @@ STADIUM_WALLS = {
     },
 }
 
+# Stadiums pyrio can answer wall questions about. Not every stadium: Toy Field
+# is absent, inherited from the JS `stadiums` constant this table mirrors.
+# Its collision model does have a normal outfield fence (z 101 at centre
+# tapering to ~84 down the lines), so the distance could be derived -- but the
+# wall-typed triangles carry no usable height, and is_home_run needs one. See
+# tools/compare_stadium_walls.py.
 STADIUM_NAMES = list(STADIUM_WALLS)
+
+
+def has_wall_data(stadium: str) -> bool:
+    """True if pyrio knows this stadium's outfield wall.
+
+    Call this before wall_at, is_home_run or wall_collision_point when the
+    stadium comes from a stat file, since Toy Field is a real StadiumID that
+    has no wall data here.
+    """
+    return stadium in STADIUM_WALLS
 
 # Peach Garden blocks (the JS `noteBlocks`). "Note" blocks are always note
 # blocks; "Random" blocks are invisible blocks that may become note blocks;
@@ -95,7 +111,14 @@ NOTE_BLOCK_STADIUM = "Peach Garden"
 
 def wall_at(stadium: str, x: float) -> Optional[tuple[float, float]]:
     """(wall_z, wall_height) of the outfield wall at field x, or None if x is
-    beyond the foul poles (no wall segment covers it)."""
+    beyond the foul poles (no wall segment covers it).
+
+    Also None for a stadium with no wall data at all -- currently Toy Field,
+    matching how wall_collision_point already documents it. This used to raise
+    KeyError, which no caller expected.
+    """
+    if stadium not in STADIUM_WALLS:
+        return None
     w = STADIUM_WALLS[stadium]
     for sx, ex, h, m, c in zip(w["starting_x"], w["ending_x"], w["wall_height"], w["m"], w["c"]):
         if sx <= x < ex:
@@ -109,7 +132,19 @@ def is_home_run(trajectory: Iterable[tuple], stadium: str) -> bool:
 
     `trajectory` is an iterable of (x, y, z) points such as
     ``HitResult.trajectory``.
+
+    Raises ValueError for a stadium with no wall data, rather than answering
+    False. Toy Field's collision model does have an outfield fence (z 101 at
+    centre, tapering to ~84 down the lines), so False would be a claim this
+    module cannot support -- it lacks the fence height, not the fence. Guard
+    with has_wall_data when the stadium comes from a stat file.
     """
+    if not has_wall_data(stadium):
+        raise ValueError(
+            f"cannot tell whether this was a home run at {stadium!r}: "
+            f"no outfield wall data. Known stadiums: {', '.join(STADIUM_NAMES)}. "
+            "Check stadiums.has_wall_data() first."
+        )
     for x, y, z in trajectory:
         wall = wall_at(stadium, x)
         if wall is None:
