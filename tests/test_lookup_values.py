@@ -92,6 +92,28 @@ def test_unknown_values_raise_unknown_rio_value_error():
         lookup("not_a_table", 0)
 
 
+# A bare family name (or contested shorthand) names one chosen variant. These were
+# decided on 2026-11-21 to settle disagreements between pyrio's and RioBot's alias
+# tables; change them deliberately, not by reordering CharNames.csv.
+@pytest.mark.parametrize("typed, expected", [
+    ("koopa", "Koopa(R)"),
+    ("pianta", "Pianta(R)"),
+    ("noki", "Noki(G)"),
+    ("bones", "Dry Bones(G)"),
+    ("drybones", "Dry Bones(G)"),
+    ("para", "Paratroopa(G)"),
+    ("paratroopa", "Paratroopa(G)"),
+    ("pt", "Toad(P)"),
+    ("bb", "Bro(B)"),
+    ("toad", "Toad(R)"),
+    ("shyguy", "Shy Guy(R)"),
+    ("magikoopa", "Magikoopa(B)"),
+    ("bro", "Bro(H)"),
+])
+def test_family_name_defaults(typed, expected):
+    assert userInputToCharacter(typed) == expected
+
+
 def test_unknown_value_caught_by_value_error_and_rio_error():
     # Both the pre-1.0 ``except ValueError`` contract and the new
     # ``except RioError`` root must catch resolution failures.
