@@ -269,7 +269,7 @@ class HitInputs:
     ground_y: float = T.GROUND_Y_DEFAULT   # landing/bounce plane (0.35 on Toy Field)
     bounce: bool = True                     # ground bounces elastically (False = skid; Bowser Castle / Toy Field)
     # Gecko-mod toggles (off = vanilla). The validator turns these on from a
-    # match's active tags; see TAG_TO_FLAG and _inputs_from_event.
+    # match's active tags; see TAG_TO_FLAG and hit_inputs_from_event.
     # "Fix Non-red Toad Hitboxes and Bat Reach": give the non-red Toad color
     # variants Red Toad's bat reach (Horizontal Range Near/Far). No other effect.
     fix_non_red_toad_reach: bool = False
@@ -479,7 +479,7 @@ class _HitSim:
                     self.Batter_Contact_SlapChargeBuntStar = T.Slap
         else:
             # Captain-class character. Under-starred captain swings (Walu tech) are
-            # converted to a regular swing upstream (see _inputs_from_event), so by
+            # converted to a regular swing upstream (see hit_inputs_from_event), so by
             # here the captain has enough stars -> captain star swing.
             self.Batter_Contact_SlapChargeBuntStar = T.Star
 
@@ -1193,7 +1193,7 @@ def simulate_hit_all_vertical_zones(inputs: HitInputs) -> list:
 def simulate_hit_all_vertical_zones_from_event(event: EventObj,
                                                active_tags=frozenset()) -> list:
     """simulate_hit_all_vertical_zones for a stat-file contact event."""
-    return simulate_hit_all_vertical_zones(_inputs_from_event(event, active_tags))
+    return simulate_hit_all_vertical_zones(hit_inputs_from_event(event, active_tags))
 
 
 def _int_no_commas(value) -> int:
@@ -1216,7 +1216,7 @@ def _mod_flags_from_tags(active_tags) -> dict:
 def _batter_is_off_captain(event: EventObj) -> bool:
     """True if the batter is a captain-class character (has a captain star hit)
     who is NOT this game's designated captain -- so a lone star can't be spent on
-    their captain swing (see the Walu-tech check in _inputs_from_event)."""
+    their captain swing (see the Walu-tech check in hit_inputs_from_event)."""
     if BatterAttributes.from_name(event.batter().name).captain_star_hit_pitch == 0:
         return False
     stat = event.rioStat
@@ -1224,8 +1224,16 @@ def _batter_is_off_captain(event: EventObj) -> bool:
     return stat.statJson["Character Game Stats"][team_str].get("Captain") != 1
 
 
-def _inputs_from_event(event: EventObj, active_tags=frozenset()) -> HitInputs:
+def hit_inputs_from_event(event: EventObj, active_tags=frozenset()) -> HitInputs:
     """Build HitInputs from a stat-file contact event.
+
+    The public bridge between a stat file and the simulator. ``HitInputs`` and
+    ``simulate_hit`` were already exported while the only way to get from an
+    event to inputs was private, so callers that needed the inputs themselves --
+    to inspect them, or to simulate and then report what was fed in -- had to
+    reach for the underscore name.
+
+    Prefer ``simulate_hit_from_event`` when the inputs are not needed.
 
     Mirrors the JS `useStatFileValues`. Requires the event to have contact
     (raises otherwise). Bunts (swing "None" with contact) are not supported.
@@ -1321,13 +1329,19 @@ def _inputs_from_event(event: EventObj, active_tags=frozenset()) -> HitInputs:
     )
 
 
+# Back-compat alias: this was the only way to get inputs from an event before
+# hit_inputs_from_event was made public, so downstream tools (RioVisualizer)
+# call it. Kept so a pyrio bump doesn't break them; prefer the public name.
+_inputs_from_event = hit_inputs_from_event
+
+
 def simulate_hit_from_event(event: EventObj, active_tags=frozenset()) -> HitResult:
     """Build HitInputs from a stat-file contact event and simulate it.
 
     ``active_tags`` is the set of gecko-mod tag names active for the match;
     recognized mods (TAG_TO_FLAG) are modeled instead of diverging.
     """
-    return simulate_hit(_inputs_from_event(event, active_tags))
+    return simulate_hit(hit_inputs_from_event(event, active_tags))
 
 
 def _inputs_from_landing_row(row: dict, stadium_id: int, active_tags=frozenset(),
@@ -1342,7 +1356,7 @@ def _inputs_from_landing_row(row: dict, stadium_id: int, active_tags=frozenset()
     needs except two game-level facts the endpoint doesn't expose: whether
     superstars are on (``batter_stars_on``/``pitcher_stars_on``, default off) and
     the stadium (``stadium_id``, used only for the ground plane / bounce). Walu
-    tech (see _inputs_from_event) can't be detected here -- the row lacks the
+    tech (see hit_inputs_from_event) can't be detected here -- the row lacks the
     team's star count -- so star swings without enough stars won't be corrected.
     """
     swing_code = int(row["type_of_swing"])
@@ -1422,4 +1436,4 @@ def simulate_hit_trajectory(inputs: HitInputs, frames: int) -> list:
 def simulate_hit_trajectory_from_event(event: EventObj, frames: int,
                                        active_tags=frozenset()) -> list:
     """``simulate_hit_trajectory`` for a stat-file contact event."""
-    return simulate_hit_trajectory(_inputs_from_event(event, active_tags), frames)
+    return simulate_hit_trajectory(hit_inputs_from_event(event, active_tags), frames)
