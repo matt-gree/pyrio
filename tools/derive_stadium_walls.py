@@ -48,11 +48,18 @@ TALLER than the fence beside them:
     (Mario Stadium, Wario Palace, DK Jungle and Toy Field have none in fair
      territory, so they are unaffected either way.)
 
-Some sit demonstrably IN the fence line, at the same z -- Yoshi Park at
-x +/-57.4..58.1 is 4.2 against the fence's 3.2 at z 58.02, and at x -2.9..-1.4
-it is 3.5 against 3.2 at z 93.34; Peach Garden at x -5..0 is 30.0 against the
-wall's 23.0 at z 87.60. At those x the real barrier is higher than this table
-says and is_home_run is too generous.
+Some sit demonstrably IN the fence line, at the same z: Yoshi Park has fourteen
+posts out along the outfield fence (z 85-93) that are 3.5-3.6 against its 3.2
+fence -- at x -2.9..-1.4, for one, at z 93.34 -- and Peach Garden is 30.0
+against the wall's 23.0 at x -5..0, z 87.60. At those x the real barrier is
+higher than this table says and is_home_run is too generous.
+
+Not every type 5 panel is such a case. The pair at Yoshi Park's x +/-57.4..58.1
+are the plinths of its foul poles, and the poles themselves are
+BALL_COLLISION_TYPE_FOUL_LINE (4), 14.00 high, which the game settles a HOME
+RUN on -- so a ball out there is a home run off the pole whatever this table
+says about the fence. Only the panels standing in the outfield fence line
+understate the barrier.
 
 Including them is not a one-line change, though: it moves Peach Garden's centre
 from 23 to 30 and replaces Bowser Castle's corner heights, which is a large

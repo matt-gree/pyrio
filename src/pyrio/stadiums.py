@@ -49,9 +49,12 @@ from typing import Iterable, Optional
 # Known gap: BALL_COLLISION_TYPE_UNCLIMBABLE_WALL panels are excluded, so at a
 # few x this understates the barrier and is_home_run is too generous there.
 # The game bounces the ball off them exactly as off a wall
-# (ball_physics.c:2783). Yoshi Park's fence posts are 3.5-4.2 against its 3.2
-# fence, and Peach Garden reaches 30.0 where this table says 23.0. See the
-# KNOWN GAP note in tools/derive_stadium_walls.py.
+# (ball_physics.c:2783). Yoshi Park has fourteen posts along its outfield fence
+# at 3.5-3.6 against the 3.2 recorded here, and Peach Garden reaches 30.0 where
+# this table says 23.0. The foul poles are a different surface
+# (BALL_COLLISION_TYPE_FOUL_LINE) and a ball off one is a home run, so they are
+# not part of this gap. See the KNOWN GAP note in
+# tools/derive_stadium_walls.py, and live_ball for the mesh-accurate answer.
 STADIUM_WALLS = {
     "Bowser Castle": {
         "starting_x": [-54.4363, -54.0623, -53.4676, -52.217, -45.3188, -36.6322, -26.8103, -21.2497, -20.0654, -18.5346, -17.4522, -15.9191, -8.1376, 8.1376, 15.9191, 17.4522, 18.5346, 20.0654, 21.2497, 26.8103, 36.6322, 45.3188, 52.217, 53.4676, 54.0623],

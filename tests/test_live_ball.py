@@ -120,18 +120,36 @@ def test_hazards_can_be_switched_off():
 
 # --------------------------------------------------- what the table cannot do
 
+def test_a_ball_off_the_foul_pole_is_a_home_run():
+    """The foul poles are BALL_COLLISION_TYPE_FOUL_LINE (4), and the game
+    settles a home run on them -- as baseball does.
+
+    Yoshi Park's are at x +/-57.4..58.9, z 58.3..59.9, standing 14.00 high.
+    Not to be confused with the UNCLIMBABLE_WALL (5) posts in the test below:
+    type 4 ends the play as a home run, type 5 bounces the ball back.
+    """
+    for x in (57.9, -57.9):
+        result = live_ball.play_out(flight_over(x, 59.1, 8.0), "Yoshi Park", hazards=False)
+        assert result["outcome"] == "home_run", x
+
+
 def test_yoshi_parks_fence_posts_stop_a_ball_the_table_clears():
     """The reason this module exists.
 
     stadiums.STADIUM_WALLS gives Yoshi Park a flat 3.2 wall. The park also has
-    UNCLIMBABLE_WALL posts standing in the fence line at 3.5-4.2, which the
-    game bounces balls off exactly as it does the fence
+    fourteen UNCLIMBABLE_WALL posts standing in the outfield fence line at
+    3.5-3.6, which the game bounces balls off exactly as it does the fence
     (ball_physics.c:2783) but which the one-dimensional table cannot hold.
 
-    Both x below are 3.2 in the table. The mesh clears one and not the other,
-    at the same height -- which is the post. Comparing two x at one height
-    also controls for the mesh modelling the ball's own radius, an offset of
-    about 0.15 that a bare table/mesh comparison would confuse for this.
+    These are mid-wall posts out in centre field (z 85-93), NOT the foul poles
+    -- a ball off a pole is a home run, which the test above pins. The surface
+    on the event says which panel stopped it: "back wall" is RioVisualizer's
+    name for type 5.
+
+    Both x below are 3.2 in the table. The mesh clears one and not the other
+    at the same height, which is the post. Comparing two x at one height also
+    controls for the mesh modelling the ball's own radius -- an offset of about
+    0.15 that a bare table-against-mesh comparison would mistake for this.
     """
     assert stadiums.wall_at("Yoshi Park", 0.0)[1] == 3.2
     assert stadiums.wall_at("Yoshi Park", -2.0)[1] == 3.2
@@ -143,9 +161,11 @@ def test_yoshi_parks_fence_posts_stop_a_ball_the_table_clears():
     assert stadiums.is_home_run(clear_gap, "Yoshi Park") is True
     assert stadiums.is_home_run(into_post, "Yoshi Park") is True
 
-    # The mesh can.
+    # The mesh can, and names the surface that did it.
     assert live_ball.is_home_run(clear_gap, "Yoshi Park", hazards=False) is True
-    assert live_ball.is_home_run(into_post, "Yoshi Park", hazards=False) is False
+    blocked = live_ball.play_out(into_post, "Yoshi Park", hazards=False)
+    assert blocked["outcome"] != "home_run"
+    assert blocked["events"][0]["surface"] == "back wall"
 
 
 def test_the_post_is_cleared_by_a_high_enough_ball():
