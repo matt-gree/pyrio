@@ -18,12 +18,12 @@ the same stats the JS calculator buffed, now clamped to the in-game caps.
 Notes / known JS quirks carried over:
   - Moonshot (5-star dinger): a fully-charged star swing with 5 stars. The game
     triggers it on stars + full charge, but a star swing's charge is zeroed in the
-    recording, so a Moonshot attempt can't be told from a regular 5-star swing
-    there -- except a *connected* dinger sets the "Star Swing Five-Star" flag. So we
-    detect the dinger via that flag (HitInputs.five_star_dinger) and model it as a
-    Star swing carrying AtBat_MoonShot (power override + _MOONSHOT_MULTIPLIER). A
-    failed Moonshot (Texas Leaguer, flag 0) is indistinguishable from a regular
-    5-star swing and is left unmodeled for now.
+    recording, so an attempt comes from the "Star Swing Five-Star" field instead
+    (HitInputs.five_star_attempt): 1 is a connected dinger, 2 a failed attempt. It's
+    modeled as a Star swing carrying AtBat_MoonShot (power override +
+    _MOONSHOT_MULTIPLIER), which non-Perfect contact clears into a Texas Leaguer.
+    Older stat files record a failed attempt as 0, so a Texas Leaguer is recognized
+    there by its launch angle (see _launched_as_texas_leaguer).
   - Super curve is read from the "Super Curve" column of the character attribute
     CSV (derived from the "Curved Hits" Extra tag) instead of the JS's hardcoded
     char ids.
@@ -73,6 +73,10 @@ from ..stat_file_parser import EventObj
 # Moonshot (5-star dinger) power multiplier, from the decomp. Applied in
 # calculate_hit_power when AtBat_MoonShot survives to a Perfect contact.
 _MOONSHOT_MULTIPLIER = 1.5
+_MOONSHOT_STAR_COST = 5
+
+# Type of Swing codes for a bunt: 0 before Project Rio 2.3.0 (None with contact), 4 from then on.
+_BUNT_SWING_CODES = (0, 4)
 
 _CONTACT_TYPE_NAMES = ["Left Sour", "Left Nice", "Perfect", "Right Nice", "Right Sour"]
 
@@ -169,7 +173,7 @@ class BatterAttributes:
     charge_power: int
     slap_contact_size: int
     charge_contact_size: int
-    bunting: int
+    bunt_contact_size: int
     horizontal_trajectory: int       # BatterAtPlate_TrajectoryNearFar (0 Mid/1 Pull/2 Push)
     vertical_trajectory: int         # AtBat_HitTrajectoryLow (0 Mid/1 High/2 Low)
     captain_star_hit_pitch: int      # 1-12 captains, 0 otherwise
@@ -190,7 +194,7 @@ class BatterAttributes:
             charge_power=_stat(row, "Charge Hit Power", stars_on),
             slap_contact_size=_stat(row, "Slap Contact Size Multiplier", stars_on),
             charge_contact_size=_stat(row, "Charge Contact Size Multiplier", stars_on),
-            bunting=_stat(row, "Bunting", stars_on),
+            bunt_contact_size=_stat(row, "Bunt Contact Size Multiplier", stars_on),
             horizontal_trajectory=int(row["Horizontal Hit Trajectory"]),
             vertical_trajectory=int(row["Vertical Hit Trajectory"]),
             captain_star_hit_pitch=int(row["Captain Star Hit"]),
@@ -270,11 +274,10 @@ class HitInputs:
     easy_batting: bool = False
     batter_stars_on: bool = False
     pitcher_stars_on: bool = False
-    # A connected 5-star dinger (the recorded "Star Swing Five-Star" flag). This is
-    # how a Moonshot is detected (see _resolve_star_swing): a 5-star swing's charge
-    # is zeroed in the recording, so a failed Moonshot (Texas Leaguer) can't be told
-    # from a regular 5-star swing -- only the connected dinger is modeled.
-    five_star_dinger: bool = False
+    # A Moonshot attempt, connected or failed (see _resolve_star_swing). A 5-star
+    # swing's charge is zeroed in the recording, so this can't be derived from
+    # charge_up; it comes from the recorded "Star Swing Five-Star" field.
+    five_star_attempt: bool = False
     ball_z: float = 0.0                     # ball Z at contact (world Z start of trajectory)
     ground_y: float = T.GROUND_Y_DEFAULT   # landing/bounce plane (0.35 on Toy Field)
     bounce: bool = True                     # ground bounces elastically (False = skid; Bowser Castle / Toy Field)
@@ -383,6 +386,7 @@ class _HitSim:
         self.AtBat_BatterHand = inp.batter_hand
         self.Batter_Contact_SlapChargeBuntStar = inp.swing
         self.Batter_IsBunting = inp.swing == T.Bunt
+        self.isBuntedBall = False
         self.BatterAtPlate_BatterCharge_Up = inp.charge_up
         self.BatterAtPlate_BatterCharge_Down = inp.charge_down
         self.AtBat_IsFullyCharged = inp.charge_up == 1.0
@@ -390,7 +394,7 @@ class _HitSim:
         self.BatterAtPlate_ChargePower = batter.charge_power
         self.Batter_SlapContactSize = batter.slap_contact_size
         self.Batter_ChargeContactSize = batter.charge_contact_size
-        self.Batter_Bunting = batter.bunting
+        self.Batter_BuntContactSize = batter.bunt_contact_size
         self.BatterAtPlate_TrajectoryNearFar = batter.horizontal_trajectory
         self.AtBat_HitTrajectoryLow = batter.vertical_trajectory
 
@@ -401,7 +405,7 @@ class _HitSim:
         if inp.fix_non_red_toad_reach and batter.name in _NON_RED_TOADS:
             self.horizontalRangeNear, self.horizontalRangeFar = _red_toad_reach()
         self.removeSlice = inp.remove_slice
-        self.RandomBattingFactors_ChemLinksOnBase = inp.chem_links
+        self.ChemLinksOnBase = inp.chem_links
         self.Frame_SwingContact1 = int(inp.frame)
         self.EasyBatting = 1 if inp.easy_batting else 0
         self.isStar = inp.is_star
@@ -426,7 +430,7 @@ class _HitSim:
         self.warioWaluStarHitDirection = inp.garlic_direction
 
         # Moonshot detection (see _resolve_star_swing).
-        self.fiveStarDinger = inp.five_star_dinger
+        self.fiveStarAttempt = inp.five_star_attempt
 
         # Force-specific pipeline decisions (see HitOverrides). Always a
         # HitOverrides (defaulted to all-None), so fields can be read unguarded.
@@ -463,13 +467,12 @@ class _HitSim:
             return
         # Moonshot first, ahead of the captain/non-captain split (hitGeneralType =
         # captainStar/Moonshot). The game triggers it on a fully-charged 5-star
-        # swing, but that's indistinguishable from a regular 5-star swing in the
-        # recording (the star swing zeroes the charge) -- except a connected dinger
-        # sets "Star Swing Five-Star", surfaced here as five_star_dinger. It only
-        # fires on the Perfect-contact dinger; a failed Moonshot (Texas Leaguer) is
-        # left as a regular star swing. AtBat_MoonShot carries the power override and
-        # _MOONSHOT_MULTIPLIER.
-        if self.fiveStarDinger:
+        # swing, but the star swing zeroes the charge in the recording, so the
+        # attempt is surfaced here as five_star_attempt. AtBat_MoonShot carries the
+        # power override and _MOONSHOT_MULTIPLIER; calculate_contact resolves it into
+        # a dinger or a Texas Leaguer. This branch skips the non-captain swing setup,
+        # so a failed non-captain attempt stays T.Star with no star swing active.
+        if self.fiveStarAttempt:
             self.Batter_Contact_SlapChargeBuntStar = T.Star
             self.AtBat_MoonShot = True
         elif self.AtBat_CaptainStarHitPitch == 0:
@@ -557,15 +560,14 @@ class _HitSim:
         if self.AtBat_Mystery_CaptainStarSwing != 0:
             charge_up = 0.0
             contact_size = 100.0
-        if not self.Batter_IsBunting:
-            if charge_up <= 0.0:
-                if self.RandomBattingFactors_ChemLinksOnBase != 0:
-                    contact_size *= T.contact_ChemLinkMultipliers[self.RandomBattingFactors_ChemLinksOnBase]
-            else:
-                contact_size = self.Batter_ChargeContactSize
+        if self.Batter_IsBunting:
+            contact_size = self.Batter_BuntContactSize
+        elif charge_up <= 0.0:
+            if self.ChemLinksOnBase != 0:
+                    contact_size *= T.contact_ChemLinkMultipliers[self.ChemLinksOnBase]
         else:
-            contact_size = self.Batter_Bunting
-
+            contact_size = self.Batter_ChargeContactSize
+        
         diff = self.interstitialBallContact_X - self.posX
         if self.AtBat_BatterHand == T.Lefty:
             diff = -diff
@@ -639,137 +641,180 @@ class _HitSim:
 
     # -- calculateHorizontalAngle --
     def calculate_horizontal_angle(self):
-        is_charge = 0 if self.Batter_Contact_SlapChargeBuntStar == T.Slap else 1
-        input_direction = T.PushPullNone
-        if self.AtBat_Mystery_BatDirection == 0:
-            if not self.input_right:
-                if self.input_left:
-                    input_direction = T.PullStickTowardsHitting if self.AtBat_BatterHand == T.Righty else T.PushStickAway
-            elif self.AtBat_BatterHand == T.Righty:
-                input_direction = T.PushStickAway
-            else:
-                input_direction = T.PullStickTowardsHitting
+        if not self.Batter_IsBunting:
+            is_charge = 0 if self.Batter_Contact_SlapChargeBuntStar == T.Slap else 1
+            input_direction = T.PushPullNone
+            if self.AtBat_Mystery_BatDirection == 0:
+                if not self.input_right:
+                    if self.input_left:
+                        input_direction = T.PullStickTowardsHitting if self.AtBat_BatterHand == T.Righty else T.PushStickAway
+                elif self.AtBat_BatterHand == T.Righty:
+                    input_direction = T.PushStickAway
+                else:
+                    input_direction = T.PullStickTowardsHitting
 
-        frame = self.Frame_SwingContact1
-        rng = T.BattingAngleRanges[input_direction][is_charge][frame]
-        if self.removeSlice:
-            rng = T.REMOVE_SLICE_ANGLE_OVERRIDES.get((input_direction, is_charge, frame), rng)
-        i_low = rng[0]
-        i_span = rng[1] - rng[0]
-        if i_span < 0:
-            i_low += self.s1 - _jfloor(self.s1 / -i_span) * -i_span
-        elif i_span > 0:
-            i_low += self.s1 - _jfloor(self.s1 / i_span) * i_span
-        i_low += 0x400
-        if self.AtBat_BatterHand != T.Righty:
-            i_low = (0x800 - i_low) if i_low < 0x801 else (0x1800 - i_low)
-        self.Hit_HorizontalAngle = _adjust_ball_angle(i_low)
-        if self.overrides.horizontal_angle is not None:
-            self.Hit_HorizontalAngle = self.overrides.horizontal_angle
+            frame = self.Frame_SwingContact1
+            rng = T.BattingAngleRanges[input_direction][is_charge][frame]
+            if self.removeSlice:
+                rng = T.REMOVE_SLICE_ANGLE_OVERRIDES.get((input_direction, is_charge, frame), rng)
+            i_low = rng[0]
+            i_span = rng[1] - rng[0]
+            if i_span < 0:
+                i_low += self.s1 - _jfloor(self.s1 / -i_span) * -i_span
+            elif i_span > 0:
+                i_low += self.s1 - _jfloor(self.s1 / i_span) * i_span
+            i_low += 0x400
+            if self.AtBat_BatterHand != T.Righty:
+                i_low = (0x800 - i_low) if i_low < 0x801 else (0x1800 - i_low)
+            self.Hit_HorizontalAngle = _adjust_ball_angle(i_low)
+            if self.overrides.horizontal_angle is not None:
+                self.Hit_HorizontalAngle = self.overrides.horizontal_angle
+        else: # bunts
+            pullInd = 0
+            contactType = self.Batter_ContactType
+            angleLower = T.BuntingAngleRanges[contactType][0]
+            angleUpper = T.BuntingAngleRanges[contactType][1]
+            angleRange = angleUpper - angleLower
+            horizontalAngle = angleLower + (self.s1 - _jfloor(self.s1 / angleRange) * angleRange)
+
+            if contactType != T.LeftSour:
+                if contactType < T.RightSour:
+                    if not self.input_left:
+                        if not self.input_right:
+                            x = self.s2 & 0xFFFFFFFF
+                            x = x - 0x100000000 if x & 0x80000000 else x  # reinterpret as signed 32-bit
+                            pullInd = -(-x % 2) if x < 0 else x % 2
+                        else:
+                            if self.AtBat_BatterHand != T.Righty:
+                                pullInd = 1
+                    else:
+                        if self.AtBat_BatterHand == T.Righty:
+                            pullInd = 1                       
+            else:
+                pullInd = 1
+            
+            if (self.AtBat_BatterHand == T.Righty and pullInd == 1) or (self.AtBat_BatterHand != T.Righty and pullInd == 0):
+                if horizontalAngle < 0x801:
+                    horizontalAngle = 0x800 - horizontalAngle
+                else:
+                    horizontalAngle = 0x1800 - horizontalAngle
+
+            self.Hit_HorizontalAngle = _adjust_ball_angle(horizontalAngle)
+            if self.overrides.horizontal_angle is not None:
+                self.Hit_HorizontalAngle = self.overrides.horizontal_angle                        
 
     # -- calculateVerticalAngle --
     def calculate_vertical_angle(self):
-        i_var5 = 0
-        up_down = 0
-        slap_or_charge = 0 if self.Batter_Contact_SlapChargeBuntStar == 0 else 1
-        handled_zones = False
-        lower = higher = 0
+        if self.Batter_IsBunting:
+            randomBool = (self.s1 & 1 ^ self.s1 >> 0x1f) != self.s1 >> 0x1f
+            contactType = self.Batter_ContactType
+            lower = T.BuntingVerticalAngleRanges[contactType][randomBool][0]
+            upper = T.BuntingVerticalAngleRanges[contactType][randomBool][1]
+            range = upper - lower
+            self.Hit_VerticalAngle = lower + (self.s1 - _jfloor(self.s1 / range) * range)
+        else: #non-bunts
+            i_var5 = 0
+            up_down = 0
+            slap_or_charge = 0 if self.Batter_Contact_SlapChargeBuntStar == 0 else 1
+            handled_zones = False
+            lower = higher = 0
 
-        captain_star = self.AtBat_Mystery_CaptainStarSwing
-        if captain_star == 0:
-            noncap = self.nonCaptainStarSwingContact
-            if self.AtBat_MoonShot:
-                # Moonshot dinger (survives to Perfect contact): the charge-column
-                # moonshot zone -- "the charge angles".
-                zone = T.SHORT_ARRAY_ARRAY_ARRAY_ARRAY_807b67cc[1][self.Batter_ContactType][2]
-                lower, higher = zone[0], zone[1]
-            elif noncap == 0:
-                if self.AtBat_Mystery_BatDirection == 0:
-                    if not self.input_up:
-                        if self.input_down:
-                            up_down = 2
+            captain_star = self.AtBat_Mystery_CaptainStarSwing
+            if captain_star == 0:
+                noncap = self.nonCaptainStarSwingContact
+                if self.AtBat_MoonShot:
+                    # Moonshot dinger (survives to Perfect contact): the charge-column
+                    # moonshot zone -- "the charge angles".
+                    zone = T.SHORT_ARRAY_ARRAY_ARRAY_ARRAY_807b67cc[1][self.Batter_ContactType][2]
+                    lower, higher = zone[0], zone[1]
+                elif noncap == 0:
+                    if self.AtBat_Mystery_BatDirection == 0:
+                        if not self.input_up:
+                            if self.input_down:
+                                up_down = 2
+                        else:
+                            up_down = 1
+
+                    weights = T.BattingVerticalAngleWeights[self.AtBat_HitTrajectoryLow][slap_or_charge][self.EasyBatting][self.Batter_ContactType]
+                    w0, w1, w2, w3, w4 = weights
+
+                    # A Star swing leaves Batter_HitType unset at -1; the game then
+                    # reads one row *before* the table (an OOB read of a float table),
+                    # not Python's negative wrap to the last row. See the constant.
+                    if self.Batter_HitType < 0:
+                        ht_row = T.UINT_ARRAY_807b7120_HITTYPE_UNSET
                     else:
-                        up_down = 1
-
-                weights = T.BattingVerticalAngleWeights[self.AtBat_HitTrajectoryLow][slap_or_charge][self.EasyBatting][self.Batter_ContactType]
-                w0, w1, w2, w3, w4 = weights
-
-                # A Star swing leaves Batter_HitType unset at -1; the game then
-                # reads one row *before* the table (an OOB read of a float table),
-                # not Python's negative wrap to the last row. See the constant.
-                if self.Batter_HitType < 0:
-                    ht_row = T.UINT_ARRAY_807b7120_HITTYPE_UNSET
-                else:
-                    ht_row = T.UINT_ARRAY_ARRAY_807b7134[self.Batter_HitType]
-                u4 = ht_row[3 - self.EasyBatting]
-                u6 = ht_row[4]
-                u5 = u4 & 0xF000000
-                if u5 == 0:
-                    u16 = u4 & 0xF
-                    if u16 != 0:
-                        i_var5 = 2
-                        if u16 == 2:
+                        ht_row = T.UINT_ARRAY_ARRAY_807b7134[self.Batter_HitType]
+                    u4 = ht_row[3 - self.EasyBatting]
+                    u6 = ht_row[4]
+                    u5 = u4 & 0xF000000
+                    if u5 == 0:
+                        u16 = u4 & 0xF
+                        if u16 != 0:
+                            i_var5 = 2
+                            if u16 == 2:
+                                if up_down == 2:
+                                    i_var5 = 0
+                                    u6 = 2
+                            elif u16 == 3 and up_down == 1:
+                                i_var5 = 0
+                                u6 = 2
+                    else:
+                        i_var5 = 1
+                        if u5 == 0x2000000:
                             if up_down == 2:
                                 i_var5 = 0
                                 u6 = 2
-                        elif u16 == 3 and up_down == 1:
+                        elif u5 == 0x3000000 and up_down == 1:
                             i_var5 = 0
                             u6 = 2
-                else:
-                    i_var5 = 1
-                    if u5 == 0x2000000:
+
+                    if i_var5 == 0:
+                        if (u4 & 0x1E0) == 0:
+                            w0 = 0
+                        if (u4 & 0xF0) == 0:
+                            w1 = 0
+                        if (u4 & 0x78) == 0:
+                            w2 = 0
+                        if (u4 & 0x3C) == 0:
+                            w3 = 0
+                        if (u4 & 0x1E) == 0:
+                            w4 = 0
                         if up_down == 2:
-                            i_var5 = 0
-                            u6 = 2
-                    elif u5 == 0x3000000 and up_down == 1:
-                        i_var5 = 0
-                        u6 = 2
+                            w4 += w0
+                            w0 = 0
+                        elif up_down == 1:
+                            tmp = w4 + w0
+                            w4 = 0
+                            w0 = w3 + tmp
+                            w3 = 0
 
-                if i_var5 == 0:
-                    if (u4 & 0x1E0) == 0:
-                        w0 = 0
-                    if (u4 & 0xF0) == 0:
-                        w1 = 0
-                    if (u4 & 0x78) == 0:
-                        w2 = 0
-                    if (u4 & 0x3C) == 0:
-                        w3 = 0
-                    if (u4 & 0x1E) == 0:
-                        w4 = 0
-                    if up_down == 2:
-                        w4 += w0
-                        w0 = 0
-                    elif up_down == 1:
-                        tmp = w4 + w0
-                        w4 = 0
-                        w0 = w3 + tmp
-                        w3 = 0
-
-                if i_var5 == 0:
-                    idx = self._weighted_random_index([w0, w1, w2, w3, w4], 5)
-                    # Override the cone choice if requested, but only after the RNG
-                    # draw above so downstream state is consumed exactly as in-game
-                    # (see HitOverrides.vertical_zone).
-                    if self.overrides.vertical_zone is not None:
-                        idx = self.overrides.vertical_zone
-                    zone = T.SHORT_ARRAY_ARRAY_ARRAY_ARRAY_807b67cc[slap_or_charge][self.Batter_ContactType][idx]
-                    lower, higher = zone[0], zone[1]
-                    handled_zones = True
+                    if i_var5 == 0:
+                        idx = self._weighted_random_index([w0, w1, w2, w3, w4], 5)
+                        # Override the cone choice if requested, but only after the RNG
+                        # draw above so downstream state is consumed exactly as in-game
+                        # (see HitOverrides.vertical_zone).
+                        if self.overrides.vertical_zone is not None:
+                            idx = self.overrides.vertical_zone
+                        zone = T.SHORT_ARRAY_ARRAY_ARRAY_ARRAY_807b67cc[slap_or_charge][self.Batter_ContactType][idx]
+                        lower, higher = zone[0], zone[1]
+                        handled_zones = True
+                    else:
+                        lower, higher = T.SHORT_ARRAY_ARRAY_807b6af4[i_var5]
                 else:
-                    lower, higher = T.SHORT_ARRAY_ARRAY_807b6af4[i_var5]
+                    rng = T.NonCaptainStarSwingBattingVerticalAngleRanges[noncap - 1][self.Batter_ContactType]
+                    lower, higher = rng[0], rng[1]
             else:
-                rng = T.NonCaptainStarSwingBattingVerticalAngleRanges[noncap - 1][self.Batter_ContactType]
+                rng = T.CaptainStarSwingBattingVerticalAngleRanges[captain_star - 1][self.Batter_ContactType]
                 lower, higher = rng[0], rng[1]
-        else:
-            rng = T.CaptainStarSwingBattingVerticalAngleRanges[captain_star - 1][self.Batter_ContactType]
-            lower, higher = rng[0], rng[1]
 
-        span = higher - lower
-        if span == 0:
-            s_var3 = lower
-        else:
-            s_var3 = lower + (self.s1 - _jfloor(self.s1 / span) * span)
-        self.Hit_VerticalAngle = s_var3
+            span = higher - lower
+            if span == 0:
+                s_var3 = lower
+            else:
+                s_var3 = lower + (self.s1 - _jfloor(self.s1 / span) * span)
+            self.Hit_VerticalAngle = s_var3
+
         if self.overrides.vertical_angle is not None:
             self.Hit_VerticalAngle = self.overrides.vertical_angle
 
@@ -785,6 +830,18 @@ class _HitSim:
 
     # -- calculateHitPower --
     def calculate_hit_power(self):
+        if self.Batter_IsBunting:
+            lower = T.BuntHitPowerRanges[self.Batter_ContactType][0]
+            upper = T.BuntHitPowerRanges[self.Batter_ContactType][1]
+            range = upper - lower
+            self.Hit_HorizontalPower = self.s1 - _jfloor(self.s1 / range) * range + lower
+
+            #set in game, but not needed for sim purposes
+            #self.isBuntedBall = True
+            #self.captainStarSwingActivated = False
+            return
+        
+        #non-bunts
         nice_sour = self.Batter_ContactType
         charged = self.BatterAtPlate_BatterCharge_Up
         contact_array = T.BallHitArray[self.Batter_Contact_SlapChargeBuntStar][nice_sour]
@@ -828,8 +885,8 @@ class _HitSim:
                                     T.FLOAT_ARRAY_ARRAY_807b7480[pns][1])
             power = power * d
 
-        if self.RandomBattingFactors_ChemLinksOnBase != 0 and 0.0 < charged:
-            power = power * T.RandomBattingFactors_ChemLinkMult0[self.RandomBattingFactors_ChemLinksOnBase]
+        if self.ChemLinksOnBase != 0 and 0.0 < charged:
+            power = power * T.RandomBattingFactors_ChemLinkMult0[self.ChemLinksOnBase]
 
         if -1 < self.Batter_HitType:
             power = (power * T.UINT_ARRAY_ARRAY_807b7134[self.Batter_HitType][1 - self.EasyBatting]) / 100.0
@@ -1234,11 +1291,26 @@ def _batter_is_off_captain(event: EventObj) -> bool:
     return stat.statJson["Character Game Stats"][team_str].get("Captain") != 1
 
 
+def _launched_as_texas_leaguer(team_stars: int, batter, vertical_angle: int) -> bool:
+    """True for a star swing that data from before the failed Moonshot value
+    recorded as 0, but which launched as a Texas Leaguer. The forced pop-fly zone
+    is out of reach of a non-captain's regular star swing, so that launch can't be
+    anything else. A captain-class character's failed attempt is an ordinary
+    captain star hit, so it needs no special handling. ``batter`` is a character
+    name or encoded char id."""
+    lower, higher = T.SHORT_ARRAY_ARRAY_807b6af4[1]
+    return (team_stars >= _MOONSHOT_STAR_COST
+            and BatterAttributes.from_name(batter).captain_star_hit_pitch == 0
+            and lower <= vertical_angle < higher)
+
+
 def _inputs_from_event(event: EventObj, active_tags=frozenset()) -> HitInputs:
     """Build HitInputs from a stat-file contact event.
 
     Mirrors the JS `useStatFileValues`. Requires the event to have contact
-    (raises otherwise). Bunts (swing "None" with contact) are not supported.
+    (raises otherwise). Bunts are recorded as swing "Bunt" from Project Rio 2.3.0,
+    or swing "None" with a contact dict before that (the game zeroes the swing
+    byte for a bunt), and are mapped to T.Bunt here.
     """
     pitch = event.pitch_dict()
     contact = event.contact_dict()
@@ -1248,10 +1320,21 @@ def _inputs_from_event(event: EventObj, active_tags=frozenset()) -> HitInputs:
     # Categorical fields may be decoded strings or encoded ints; coerce to codes
     # so the simulator works against either stat-file flavor.
     swing_code = G.to_encoded(LookupDicts.TYPE_OF_SWING, pitch.get("Type of Swing"))
-    if swing_code not in (1, 2, 3):  # 1 Slap, 2 Charge, 3 Star (0 None / 4 Bunt unsupported)
+    # A recorded contact whose swing is "None" (code 0) is a bunt: the game stores
+    # 0 in the swing byte for a bunt, so a bunt reads as "swing None but the bat
+    # touched the ball". A genuine take carries no contact dict and was filtered
+    # out above, so contact + swing 0 uniquely identifies a bunt here. Project Rio
+    # 2.3.0 logs bunts as code 4 instead. Before 1.9.6 swing 0 doesn't mean a bunt
+    # (ordinary swings logged it too), so those can't be reproduced.
+    is_bunt = swing_code in _BUNT_SWING_CODES
+    if swing_code not in (0, 1, 2, 3, 4):  # 0/4 Bunt, 1 Slap, 2 Charge, 3 Star
         raise ValueError(
-            f"Unsupported swing type {pitch.get('Type of Swing')!r} (bunts not supported)"
+            f"Unsupported swing type {pitch.get('Type of Swing')!r}"
         )
+    if is_bunt and event.rioStat.versionBefore(1, 9, 6):
+        raise ValueError(f"Can't simulate swing {pitch.get('Type of Swing')!r} from Rio {event.rioStat.version()}")
+    if pitch.get("Bat Contact Pos - X") is None:
+        raise ValueError(f"Rio {event.rioStat.version()} didn't log the bat position")
 
     charge_up = float(contact.get("Charge Power Up", 0.0))
     charge_down = float(contact.get("Charge Power Down", 0.0))
@@ -1269,21 +1352,21 @@ def _inputs_from_event(event: EventObj, active_tags=frozenset()) -> HitInputs:
             swing_code = 2  # regular Charge swing...
             charge_down = 0.0  # ...with charge-down forced to 0 (the power benefit)
 
+    five_star = G.to_encoded(LookupDicts.FIVE_STAR, contact.get("Star Swing Five-Star") or 0)
+    five_star_attempt = swing_code == 3 and (five_star != 0 or _launched_as_texas_leaguer(
+        event.team_stars(event.batting_team()), event.batter(), _int_no_commas(contact.get("Vert Angle"))))
+
     pitch_code = G.to_encoded(LookupDicts.PITCH_TYPE, pitch.get("Pitch Type"))  # 0 Curve/1 Charge/2 ChangeUp
     if pitch_code == 0:
         pitch_type_val = 0
     elif pitch_code == 1:
-        # Charge Type: 1 ChargedStar / 2 Slider / 3 Perfect. Older stat files
-        # couldn't decode ChargedStar and log "Unable to Decode. Invalid Value
-        # (1)." instead -- map that legacy string back to 1.
+        # Charge Type: 1 Charged Captain Star / 2 Slider / 3 Perfect. charge_type()
+        # corrects the labels older stat files used for 1.
         try:
-            charge_code = G.to_encoded(LookupDicts.CHARGE_TYPE, pitch.get("Charge Type"))
+            charge_code = G.to_encoded(LookupDicts.CHARGE_TYPE, event.charge_type())
         except KeyError:
-            if "(1)" in str(pitch.get("Charge Type")):
-                charge_code = 1  # ChargedStar
-            else:
-                raise ValueError(f"undecodable Charge Type {pitch.get('Charge Type')!r}")
-        # 1 ChargedStar -> 4, 3 Perfect -> 2, else (Slider) -> 1.
+            raise ValueError(f"undecodable Charge Type {pitch.get('Charge Type')!r}")
+        # 1 Charged Captain Star -> 4, 3 Perfect -> 2, else (Slider) -> 1.
         pitch_type_val = {1: 4, 3: 2}.get(charge_code, 1)
     else:
         pitch_type_val = 3
@@ -1308,7 +1391,7 @@ def _inputs_from_event(event: EventObj, active_tags=frozenset()) -> HitInputs:
         ball_x=contact.get("Ball Contact Pos - X"),
         ball_z=float(contact.get("Ball Contact Pos - Z", 0.0)),
         batter_hand=G.to_encoded(LookupDicts.HAND, event.batter_hand()),  # 0 Right/1 Left == T.Righty/T.Lefty
-        swing=T.Charge if swing_code == 2 else T.Slap,
+        swing=T.Bunt if is_bunt else (T.Charge if swing_code == 2 else T.Slap),
         is_star=swing_code == 3,
         charge_up=charge_up,
         charge_down=charge_down,
@@ -1321,7 +1404,7 @@ def _inputs_from_event(event: EventObj, active_tags=frozenset()) -> HitInputs:
         easy_batting=False,  # not recorded in stat files
         batter_stars_on=batter_starred,
         pitcher_stars_on=pitcher_starred,
-        five_star_dinger=_int_no_commas(contact.get("Star Swing Five-Star") or 0) == 1,
+        five_star_attempt=five_star_attempt,
         ground_y=ground_y,
         bounce=bounce,
         rng1=_int_no_commas(contact.get("RNG1")),
@@ -1348,18 +1431,34 @@ def _inputs_from_landing_row(row: dict, stadium_id: int, active_tags=frozenset()
     The endpoint already serves encoded values, so characters come through as
     encoded char ids (BatterAttributes.from_name resolves those directly) and the
     categorical fields (swing/pitch/charge type, hand, stick) are integer codes
-    matching game_constants. The row carries everything the contact pipeline
-    needs except two game-level facts the endpoint doesn't expose: whether
-    superstars are on (``batter_stars_on``/``pitcher_stars_on``, default off) and
-    the stadium (``stadium_id``, used only for the ground plane / bounce). Walu
-    tech (see _inputs_from_event) can't be detected here -- the row lacks the
-    team's star count -- so star swings without enough stars won't be corrected.
+    matching game_constants. If the row carries per-character superstar flags
+    (``batter_superstar``/``pitcher_superstar``) they are used directly -- a
+    bunt's contact size (and the slap/charge/cursed-ball buffs) depend on the
+    batter/pitcher being the starred version; otherwise the caller-supplied
+    game-level ``batter_stars_on``/``pitcher_stars_on`` is the fallback. (The
+    /landing_data/ endpoint does not currently expose those columns, so the
+    fallback is used until it does.) The stadium (``stadium_id``, used only for
+    the ground plane / bounce) is always caller-supplied. Walu tech (see
+    _inputs_from_event) isn't detected here -- the row doesn't say whether the
+    batter is their team's captain -- so star swings without enough stars won't
+    be corrected. A Moonshot attempt needs ``star_swing_five_star`` and
+    ``batter_team_stars``; a row without them is treated as a regular star swing.
     """
     swing_code = int(row["type_of_swing"])
-    if swing_code not in (1, 2, 3):  # 1 Slap, 2 Charge, 3 Star (0 None / 4 Bunt unsupported)
-        raise ValueError(
-            f"Unsupported swing type {swing_code!r} (None/Bunt not supported)"
-        )
+    # A landing row always carries contact, so swing "None" (0) is a bunt: the
+    # game zeroes the swing byte for a bunt, same as the stat-file path. Project
+    # Rio 2.3.0 logs bunts as code 4 instead.
+    is_bunt = swing_code in _BUNT_SWING_CODES
+    if swing_code not in (0, 1, 2, 3, 4):  # 0/4 Bunt, 1 Slap, 2 Charge, 3 Star
+        raise ValueError(f"Unsupported swing type {swing_code!r}")
+
+    # Prefer the endpoint's per-character superstar flag (a bunt's contact size,
+    # and the slap/charge/cursed-ball buffs, depend on it); fall back to the
+    # caller's game-level value when the row omits the column.
+    if row.get("batter_superstar") is not None:
+        batter_stars_on = bool(row["batter_superstar"])
+    if row.get("pitcher_superstar") is not None:
+        pitcher_stars_on = bool(row["pitcher_superstar"])
 
     pitch_code = int(row["pitch_type"])  # 0 Curve / 1 Charge / 2 ChangeUp
     if pitch_code == 0:
@@ -1369,6 +1468,13 @@ def _inputs_from_landing_row(row: dict, stadium_id: int, active_tags=frozenset()
         pitch_type_val = {1: 4, 3: 2}.get(charge_code, 1)
     else:
         pitch_type_val = 3
+
+    # NOTE: ball_horiz_angle holds the vertical angle (the endpoint's columns are swapped).
+    team_stars = row.get("batter_team_stars")
+    five_star_attempt = swing_code == 3 and (
+        int(row.get("star_swing_five_star") or 0) != 0
+        or (team_stars is not None and _launched_as_texas_leaguer(
+            int(team_stars), int(row["batter_char_id"]), int(row["ball_horiz_angle"]))))
 
     up, down, left, right = G.stick_directions(int(row["stick_input"]))
     ground_y = T.GROUND_Y_TOY_FIELD if stadium_id == 0x6 else T.GROUND_Y_DEFAULT
@@ -1382,7 +1488,7 @@ def _inputs_from_landing_row(row: dict, stadium_id: int, active_tags=frozenset()
         ball_x=float(row["ball_x_contact_pos"]),
         ball_z=float(row.get("ball_z_contact_pos") or 0.0),
         batter_hand=int(bool(row["batting_hand"])),  # 0 Right / 1 Left
-        swing=T.Charge if swing_code == 2 else T.Slap,
+        swing=T.Bunt if is_bunt else (T.Charge if swing_code == 2 else T.Slap),
         is_star=swing_code == 3,
         charge_up=float(row.get("charge_power_up") or 0.0),
         charge_down=float(row.get("charge_power_down") or 0.0),
@@ -1395,6 +1501,7 @@ def _inputs_from_landing_row(row: dict, stadium_id: int, active_tags=frozenset()
         easy_batting=False,
         batter_stars_on=batter_stars_on,
         pitcher_stars_on=pitcher_stars_on,
+        five_star_attempt=five_star_attempt,
         ground_y=ground_y,
         bounce=bounce,
         rng1=int(row["rng1"]),  # endpoint serves the seeds as floats (e.g. 9747.0)

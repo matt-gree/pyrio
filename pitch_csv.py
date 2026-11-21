@@ -35,7 +35,7 @@ def pitch_rows_from_statobj(sf, include_character_attributes=False):
 
     prevEv = {}
 
-    for ev in sf.events():
+    for eventIndex, ev in enumerate(sf.events()):
         if "Pitch" not in ev:
             continue
 
@@ -103,7 +103,7 @@ def pitch_rows_from_statobj(sf, include_character_attributes=False):
         batterPosX = ev["Pitch"]["Bat Contact Pos - X"]
         batterPosZ = ev["Pitch"]["Bat Contact Pos - Z"]
         rBIs = ev["RBI"]
-        result = ev["Result of AB"]
+        result = stat_file_parser.EventObj(sf, eventIndex).result_of_AB()
 
         gameID = sf.gameID()
         gameMode = sf.gameMode()

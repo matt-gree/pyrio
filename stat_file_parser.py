@@ -1,7 +1,9 @@
 from __future__ import annotations
+from .constants import game_constants as G
 from .lookup import LookupDicts
 from datetime import datetime
 from typing import Optional, Union
+import re
 
 '''
 Intended to parse "decoded" files which would be present on a user's computer
@@ -44,6 +46,34 @@ Roster args:
 # "no unnecessary half-inning" terms as the final inning. Used by both the live
 # HudObj.game_over predicate and StatObj.isMercy, so the two cannot drift.
 MERCY_MARGIN = 10
+
+# "Result of AB" labels from older decoded files, mapped to the LookupDicts.FINAL_RESULT
+# names. Files keep the label they were written with, so these are corrected on read.
+RENAMED_RESULT_OF_AB = {
+    'Error - Input': 'Error',
+    'Error - Chem': 'Fielders Choice',
+}
+# Project Rio before 2.3.0 wrote the labels for results 5 and 6 the wrong way round.
+SWAPPED_CAUGHT_RESULT_OF_AB = {
+    'Caught': 'Caught line-drive',
+    'Caught line-drive': 'Caught',
+}
+# "Num Outs During Play" on an event that never finished, like the last one in a quit file.
+UNFINISHED_PLAY_NUM_OUTS = 255
+
+
+def per_position(values: list) -> dict:
+    """A per-position stat as {position: count}. Rio writes these as a list holding one object, or
+    an empty list when the character has none at any position."""
+    return values[0] if values else {}
+
+
+def rate(numerator: float, denominator: float) -> float:
+    """numerator / denominator, or 0.0 when there's nothing to divide by, like a character with no
+    at-bats or who never pitched."""
+    if denominator <= 0:
+        return 0.0
+    return float(numerator) / float(denominator)
 
 
 class ErrorChecker:
@@ -145,6 +175,16 @@ class StatObj:
     def version(self) -> str:
         return self.statJson.get('Version', 'Pre 0.1.7')
 
+    def versionBefore(self, major: int, minor: int, patch: int = 0) -> bool:
+        # returns if the file was written by a Project Rio version before major.minor.patch
+        # versions can have a prefix or suffix, ex: "Pre 0.1.7" and "0.1.7a"
+        match = re.search(r'(\d+)\.(\d+)(?:\.(\d+))?', self.version())
+        return match is None or tuple(int(num or 0) for num in match.groups()) < (major, minor, patch)
+
+    def versionBefore2_3(self) -> bool:
+        # returns if the file was written by a Project Rio version before 2.3.0
+        return self.versionBefore(2, 3)
+
     def stadium(self) -> str:
         # returns the stadium that was played on
         old_stadium_names = {
@@ -158,6 +198,8 @@ class StatObj:
         return old_stadium_names.get(self.statJson["StadiumID"], self.statJson["StadiumID"])
     
     def teamNumVersionCorrection(self, teamNum: int) -> int:
+        # Apply this once, where a method reads the file by team (roster_obj, player, score).
+        # Methods built on those must not apply it again, or two flips cancel out.
         # For Project Rio versions pre 1.9.2
         # teamNum: 0 == home team, 1 == away team
         # For Project Rio versions 1.9.2 and later
@@ -216,8 +258,9 @@ class StatObj:
                 and abs(self.score(0) - self.score(1)) >= MERCY_MARGIN)
 
     def wasQuit(self) -> bool:
-        # returns if the game was quit out early
-        return self.statJson["Quitter Team"] != ""
+        # returns if the game was quit out early, which includes a game cut off by a "Crash"
+        # no quitter is "None" in a decoded file, 255 in an encoded file and "" in old files
+        return self.statJson["Quitter Team"] not in ("", "None", 255)
 
     def quitter(self) -> str:
         # returns the name of the quitter if the game was quit. empty string if no quitter
@@ -327,17 +370,26 @@ class StatObj:
 
     # defensive stats
     def era(self, teamNum: int, rosterNum: int = -1) -> float:
-        # tells the era of a character
+        # tells the era of a character, from earned runs
+        # 0.0 if they never pitched
         # if no character given, returns era of that team
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
-        teamNum = self.teamNumVersionCorrection(teamNum)
-        return 9 * float(self.runsAllowed(teamNum, rosterNum)) / self.inningsPitched(teamNum, rosterNum)
+        return 9 * rate(self.earnedRuns(teamNum, rosterNum), self.inningsPitched(teamNum, rosterNum))
+
+    def earnedRuns(self, teamNum: int, rosterNum: int = -1) -> int:
+        # tells how many earned runs a character allowed when pitching
+        # files without Earned Runs count every run allowed instead
+        # if no character given, returns earned runs allowed by that team
+        # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
+        if rosterNum == -1:
+            return sum(self.earnedRuns(teamNum, x) for x in range(0, 9))
+        stats = self.defensiveStats(teamNum, rosterNum)
+        return stats.get("Earned Runs", stats["Runs Allowed"])
 
     def battersFaced(self, teamNum: int, rosterNum: int = -1) -> int:
         # tells how many batters were faced by character
         # if no character given, returns batters faced by that team
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
-        teamNum = self.teamNumVersionCorrection(teamNum)
         if rosterNum == -1:
             total = 0
             for x in range(0, 9):
@@ -350,7 +402,6 @@ class StatObj:
         # tells how many runs a character allowed when pitching
         # if no character given, returns runs allowed by that team
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
-        teamNum = self.teamNumVersionCorrection(teamNum)
         if rosterNum == -1:
             total = 0
             for x in range(0, 9):
@@ -363,14 +414,12 @@ class StatObj:
         # tells how many walks a character allowed when pitching
         # if no character given, returns walks by that team
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
-        teamNum = self.teamNumVersionCorrection(teamNum)
         return self.battersWalkedBallFour(teamNum, rosterNum) + self.battersHitByPitch(teamNum, rosterNum)
 
     def battersWalkedBallFour(self, teamNum: int, rosterNum: int = -1) -> int:
         # returns how many times a character has walked a batter via 4 balls
         # if no character given, returns how many times the team walked via 4 balls
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
-        teamNum = self.teamNumVersionCorrection(teamNum)
         if rosterNum == -1:
             total = 0
             for x in range(0, 9):
@@ -383,7 +432,6 @@ class StatObj:
         # returns how many times a character walked a batter by hitting them by a pitch
         # if no character given, returns walked via HBP for the team
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
-        teamNum = self.teamNumVersionCorrection(teamNum)
         if rosterNum == -1:
             total = 0
             for x in range(0, 9):
@@ -396,7 +444,6 @@ class StatObj:
         # returns how many hits a character allowed as pitcher
         # if no character given, returns how many hits a team allowed
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
-        teamNum = self.teamNumVersionCorrection(teamNum)
         if rosterNum == -1:
             total = 0
             for x in range(0, 9):
@@ -409,7 +456,6 @@ class StatObj:
         # returns how many homeruns a character allowed as pitcher
         # if no character given, returns how many homeruns a team allowed
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
-        teamNum = self.teamNumVersionCorrection(teamNum)
         if rosterNum == -1:
             total = 0
             for x in range(0, 9):
@@ -422,7 +468,6 @@ class StatObj:
         # returns how many pitches a character threw
         # if no character given, returns how many pitches a team threw
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
-        teamNum = self.teamNumVersionCorrection(teamNum)
         if rosterNum == -1:
             total = 0
             for x in range(0, 9):
@@ -435,7 +480,6 @@ class StatObj:
         # returns final pitching stamina of a pitcher
         # if no character given, returns total stamina of a team
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
-        teamNum = self.teamNumVersionCorrection(teamNum)
         if rosterNum == -1:
             total = 0
             for x in range(0, 9):
@@ -447,7 +491,6 @@ class StatObj:
     def wasPitcher(self, teamNum: int, rosterNum: int) -> bool:
         # returns if a character was a pitcher
         # rosterNum: 0 -> 8 for each of the 9 roster spots
-        teamNum = self.teamNumVersionCorrection(teamNum)
         ErrorChecker.check_roster_num_no_neg(rosterNum)
         return self.defensiveStats(teamNum, rosterNum)["Was Pitcher"] == 1
 
@@ -455,7 +498,6 @@ class StatObj:
         # returns how many strikeouts a character pitched
         # if no character given, returns how mnany strikeouts a team pitched
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
-        teamNum = self.teamNumVersionCorrection(teamNum)
         if rosterNum == -1:
             total = 0
             for x in range(0, 9):
@@ -468,7 +510,6 @@ class StatObj:
         # returns how many star pitches a character threw
         # if no character given, returns how many star pitches a team threw
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
-        teamNum = self.teamNumVersionCorrection(teamNum)
         if rosterNum == -1:
             total = 0
             for x in range(0, 9):
@@ -481,7 +522,6 @@ class StatObj:
         # returns how many big plays a character had
         # if no character given, returns how many big plays a team had
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
-        teamNum = self.teamNumVersionCorrection(teamNum)
         if rosterNum == -1:
             total = 0
             for x in range(0, 9):
@@ -494,7 +534,6 @@ class StatObj:
         # returns how many outs a character was pitching for
         # if no character given, returns how many outs a team pitched for
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
-        teamNum = self.teamNumVersionCorrection(teamNum)
         if rosterNum == -1:
             total = 0
             for x in range(0, 9):
@@ -507,22 +546,26 @@ class StatObj:
         # returns how many innings a character was pitching for
         # if no character given, returns how many innings a team pitched for
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
-        teamNum = self.teamNumVersionCorrection(teamNum)
         return float(self.outsPitched(teamNum, rosterNum)) / 3
 
-    def pitchesPerPosition(self, teamNum: int, rosterNum: int) -> dict:
-        # returns a dict which tracks how many pitches a character was at a position for
+    def battersPerPosition(self, teamNum: int, rosterNum: int) -> dict:
+        # returns a dict which tracks how many batters a character faced at each position
+        # Rio renamed "Pitches Per Position" to "Batters Per Position" in 2022; older files use the old key
         # rosterNum: 0 -> 8 for each of the 9 roster spots
-        teamNum = self.teamNumVersionCorrection(teamNum)
         ErrorChecker.check_roster_num_no_neg(rosterNum)
-        return self.defensiveStats(teamNum, rosterNum)["Pitches Per Position"][0]
+        stats = self.defensiveStats(teamNum, rosterNum)
+        key = "Batters Per Position" if "Batters Per Position" in stats else "Pitches Per Position"
+        return per_position(stats[key])
+
+    def pitchesPerPosition(self, teamNum: int, rosterNum: int) -> dict:
+        # the old name for battersPerPosition, kept so existing callers still work
+        return self.battersPerPosition(teamNum, rosterNum)
 
     def outsPerPosition(self, teamNum: int, rosterNum: int) -> dict:
         # returns a dict which tracks how many outs a character was at a position for
         # rosterNum: 0 -> 8 for each of the 9 roster spots
-        teamNum = self.teamNumVersionCorrection(teamNum)
         ErrorChecker.check_roster_num_no_neg(rosterNum)
-        return self.defensiveStats(teamNum, rosterNum)["Outs Per Position"][0]
+        return per_position(self.defensiveStats(teamNum, rosterNum)["Outs Per Position"])
 
     # offensive stats
 
@@ -530,7 +573,6 @@ class StatObj:
         # returns how many at bats a character had
         # if no character given, returns how many at bats a team had
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
-        teamNum = self.teamNumVersionCorrection(teamNum)
         if rosterNum == -1:
             total = 0
             for x in range(0, 9):
@@ -543,7 +585,6 @@ class StatObj:
         # returns how many hits a character had
         # if no character given, returns how many hits a team had
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
-        teamNum = self.teamNumVersionCorrection(teamNum)
         if rosterNum == -1:
             total = 0
             for x in range(0, 9):
@@ -556,7 +597,6 @@ class StatObj:
         # returns how many singles a character had
         # if no character given, returns how many singles a team had
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
-        teamNum = self.teamNumVersionCorrection(teamNum)
         if rosterNum == -1:
             total = 0
             for x in range(0, 9):
@@ -569,7 +609,6 @@ class StatObj:
         # returns how many doubles a character had
         # if no character given, returns how many doubles a team had
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
-        teamNum = self.teamNumVersionCorrection(teamNum)
         if rosterNum == -1:
             total = 0
             for x in range(0, 9):
@@ -582,7 +621,6 @@ class StatObj:
         # returns how many triples a character had
         # if no character given, returns how many triples a teams had
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
-        teamNum = self.teamNumVersionCorrection(teamNum)
         if rosterNum == -1:
             total = 0
             for x in range(0, 9):
@@ -595,7 +633,6 @@ class StatObj:
         # returns how many homeruns a character had
         # if no character given, returns how many homeruns a team had
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
-        teamNum = self.teamNumVersionCorrection(teamNum)
         if rosterNum == -1:
             total = 0
             for x in range(0, 9):
@@ -608,7 +645,6 @@ class StatObj:
         # returns how many successful bunts a character had
         # if no character given, returns how many successful bunts a team had
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
-        teamNum = self.teamNumVersionCorrection(teamNum)
         if rosterNum == -1:
             total = 0
             for x in range(0, 9):
@@ -621,7 +657,6 @@ class StatObj:
         # returns how many sac flys a character had
         # if no character given, returns how many sac flys a team had
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
-        teamNum = self.teamNumVersionCorrection(teamNum)
         if rosterNum == -1:
             total = 0
             for x in range(0, 9):
@@ -634,7 +669,6 @@ class StatObj:
         # returns how many times a character struck out when batting
         # if no character given, returns how many times a team struck out when batting
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
-        teamNum = self.teamNumVersionCorrection(teamNum)
         if rosterNum == -1:
             total = 0
             for x in range(0, 9):
@@ -647,14 +681,12 @@ class StatObj:
         # returns how many times a character was walked when batting
         # if no character given, returns how many times a team was walked when batting
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
-        teamNum = self.teamNumVersionCorrection(teamNum)
         return self.walksBallFour(teamNum, rosterNum) + self.walksHitByPitch(teamNum, rosterNum)
 
     def walksBallFour(self, teamNum: int, rosterNum: int = -1) -> int:
         # returns how many times a character was walked via 4 balls when batting
         # if no character given, returns how many times a team was walked via 4 balls when batting
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
-        teamNum = self.teamNumVersionCorrection(teamNum)
         if rosterNum == -1:
             total = 0
             for x in range(0, 9):
@@ -667,7 +699,6 @@ class StatObj:
         # returns how many times a character was walked via hit by pitch when batting
         # if no character given, returns how many times a team was walked via hit by pitch when batting
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
-        teamNum = self.teamNumVersionCorrection(teamNum)
         if rosterNum == -1:
             total = 0
             for x in range(0, 9):
@@ -680,7 +711,6 @@ class StatObj:
         # returns how many RBI's a character had
         # if no character given, returns how many RBI's a team had
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
-        teamNum = self.teamNumVersionCorrection(teamNum)
         if rosterNum == -1:
             total = 0
             for x in range(0, 9):
@@ -693,7 +723,6 @@ class StatObj:
         # returns how many times a character successfully stole a base
         # if no character given, returns how many times a team successfully stole a base
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
-        teamNum = self.teamNumVersionCorrection(teamNum)
         if rosterNum == -1:
             total = 0
             for x in range(0, 9):
@@ -706,7 +735,6 @@ class StatObj:
         # returns how many star hits a character used
         # if no character given, returns how many star hits a team used
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
-        teamNum = self.teamNumVersionCorrection(teamNum)
         if rosterNum == -1:
             total = 0
             for x in range(0, 9):
@@ -719,41 +747,41 @@ class StatObj:
 
     def battingAvg(self, teamNum: int, rosterNum: int = -1) -> float:
         # returns the batting average of a character
+        # 0.0 with no at-bats
         # if no character given, returns the batting average of a team
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
-        teamNum = self.teamNumVersionCorrection(teamNum)
         nAtBats = self.atBats(teamNum, rosterNum)
         nHits = self.hits(teamNum, rosterNum)
-        return float(nHits) / float(nAtBats)
+        return rate(nHits, nAtBats)
 
     def obp(self, teamNum: int, rosterNum: int = -1) -> float:
         # returns the on base percentage of a character
+        # (H + BB + HBP) / (AB + BB + HBP + SF). At Bats doesn't include walks or hit by pitches
+        # 0.0 with no plate appearances
         # if no character given, returns the on base percentage of a team
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
-        teamNum = self.teamNumVersionCorrection(teamNum)
         nAtBats = self.atBats(teamNum, rosterNum)
         nHits = self.hits(teamNum, rosterNum)
-        nWalks = self.walks(teamNum, rosterNum)
-        return float(nHits + nWalks) / float(nAtBats)
+        nWalks = self.walks(teamNum, rosterNum)  # ball four and hit by pitch
+        nSacFlys = self.sacFlys(teamNum, rosterNum)
+        return rate(nHits + nWalks, nAtBats + nWalks + nSacFlys)
 
     def slg(self, teamNum: int, rosterNum: int = -1) -> float:
-        # returns the SLG of a character
+        # returns the SLG of a character: total bases / at-bats
+        # 0.0 with no at-bats
         # if no character given, returns the SLG of a team
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
-        teamNum = self.teamNumVersionCorrection(teamNum)
         nAtBats = self.atBats(teamNum, rosterNum)
         nSingles = self.singles(teamNum, rosterNum)
         nDoubles = self.doubles(teamNum, rosterNum)
         nTriples = self.triples(teamNum, rosterNum)
         nHomeruns = self.homeruns(teamNum, rosterNum)
-        nWalks = self.walks(teamNum, rosterNum)
-        return float(nSingles + nDoubles * 2 + nTriples * 3 + nHomeruns * 4) / float(nAtBats - nWalks)
+        return rate(nSingles + nDoubles * 2 + nTriples * 3 + nHomeruns * 4, nAtBats)
 
     def ops(self, teamNum: int, rosterNum: int = -1) -> float:
         # returns the OPS of a character
         # if no character given, returns the OPS of a team
         # rosterNum: optional (no arg == all characters on team), 0 -> 8 for each of the 9 roster spots
-        teamNum = self.teamNumVersionCorrection(teamNum)
         return self.obp(teamNum, rosterNum) + self.slg(teamNum, rosterNum)
     
     def events(self) -> list[dict]:
@@ -833,8 +861,9 @@ class EventSearch():
             self.character_action_dict[batter]['AtBat'].add(eventNum)
             self.character_action_dict[pitcher]['Pitching'].add(eventNum)
             
-            self._away_score_dict[currentEvent.score(0)].add(eventNum)
-            self._home_score_dict[currentEvent.score(1)].add(eventNum)
+            # setdefault because the final score can be behind the current one in an unfinished game
+            self._away_score_dict.setdefault(currentEvent.score(0), set()).add(eventNum)
+            self._home_score_dict.setdefault(currentEvent.score(1), set()).add(eventNum)
 
             if currentEvent.score(0) > currentEvent.score(1):
                 self._away_team_winning.add(eventNum)
@@ -850,14 +879,17 @@ class EventSearch():
             self._chem_on_base_dict[currentEvent.chem_links_on_base()].add(eventNum)
             self._strikes_dict[currentEvent.strikes()].add(eventNum)
             self._balls_dict[currentEvent.balls()].add(eventNum)
-            self._inning_dict[currentEvent.inning()].add(eventNum)
+            # setdefault because "Innings Played" can be behind the current inning in an unfinished game
+            self._inning_dict.setdefault(currentEvent.inning(), set()).add(eventNum)
             self._rbi_dict[currentEvent.rbi()].add(eventNum)
             self._pitcher_stamina_dict[currentEvent.pitcher_stamina()].add(eventNum)
             self._star_chance_dict[currentEvent.star_chance()].add(eventNum)
-            self._outs_during_event_dict[currentEvent.num_outs_during_play()].add(eventNum)
+            if currentEvent.num_outs_during_play() != UNFINISHED_PLAY_NUM_OUTS:
+                self._outs_during_event_dict[currentEvent.num_outs_during_play()].add(eventNum)
 
             self._half_inning_dict[currentEvent.half_inning()].add(eventNum)
-            self._result_of_AB_dict[currentEvent.result_of_AB()].add(eventNum)
+            # setdefault so a label this version doesn't know about can't stop the file from loading
+            self._result_of_AB_dict.setdefault(currentEvent.result_of_AB(), set()).add(eventNum)
             
             if currentEvent.bool_runner_on_base(-1) == 0:
                 self._runners_on_base_dict[0].add(eventNum)
@@ -928,7 +960,12 @@ class EventSearch():
             if not currentEvent.first_fielder_dict():
                 continue
 
-            self.character_action_dict[currentEvent.first_fielder_character()]['Fielding'].add(eventNum)
+            # setdefault because the fielder is logged separately from the rosters, and some files disagree
+            self.character_action_dict.setdefault(currentEvent.first_fielder_character(), {
+                'AtBat': set(),
+                'Pitching': set(),
+                'Fielding': set()
+            })['Fielding'].add(eventNum)
 
             if currentEvent.first_fielder_bobble() != 'None':
                 self._bobble.add(eventNum)
@@ -1009,13 +1046,13 @@ class EventSearch():
         else:
             return self._result_of_AB_dict['Single'] | self._result_of_AB_dict['Double'] | self._result_of_AB_dict['Triple'] | self._result_of_AB_dict['HR']
 
-    def inputErrorResultEvents(self) -> set[int]:
-        # returns a set of events where the result is a input error
-        return self._result_of_AB_dict['Error - Input']
-    
-    def chemErrorResultEvents(self) -> set[int]:
-        # returns a set of events where the result is a chem error
-        return self._result_of_AB_dict['Error - Chem']
+    def errorResultEvents(self) -> set[int]:
+        # returns a set of events where the result is an error
+        return self._result_of_AB_dict['Error']
+
+    def fieldersChoiceResultEvents(self) -> set[int]:
+        # returns a set of events where the result is a fielders choice
+        return self._result_of_AB_dict['Fielders Choice']
 
     def buntResultEvents(self) -> set[int]:
         #returns a set of events of successful bunts
@@ -1458,6 +1495,7 @@ class EventObj():
         if abs(eventNum) > len(self.all_events):
             raise IndexError(f'Invalid event num: Event {eventNum} does not exist in game')
         self.eventDict = self.all_events[eventNum]
+        self.eventIndex = eventNum % len(self.all_events)
 
     def safe_int(self, value) -> Optional[int]:
         """
@@ -1476,7 +1514,7 @@ class EventObj():
             return value  # Return if it's already an integer
         elif isinstance(value, str):
             try:
-                return int(value)  # Try converting a string to an integer
+                return int(value.replace(',', ''))  # Try converting a string to an integer. Stat files group digits with commas
             except ValueError:
                 raise ValueError(f"Value '{value}' is not a valid integer.")
         
@@ -1561,7 +1599,10 @@ class EventObj():
         return self.eventDict['Num Outs During Play']
     
     def result_of_AB(self) -> str:
-        return self.eventDict['Result of AB']
+        result = self.eventDict['Result of AB']
+        if self.rioStat.versionBefore2_3():
+            result = SWAPPED_CAUGHT_RESULT_OF_AB.get(result, result)
+        return RENAMED_RESULT_OF_AB.get(result, result)
     
     def runners(self) -> set[str]:
         return set(self.eventDict).intersection(['Runner 1B', 'Runner 2B', 'Runner 3B'])
@@ -1620,8 +1661,13 @@ class EventObj():
     def charge_type(self) -> Optional[str]:
         """
         Returns None if no pitch in event
+        Project Rio before 2.3.0 couldn't decode a charged captain star and logged
+        'Unable to Decode. Invalid Value (1).' instead, so that's corrected on read.
         """
-        return self.pitch_dict().get('Charge Type')
+        charge_type = self.pitch_dict().get('Charge Type')
+        if charge_type == 'ChargedStar' or '(1)' in str(charge_type):
+            return LookupDicts.CHARGE_TYPE[1]
+        return charge_type
     
     def star_pitch(self) -> Optional[int]:
         """
@@ -1697,9 +1743,11 @@ class EventObj():
 
     def five_star_swing(self) -> Optional[int]:
         """
+        Returns the encoded value (see LookupDicts.FIVE_STAR)
         Returns None if no contact in event
         """
-        return self.contact_dict().get('Star Swing Five-Star')
+        five_star = self.contact_dict().get('Star Swing Five-Star')
+        return G.to_encoded(LookupDicts.FIVE_STAR, five_star) if five_star is not None else None
 
     def input_direction_push_or_pull(self) -> Optional[str]:
         """
@@ -1800,17 +1848,60 @@ class EventObj():
         """
         return self.safe_int(self.contact_dict().get('Ball Hang Time'))
 
+    def nextEventContinuesAtBat(self) -> bool:
+        # A foul keeps the same batter up with the same outs and balls, and adds a strike
+        # unless there are already 2. The last event in a file can't be confirmed.
+        if self.eventIndex + 1 >= len(self.all_events):
+            return False
+        next_event = self.all_events[self.eventIndex + 1]
+        if any(next_event.get(key) != self.eventDict.get(key)
+               for key in ('Inning', 'Half Inning', 'Batter Roster Loc', 'Outs', 'Balls')):
+            return False
+        return next_event.get('Strikes') == min(self.eventDict.get('Strikes', 0) + 1, 2)
+
+    def foulLoggedAsFair(self) -> bool:
+        # Project Rio before 2.3.0 logged a foul as fair if the ball landed before the game
+        # called it foul. A strikeout with contact is always a foul bunt. No result alone isn't
+        # enough, since some real hits logged none, so that also has to continue the at bat.
+        contact = self.contact_dict()
+        if (not self.rioStat.versionBefore2_3()
+                or contact.get('Contact Result - Primary') not in ('Fair', 'Fielded')
+                or contact.get('Contact Result - Secondary') != 'Out-caught'
+                or self.num_outs_during_play() == UNFINISHED_PLAY_NUM_OUTS):
+            return False
+        result = self.result_of_AB()
+        return result == 'Strikeout' or (result == 'None' and self.nextEventContinuesAtBat())
+
     def contact_result_primary(self) -> Optional[str]:
         """
         Returns None if no contact in event.
+        Project Rio before 2.3.0 logged every result from Single through double play as
+        'Fair'. A sac fly is always caught, so that's corrected to 'Out'. The rest can't
+        be, since the file doesn't say which of those balls were fielded before landing.
         """
-        return self.contact_dict().get('Contact Result - Primary')
+        primary = self.contact_dict().get('Contact Result - Primary')
+        if self.foulLoggedAsFair():
+            return 'Foul'
+        if primary == 'Fair' and self.rioStat.versionBefore2_3() and self.result_of_AB() == 'SacFly':
+            return 'Out'
+        return primary
 
     def contact_result_secondary(self) -> Optional[str]:
         """
         Returns None if no contact in event.
+        Corrects files from Project Rio before 2.3.0, which logged a force out as
+        'Out-tag', a tag out as 'Foul', and a foul that landed first as 'Out-caught'.
         """
-        return self.contact_dict().get('Contact Result - Secondary')
+        secondary = self.contact_dict().get('Contact Result - Secondary')
+        if self.foulLoggedAsFair():
+            return 'Foul'
+        if self.rioStat.versionBefore2_3() and self.result_of_AB() in ('Out', 'None'):
+            out_type = self.runner_dict(0).get('Out Type')
+            if out_type == 'Force':
+                return 'Out-force'
+            if out_type == 'Tag':
+                return 'Out-tag'
+        return RENAMED_RESULT_OF_AB.get(secondary, secondary)
 
     def first_fielder_dict(self) -> dict:
         """
