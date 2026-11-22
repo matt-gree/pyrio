@@ -210,6 +210,9 @@ class Pitch:
     type: PitchType
     charge_type: ChargeType
     is_star: bool
+    is_dickball: bool
+    """A straight pitch down the middle: thrown from the center of the mound with
+    no curve input. The stat file's ``"DB"``."""
     speed: int
     swing: SwingType
     strike_zone_location: float | None
@@ -394,7 +397,8 @@ class GameResult:
     """The side with more runs, however the game ended; ``None`` when level."""
     is_mercy: bool
     """Ended early on the mercy rule: a lead of 10 or more before the last
-    inning, with nobody quitting."""
+    inning, with nobody quitting. A trailing home team always bats its half of
+    the inning first, so an away mercy win ends in the bottom of an inning."""
     quit_by: Side | None
     """The side whose player quit, if one did."""
     crashed: bool

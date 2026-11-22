@@ -365,7 +365,7 @@ def read_game(source: Source) -> Game:
         away=away,
         home=home,
         events=events,
-        result=_result(root, away.score, home.score, innings_selected, innings_played),
+        result=_result(root, away.score, home.score, innings_selected, innings_played, events),
     )
 
 
@@ -414,17 +414,26 @@ def _tag_set_id(root: _Node) -> int | None:
 
 
 def _result(
-    root: _Node, away_score: int, home_score: int, innings_selected: int, innings_played: int
+    root: _Node,
+    away_score: int,
+    home_score: int,
+    innings_selected: int,
+    innings_played: int,
+    events: tuple[Event, ...],
 ) -> GameResult:
     quit_by, crashed = _quitter(root)
     winner = (
         None if away_score == home_score else (Side.AWAY if away_score > home_score else Side.HOME)
     )
+    # The mercy rule ends a game on a lead of 10 or more, but a home team that
+    # trails always gets its half of the inning to answer: an away mercy win
+    # ends on the home side batting.
     is_mercy = (
         quit_by is None
         and not crashed
         and innings_played < innings_selected
         and abs(away_score - home_score) >= 10
+        and (winner is Side.HOME or (bool(events) and events[-1].state.batting_side is Side.HOME))
     )
     return GameResult(winner=winner, is_mercy=is_mercy, quit_by=quit_by, crashed=crashed)
 
@@ -676,6 +685,7 @@ def _pitch(node: _Node) -> Pitch:
         type=node.coded("Pitch Type", PitchType),
         charge_type=node.coded("Charge Type", ChargeType),
         is_star=node.flag("Star Pitch"),
+        is_dickball=node.flag("DB"),
         speed=node.integer("Pitch Speed"),
         swing=node.coded("Type of Swing", SwingType),
         strike_zone_location=node.maybe_number("Ball Position - Strikezone"),

@@ -439,6 +439,16 @@ def test_mercy():
     assert not read_game(V2_0_2_QUIT).result.is_mercy
 
 
+def test_an_away_mercy_win_ends_with_the_home_team_batting():
+    # The mercy file is a home win in the bottom of the first; flip the score.
+    data = load(V2_0_2_MERCY)
+    data["Away Score"], data["Home Score"] = 10, 0
+    assert read_game(data).result.is_mercy
+    # Cut off before the home half, the game can't have ended on the mercy rule.
+    data["Events"] = [e for e in data["Events"] if e["Half Inning"] == 0]
+    assert not read_game(data).result.is_mercy
+
+
 def test_walkoffs_in_extra_innings():
     for path, result in ((V2_1_1, AtBatResult.DOUBLE), (V1_9_5, AtBatResult.SINGLE)):
         game = read_game(path)
@@ -524,3 +534,8 @@ def test_hud_before_2_2_0_has_no_header():
 def test_hud_version_must_parse():
     with pytest.raises(StatFileError):
         read_hud(FIXTURES / "hud.json", version="soon")
+
+
+def test_dickballs():
+    game = read_game(V2_1_1)
+    assert [e.number for e in game.events if e.pitch and e.pitch.is_dickball] == [79, 85]
