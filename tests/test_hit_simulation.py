@@ -1,8 +1,17 @@
+import importlib.util
 import pathlib
+import sys
 
 import pyrio
 from pyrio import simulate_hit_from_event
-from pyrio.hit_sim_validation import validate_statobj
+
+# hit_sim_validation is a developer tool in tools/, which isn't shipped.
+_spec = importlib.util.spec_from_file_location(
+    "hit_sim_validation", pathlib.Path(__file__).parent.parent / "tools" / "hit_sim_validation.py")
+_validation = importlib.util.module_from_spec(_spec)
+sys.modules[_spec.name] = _validation  # dataclasses look their module up here
+_spec.loader.exec_module(_validation)
+validate_statobj = _validation.validate_statobj
 from pyrio.hit_simulation import HitInputs, HitOverrides, simulate_hit, simulate_hit_all_vertical_zones
 from pyrio.stat_file_parser import EventObj
 

@@ -15,7 +15,7 @@ only: for a caught ball the stat file records the FIELDER's location, not where
 the ball would have hit the ground, so mismatches there are expected.
 
 Usage:
-    from pyrio import hit_sim_validation as v
+    import hit_sim_validation as v  # from tools/
     report = v.validate_file("decoded.json")
     print(report.summary())
 
@@ -23,18 +23,22 @@ Usage:
     # or programmatically inspect report.fields[...].mismatches
 
 CLI:
-    python -m pyrio.hit_sim_validation <file-or-directory> [--landing]
+    python tools/hit_sim_validation.py <file-or-directory> [--landing]
 """
+
 from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, Iterable, Optional
+from typing import TYPE_CHECKING, Any
 
-from . import hit_simulation as hs
-from .constants import game_constants as G
-from .stat_file_parser import StatObj, EventObj
+from pyrio import hit_simulation as hs
+from pyrio.constants import game_constants
+from pyrio.stat_file_parser import EventObj, StatObj
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Iterable
 
 # game Type of Swing codes that the simulator supports: 1 Slap, 2 Charge, 3 Star.
 _SUPPORTED_SWING_CODES = (1, 2, 3)
@@ -47,75 +51,86 @@ def _ci(value) -> int:
 
 # ---------------------------------------------------------------- field specs
 
+
 @dataclass(frozen=True)
 class _FieldSpec:
     name: str
-    recorded: Callable[[dict], object]      # from the contact dict
-    computed: Callable[[hs.HitResult], object]
-    tol: Optional[float] = None             # None -> exact equality
+    recorded: Callable[[dict], Any]  # from the contact dict
+    computed: Callable[[hs.HitResult], Any]
+    tol: float | None = None  # None -> exact equality
 
     def matches(self, contact: dict, result: hs.HitResult) -> tuple[bool, object, object]:
         rec = self.recorded(contact)
         com = self.computed(result)
-        if self.tol is None:
-            ok = rec == com
-        else:
-            ok = abs(float(rec) - float(com)) <= self.tol
+        ok = rec == com if self.tol is None else abs(float(rec) - float(com)) <= self.tol
         return ok, rec, com
 
 
 def _contact_field_specs(vel_tol: float, float_tol: float) -> list[_FieldSpec]:
     return [
-        _FieldSpec("contact_type",
-                   lambda c: G.to_encoded(G.TYPE_OF_CONTACT, c["Type of Contact"]),
-                   lambda r: r.contact_type),
-        _FieldSpec("contact_absolute",
-                   lambda c: float(c["Contact Absolute"]),
-                   lambda r: r.contact_absolute, tol=float_tol),
-        _FieldSpec("contact_quality",
-                   lambda c: float(c["Contact Quality"]),
-                   lambda r: r.contact_quality, tol=float_tol),
-        _FieldSpec("horizontal_angle",
-                   lambda c: _ci(c["Horiz Angle"]),
-                   lambda r: r.horizontal_angle),
-        _FieldSpec("vertical_angle",
-                   lambda c: _ci(c["Vert Angle"]),
-                   lambda r: r.vertical_angle),
-        _FieldSpec("power",
-                   lambda c: _ci(c["Ball Power"]),
-                   lambda r: r.power),
-        _FieldSpec("velocity_x",
-                   lambda c: c["Ball Velocity - X"],
-                   lambda r: r.velocity[0], tol=vel_tol),
-        _FieldSpec("velocity_y",
-                   lambda c: c["Ball Velocity - Y"],
-                   lambda r: r.velocity[1], tol=vel_tol),
-        _FieldSpec("velocity_z",
-                   lambda c: c["Ball Velocity - Z"],
-                   lambda r: r.velocity[2], tol=vel_tol),
+        _FieldSpec(
+            "contact_type",
+            lambda c: game_constants.to_encoded(
+                game_constants.TYPE_OF_CONTACT, c["Type of Contact"]
+            ),
+            lambda r: r.contact_type,
+        ),
+        _FieldSpec(
+            "contact_absolute",
+            lambda c: float(c["Contact Absolute"]),
+            lambda r: r.contact_absolute,
+            tol=float_tol,
+        ),
+        _FieldSpec(
+            "contact_quality",
+            lambda c: float(c["Contact Quality"]),
+            lambda r: r.contact_quality,
+            tol=float_tol,
+        ),
+        _FieldSpec(
+            "horizontal_angle", lambda c: _ci(c["Horiz Angle"]), lambda r: r.horizontal_angle
+        ),
+        _FieldSpec("vertical_angle", lambda c: _ci(c["Vert Angle"]), lambda r: r.vertical_angle),
+        _FieldSpec("power", lambda c: _ci(c["Ball Power"]), lambda r: r.power),
+        _FieldSpec(
+            "velocity_x", lambda c: c["Ball Velocity - X"], lambda r: r.velocity[0], tol=vel_tol
+        ),
+        _FieldSpec(
+            "velocity_y", lambda c: c["Ball Velocity - Y"], lambda r: r.velocity[1], tol=vel_tol
+        ),
+        _FieldSpec(
+            "velocity_z", lambda c: c["Ball Velocity - Z"], lambda r: r.velocity[2], tol=vel_tol
+        ),
     ]
 
 
 def _landing_field_specs(landing_tol: float) -> list[_FieldSpec]:
     return [
-        _FieldSpec("landing_x",
-                   lambda c: c["Ball Landing Position - X"],
-                   lambda r: r.landing[0], tol=landing_tol),
-        _FieldSpec("landing_z",
-                   lambda c: c["Ball Landing Position - Z"],
-                   lambda r: r.landing[2], tol=landing_tol),
+        _FieldSpec(
+            "landing_x",
+            lambda c: c["Ball Landing Position - X"],
+            lambda r: r.landing[0],
+            tol=landing_tol,
+        ),
+        _FieldSpec(
+            "landing_z",
+            lambda c: c["Ball Landing Position - Z"],
+            lambda r: r.landing[2],
+            tol=landing_tol,
+        ),
     ]
 
 
 # ---------------------------------------------------------------- report types
+
 
 @dataclass
 class FieldStat:
     name: str
     matches: int = 0
     total: int = 0
-    expected: int = 0                                # known-mod exceptions (see KNOWN_MOD_EXCEPTIONS)
-    mismatches: list = field(default_factory=list)   # (game_id, event_num, recorded, computed)
+    expected: int = 0  # known-mod exceptions (see KNOWN_MOD_EXCEPTIONS)
+    mismatches: list = field(default_factory=list)  # (game_id, event_num, recorded, computed)
     expected_examples: list = field(default_factory=list)  # (game_id, event_num, exception_name)
 
     @property
@@ -130,18 +145,18 @@ class FieldStat:
 
 @dataclass
 class ValidationReport:
-    fields: dict = field(default_factory=dict)         # name -> FieldStat
+    fields: dict = field(default_factory=dict)  # name -> FieldStat
     total_events: int = 0
     contact_events: int = 0
     simulated: int = 0
-    skipped: list = field(default_factory=list)        # (game_id, event_num, reason)
-    errors: list = field(default_factory=list)         # (game_id, event_num, message)
+    skipped: list = field(default_factory=list)  # (game_id, event_num, reason)
+    errors: list = field(default_factory=list)  # (game_id, event_num, message)
     files: int = 0
 
     def _stat(self, name: str) -> FieldStat:
         return self.fields.setdefault(name, FieldStat(name))
 
-    def merge(self, other: "ValidationReport") -> "ValidationReport":
+    def merge(self, other: ValidationReport) -> ValidationReport:
         self.total_events += other.total_events
         self.contact_events += other.contact_events
         self.simulated += other.simulated
@@ -167,9 +182,9 @@ class ValidationReport:
         failures. Excludes the informational 'landing_*' fields, which are
         expected to diverge (the JS trajectory model was never verified).
         """
-        return all(st.failures == 0
-                   for name, st in self.fields.items()
-                   if not name.startswith("landing_"))
+        return all(
+            st.failures == 0 for name, st in self.fields.items() if not name.startswith("landing_")
+        )
 
     def summary(self, max_mismatches: int = 8) -> str:
         lines = []
@@ -182,8 +197,10 @@ class ValidationReport:
         lines.append(f"{'field':18} {'match':>12} {'exp':>5} {'fail':>5}   rate")
         lines.append("-" * 56)
         for name, st in self.fields.items():
-            lines.append(f"{name:18} {st.matches:>6}/{st.total:<5} {st.expected:>5} "
-                         f"{st.failures:>5} {st.rate * 100:6.2f}%")
+            lines.append(
+                f"{name:18} {st.matches:>6}/{st.total:<5} {st.expected:>5} "
+                f"{st.failures:>5} {st.rate * 100:6.2f}%"
+            )
 
         # group skip reasons
         if self.skipped:
@@ -228,6 +245,7 @@ class ValidationReport:
 
 # ---------------------------------------------------------------- core driver
 
+
 def _ball_reached_ground(contact: dict) -> bool:
     """True if the recorded landing is a real ground contact (not a fielder).
 
@@ -238,7 +256,9 @@ def _ball_reached_ground(contact: dict) -> bool:
     sec = contact.get("Contact Result - Secondary")
     if sec is None:
         return True
-    return G.to_encoded(G.SECONDARY_CONTACT_RESULT, sec) != 0  # 0 = Out-caught
+    return (
+        game_constants.to_encoded(game_constants.SECONDARY_CONTACT_RESULT, sec) != 0
+    )  # 0 = Out-caught
 
 
 # ---------------------------------------------------------------- known mod exceptions
@@ -248,12 +268,13 @@ def _ball_reached_ground(contact: dict) -> bool:
 # /tag/list) being active for the match, only excuses its listed fields, and
 # only for events its predicate identifies. See rio_tags.active_tags_for_stat.
 
+
 @dataclass(frozen=True)
 class KnownModException:
-    name: str                       # label for the report
-    tag: str                        # gecko tag name that must be active
-    fields: frozenset               # field names this exception may excuse
-    predicate: Callable             # (event, contact, result) -> bool
+    name: str  # label for the report
+    tag: str  # gecko tag name that must be active
+    fields: frozenset  # field names this exception may excuse
+    predicate: Callable  # (event, contact, result) -> bool
 
 
 def _is_slice_event(event, contact, result) -> bool:
@@ -264,7 +285,9 @@ def _is_slice_event(event, contact, result) -> bool:
     horizontal trajectory diverges from the sim.
     """
     swing = event.pitch_dict().get("Type of Swing")
-    if swing is None or G.to_encoded(G.TYPE_OF_SWING, swing) != 3:  # 3 = Star
+    if (
+        swing is None or game_constants.to_encoded(game_constants.TYPE_OF_SWING, swing) != 3
+    ):  # 3 = Star
         return False
     try:
         frame = _ci(contact.get("Frame of Swing Upon Contact"))
@@ -274,8 +297,7 @@ def _is_slice_event(event, contact, result) -> bool:
         return False
     # Line-drive star swings (non-captain star type 3) don't slice.
     batter = hs.BatterAttributes.from_name(event.batter().name)
-    is_line_drive_star = (batter.captain_star_hit_pitch == 0
-                          and batter.non_captain_star_swing == 3)
+    is_line_drive_star = batter.captain_star_hit_pitch == 0 and batter.non_captain_star_swing == 3
     return not is_line_drive_star
 
 
@@ -312,17 +334,26 @@ KNOWN_MOD_EXCEPTIONS = [
 def _excused(field_name, event, contact, result, active_tags):
     """Return the KnownModException excusing this field mismatch, or None."""
     for exc in KNOWN_MOD_EXCEPTIONS:
-        if (exc.tag in active_tags and field_name in exc.fields
-                and exc.predicate(event, contact, result)):
+        if (
+            exc.tag in active_tags
+            and field_name in exc.fields
+            and exc.predicate(event, contact, result)
+        ):
             return exc
     return None
 
 
-def validate_statobj(stat: StatObj, *, include_landing: bool = False,
-                     landing_exclude_caught: bool = True,
-                     vel_tol: float = 1e-4, float_tol: float = 1e-3,
-                     landing_tol: float = 1.0, active_tags=None,
-                     report: Optional[ValidationReport] = None) -> ValidationReport:
+def validate_statobj(
+    stat: StatObj,
+    *,
+    include_landing: bool = False,
+    landing_exclude_caught: bool = True,
+    vel_tol: float = 1e-4,
+    float_tol: float = 1e-3,
+    landing_tol: float = 1.0,
+    active_tags=None,
+    report: ValidationReport | None = None,
+) -> ValidationReport:
     """Compare every contact event in one game against the simulator.
 
     ``active_tags`` is the set of gecko-mod tag names active for this match.
@@ -353,7 +384,11 @@ def validate_statobj(stat: StatObj, *, include_landing: bool = False,
         report.contact_events += 1
 
         swing = event.pitch_dict().get("Type of Swing")
-        swing_code = G.to_encoded(G.TYPE_OF_SWING, swing) if swing is not None else None
+        swing_code = (
+            game_constants.to_encoded(game_constants.TYPE_OF_SWING, swing)
+            if swing is not None
+            else None
+        )
         if swing_code not in _SUPPORTED_SWING_CODES:
             report.skipped.append((game_id, i, f"unsupported swing: {swing!r}"))
             continue
@@ -363,7 +398,7 @@ def validate_statobj(stat: StatObj, *, include_landing: bool = False,
         except ValueError as ex:
             report.skipped.append((game_id, i, f"value error: {ex}"))
             continue
-        except Exception as ex:  # noqa: BLE001 - surface unexpected failures
+        except Exception as ex:
             report.errors.append((game_id, i, f"{type(ex).__name__}: {ex}"))
             continue
 
@@ -393,7 +428,7 @@ def validate_statobj(stat: StatObj, *, include_landing: bool = False,
 
 def validate_file(path, **opts) -> ValidationReport:
     """Validate a single decoded stat-file path."""
-    with open(path) as f:
+    with Path(path).open() as f:
         stat = StatObj(json.load(f))
     return validate_statobj(stat, **opts)
 
@@ -409,7 +444,7 @@ def validate_directory(directory, **opts) -> ValidationReport:
     report = ValidationReport()
     for path in _iter_decoded_files(directory):
         try:
-            with open(path) as f:
+            with path.open() as f:
                 stat = StatObj(json.load(f))
         except (json.JSONDecodeError, OSError) as ex:
             report.errors.append((str(path), -1, f"load failed: {ex}"))
@@ -425,21 +460,34 @@ def validate(path, **opts) -> ValidationReport:
 
 def main(argv=None):
     import argparse
+
     parser = argparse.ArgumentParser(description="Validate the hit simulator against stat files")
     parser.add_argument("path", help="decoded stat file or a directory of them")
-    parser.add_argument("--landing", action="store_true",
-                        help="also compare landing position (informational; the JS "
-                             "trajectory model is unverified, so misses are expected)")
-    parser.add_argument("--include-caught-landing", action="store_true",
-                        help="include caught balls in the landing comparison "
-                             "(their recorded landing is the fielder's position)")
-    parser.add_argument("--no-tags", action="store_true",
-                        help="don't resolve match tags from the ProjectRio API; "
-                             "known-mod exceptions (e.g. Remove slice) won't be excused")
+    parser.add_argument(
+        "--landing",
+        action="store_true",
+        help="also compare landing position (informational; the JS "
+        "trajectory model is unverified, so misses are expected)",
+    )
+    parser.add_argument(
+        "--include-caught-landing",
+        action="store_true",
+        help="include caught balls in the landing comparison "
+        "(their recorded landing is the fielder's position)",
+    )
+    parser.add_argument(
+        "--no-tags",
+        action="store_true",
+        help="don't resolve match tags from the ProjectRio API; "
+        "known-mod exceptions (e.g. Remove slice) won't be excused",
+    )
     args = parser.parse_args(argv)
-    report = validate(args.path, include_landing=args.landing,
-                      landing_exclude_caught=not args.include_caught_landing,
-                      active_tags=frozenset() if args.no_tags else None)
+    report = validate(
+        args.path,
+        include_landing=args.landing,
+        landing_exclude_caught=not args.include_caught_landing,
+        active_tags=frozenset() if args.no_tags else None,
+    )
     print(report.summary())
     # Exit status reflects the deterministic fields only; landing is informational.
     return 0 if report.contact_fields_perfect() and not report.errors else 1

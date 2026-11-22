@@ -196,5 +196,4 @@ from .hit_simulation import (
     HitInputs,
     HitResult,
 )
-from .hit_sim_validation import validate_statobj
 from . import hit_analysis, stadiums
