@@ -147,3 +147,62 @@ def test_web_names():
     web = pytest.importorskip("pyrio.web", exc_type=ImportError)
     assert sorted(web.__all__) == WEB
     assert [name for name in web.__all__ if not hasattr(web, name)] == []
+
+
+GEOMETRY = [
+    "FIELDER_LOCKOUT_FRAMES",
+    "FIELDER_START_LOCATIONS",
+    "Hazard",
+    "HazardKind",
+    "Point",
+    "StadiumPhysics",
+    "Surface",
+    "Triangle",
+    "WallSegment",
+    "area",
+    "boundary",
+    "boundary_crossing",
+    "clears_wall",
+    "hazards",
+    "physics",
+    "triangles",
+    "wall_at",
+    "wall_crossing",
+    "walls",
+]
+
+
+def test_geometry_names():
+    import pyrio.geometry
+
+    assert sorted(pyrio.geometry.__all__) == GEOMETRY
+    assert all(hasattr(pyrio.geometry, name) for name in GEOMETRY)
+
+
+SIM = [
+    "ContactRecord",
+    "Highlights",
+    "HitInputs",
+    "HitOverrides",
+    "HitResult",
+    "LiveBallEvent",
+    "LiveBallEventKind",
+    "LiveBallOutcome",
+    "LiveBallResult",
+    "Mod",
+    "TAG_TO_MOD",
+    "best",
+    "find_highlights",
+    "format_highlights",
+    "play_out",
+    "simulate_all_zones",
+    "simulate_hit",
+    "simulate_trajectory",
+]
+
+
+def test_sim_names():
+    import pyrio.sim
+
+    assert sorted(pyrio.sim.__all__) == SIM
+    assert all(hasattr(pyrio.sim, name) for name in SIM)
