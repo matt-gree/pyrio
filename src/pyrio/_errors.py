@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-__all__ = ["RioError", "UnknownCodeError", "UnknownNameError"]
+__all__ = ["RioError", "StatFileError", "UnknownCodeError", "UnknownNameError"]
 
 
 class RioError(Exception):
@@ -28,3 +28,17 @@ class UnknownNameError(UnknownCodeError):
         if suggestions:
             message += f" -- did you mean {' or '.join(suggestions)}?"
         self.args = (message,)
+
+
+class StatFileError(RioError, ValueError):
+    """A stat file or HUD file pyrio can't read: malformed, or from a client it doesn't support.
+
+    ``path`` is the file (``None`` when decoding an in-memory dict) and ``key``
+    the place in it, such as ``"Events[12].Pitch.Type of Swing"``.
+    """
+
+    def __init__(self, message: str, *, path: str | None = None, key: str | None = None) -> None:
+        self.path = path
+        self.key = key
+        where = ": ".join(part for part in (path, key) if part)
+        super().__init__(f"{where}: {message}" if where else message)
