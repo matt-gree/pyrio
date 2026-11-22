@@ -1,0 +1,109 @@
+# Changelog
+
+All notable changes to pyrio are recorded here. The format follows
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and pyrio uses
+[semantic versioning](https://semver.org/) from 1.0.0 on.
+
+## [1.0.0] - Unreleased
+
+A rebuild, planned in [`docs/v1.0.0-audit.md`](docs/v1.0.0-audit.md). Nothing from
+0.1.0 is kept for compatibility: every module was rewritten or deleted. The table at
+the end maps the old names to the new.
+
+### Added
+
+- **Typed game model.** `pyrio.read_game()` reads any stat file from Rio 0.1.7 on,
+  encoded or decoded, into frozen dataclasses: `Game`, `Team`, `RosterSpot`, `Event`,
+  `GameState`, `Pitch`, `Contact`, `Fielding`, `Runner`, `GameResult`. `read_hud()` reads
+  live HUD files into a `HUDSnapshot`. Every per-version rule lives in the decoder: the
+  1.9.2 home/away flip (as `Side`, never a team number), the 1.9.2–1.9.4 crossed
+  captain flags, hex and decimal game ids, the pre-2.3.0 swapped result labels and
+  contact results, renamed keys and comma-grouped numbers.
+- **Enums for every coded value** (`Character`, `Stadium`, `PitchType`, `AtBatResult`,
+  `Position` and about twenty more), each with the game's id and label, checked
+  against ProjectRio's own tables by a parity test. `Character.parse()`,
+  `CharacterFamily.parse()` and `Stadium.parse()` accept what people type and suggest
+  near misses. `CharacterFamily` groups colour variants.
+- **`BattingLine` and `PitchingLine`**: counts that add with `+` and `sum()`, derived
+  stats as properties (`avg`, `obp`, `slg`, `ops`, `era`, `whip`, ...), and
+  `format_batting_line` / `format_pitching_line`.
+- **`pyrio.team_name(roster, captain)`** and the `CAPTAIN_TEAMS` table.
+- **`pyrio decode FILE`** (also `python -m pyrio`), printing a box score, the events
+  (`--events`) or the whole model as JSON (`--json`); `pyrio.to_jsonable()` underneath.
+- **`pyrio.web`**: `RioClient` and `AsyncRioClient` on httpx, with retries, an opt-in
+  `DiskCache`, frozen response models that reuse the core enums and stat lines, and
+  `APIError` subclasses (`AuthenticationError`, `NotFoundError`, `APIResponseError`,
+  `APIConnectionError`, `APITimeoutError`). Marked provisional until Rio web 2.0's API
+  settles.
+- **`pyrio.sim`**: `simulate_hit`, `simulate_trajectory`, `simulate_all_zones` and
+  `play_out` (the live ball against each stadium's collision mesh and hazards), typed
+  with the enums. `HitInputs.from_event()` rebuilds a recorded contact;
+  `simulate_contacts(game)` does a whole game. Star swings resolve from `stars` and
+  `is_captain`, as in the game. `find_highlights` and `best` for game summaries.
+- **`pyrio.geometry`**: walls, the field boundary, collision triangles, hazards and
+  physics per stadium, fielder starting spots and lockout frames.
+- **`pyrio.ratings`**: Glicko-2 as a frozen `Rating`, a pure `update()` and
+  `win_probability()`, with Rio web's parameters (tau 0.5, starting RD 300).
+- **`pyrio.svg`**: stadium drawings and spray charts as SVG strings, with no
+  dependencies.
+- **`pyrio.plot`**: the same drawings on matplotlib axes (`plot` extra).
+- **`pyrio.pandas.frame()`**: a DataFrame from any one model type (`pandas` extra).
+- `examples/`: a box score, an SVG spray chart, batting by character with pandas, and a
+  game summary graphic, all run by the tests.
+- `py.typed`, and type hints on the whole public API.
+
+### Changed
+
+- **The package is `projectrio` on PyPI and `pyrio` on import**, built with hatchling
+  from a `src/` layout. Python 3.11 or later.
+- **`import pyrio` needs only the standard library.** pandas, numpy, scipy, matplotlib
+  and requests were all required; now httpx, pandas and matplotlib are the `web`,
+  `pandas` and `plot` extras, and numpy and scipy aren't used.
+- **Ratings match the official ladder.** pyrio's Glicko-2 used tau 1.2 and RD 350;
+  it now uses Rio web's tau 0.5 and RD 300. pyrio follows Glickman's paper where Rio
+  web's volatility step has a slip (`mu**2` for `phi**2`), and keeps a bisection step
+  that always converges.
+- **Derived stats are unrounded floats, `nan` for a zero denominator.** Rounding is for
+  the formatters. `batting_avg(hit=3, at_bats=10)` used to return 0.0 by swallowing the
+  misspelt keyword.
+- **Errors**: bad data raises a `pyrio.RioError` subclass (`UnknownCodeError`,
+  `UnknownNameError`, `StatFileError`, the web `APIError`s); a bad argument raises a
+  plain `ValueError` or `TypeError`.
+
+### Fixed
+
+- Game ids from Rio 0.1.9 to 2.2.0 were parsed as hex, so every one was wrong.
+- Files from before 1.9.2 reported the wrong team for 0.1.7 and 0.1.7.a, which fell
+  through both hard-coded version lists.
+- `wasQuit()` was true for every game.
+- `pitchesPerPosition()` raised on every file since 1.9.2.
+- 1.9.2–1.9.4 files gave each team the other team's captain, and so the wrong team
+  name.
+- `examples/game_summary.py` silently skipped the stadium outline.
+- Building an `EventSearch` from an encoded file raised `KeyError: 2`.
+
+### Removed
+
+Everything from 0.1.0. Where it went:
+
+| 0.1.0 | 1.0.0 |
+|---|---|
+| `StatObj`, `EventObj`, `HudObj`, `RunnerObj`, `load_stat_file`, `iter_stat_files` | `pyrio.read_game`, `pyrio.read_hud`, and the model's fields |
+| `EventSearch` | a comprehension over `game.events` |
+| `rio_value` (`Tables`, `RioValue`, `lookup`, `create_translated_columns`), `CharNames.csv` | the enums, `Character.parse`, `pyrio.pandas.frame` |
+| `constants.character_data` (`AttributeSpec`, `character_attributes`) | `Character.attributes`, `CharacterAttributes` |
+| `RioWeb`, `api` (`ParameterList`s, `Endpoint`), `web_caching` | `pyrio.web.RioClient`, `DiskCache` |
+| `RioAPIError`, `RioAuthError`, `RioNotFoundError`, `UnknownRioValueError` | `pyrio.web.APIError` and subclasses, `pyrio.UnknownCodeError` |
+| `stat_formatters` (`batting_avg`, `era`, `derive_batting`, ...) | `BattingLine` / `PitchingLine` properties, `format_*` |
+| `glicko2.Player`, `glicko2_win_probability` | `pyrio.ratings` |
+| `team_name_algo` | `pyrio.team_name` |
+| `hit_simulation`, `hit_analysis` | `pyrio.sim` |
+| `live_ball`, `stadiums`, `helpers` | `pyrio.sim.play_out`, `pyrio.geometry` |
+| `draw.draw_stadium` | `pyrio.svg`, `pyrio.plot` |
+
+## [0.1.0]
+
+The first packaged release: stat-file parsing, the web client and the domain helpers
+in a flat layout.
+
+[1.0.0]: https://github.com/matt-gree/pyrio/compare/main...v1.0.0-prep

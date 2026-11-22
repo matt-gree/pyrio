@@ -1,6 +1,10 @@
 # Proposal: one version-aware decode layer
 
-**Status:** draft, for discussion
+**Status:** adopted, and implemented in pyrio 1.0 as `src/pyrio/_decode.py`
+(`read_game`, `read_hud`). Each rule there is a named `Version` constant tagged
+with its kind from this document, applied through one `_rules(version)` table.
+The tables below are the 2026-11-19 review; corrections found while building
+the decoder are marked **Corrected**.
 **Date:** 2026-11-19
 **Companion to:** [`schema-sync-proposal.md`](schema-sync-proposal.md)
 
@@ -202,8 +206,8 @@ The lists are wrong for the three reasons above instead.
 
 | # | Change | Range | Kind | pyrio today |
 |---|---|---|---|---|
-| A | No `"Character Game Stats"` object: rosters are `"Away/Home Team Roster"` arrays plus a `"Player Stats"` array with string `"Team"` labels | **0.1.0–0.1.5** | (c) | claims support via `"Pre 0.1.7"`; raises `KeyError` |
-| B | No `"Version"` key at all | **0.1.0–0.1.6** | (a) | defaults to `"Pre 0.1.7"` — correct |
+| A | No `"Character Game Stats"` object: rosters are `"Away/Home Team Roster"` arrays plus a `"Player Stats"` array with string `"Team"` labels | **0.1.0–0.1.5** | (c) | claims support via `"Pre 0.1.7"`; raises `KeyError`. **1.0:** refused with a `StatFileError` (see B) |
+| B | No `"Version"` key at all | **0.1.0–0.1.6** | (a) | defaults to `"Pre 0.1.7"` — correct. **1.0:** a file with no `"Version"` is refused with a `StatFileError` naming the cause; 0.1.7 is the first version read |
 | C | Top-level scores: quoted strings → bare numbers | at **0.1.6** | (b) | `safe_int` absorbs it |
 | D | `"Quitter Team"` is a bare bool with **no "nobody quit" value** — `(quitter_port == away_port)`, emitted `"0"`/`"1"`, then decoded `"Home"`/`"Away"` from 0.1.8 | **0.1.6–0.1.9** | (c) | **`wasQuit()` returns `True` for every game** |
 | E | Event `"Away Stars"` / `"Home Stars"` written from each other's source | **0.1.6** only | (b) | **not handled** |
@@ -219,7 +223,7 @@ The lists are wrong for the three reasons above instead.
 | 9 | `"Ranked"` removed | at **1.9.5** | (a) | n/a |
 | 10 | `"Pitch Result"`, `"Multi-out"`, pitch-level `"Ball/Batter Position - X/Z"`, `"Ball Angle"`, `"Ball Vertical/Horizontal Power"` all removed; `"Ball Power"`/`"Vert Angle"`/`"Horiz Angle"`, `"RNG1-3"`, contact positions, `"Ball Hang Time"`, `"Num Outs During Play"`, `"In Strikezone"` all added | at **1.9.2** | (a) | partial |
 | 11 | `"Bat Contact Pos - Y"` and `"Ball Contact Pos - Y"` removed | at **1.9.3** | (a) | n/a |
-| 12 | `"GameID"` is a quoted **decimal** string; 2.3.0 switches to lowercase **hex** via `gameIDToHex` | decimal **≤2.2.0**, hex **2.3.0+** | (b) | **`gameID()` always parses base 16** — wrong for every file that exists today |
+| 12 | `"GameID"` is a quoted **decimal** string; 2.3.0 switches to lowercase **hex** via `gameIDToHex` | **Corrected:** hex **≤0.1.8** (`std::hex`), decimal **0.1.9–2.2.0**, hex **2.3.0+** | (b) | **`gameID()` always parses base 16** — wrong for every file from 0.1.9 to 2.2.0 |
 | 13 | Stadium names renamed: `"Bowser's Castle"` → `"Bowser Castle"`, and the same for Wario, Yoshi (also → `"Yoshi Park"`), Peach and DK | at **2.1.0** | (b) | only the Bowser alias exists; the other four are unhandled |
 | 14 | `"Pitches Per Position"` gone, `"Batters Per Position"` in its place | at **1.9.2** | (a) | **prep reads the old key with no fallback → `KeyError` on every file since 1.9.2** |
 | 15 | `"Quitter Team"` sentinel `0xFF` → raw `255` / decoded `"None"`; `2` means `"Crash"` | **1.9.1+** | (b) | **prep's `!= ""` → `wasQuit()` is `True` for every game**; `"Crash"` unmapped |
@@ -258,7 +262,9 @@ gameID()       : 243037180519     # int(x, 16)
 correct        : 3896251267       # int(x)
 ```
 
-Wrong by a factor of ~62, silently, for every stat file that exists. Any join
+Wrong by a factor of ~62, silently, for every stat file from 0.1.9 to 2.2.0.
+(**Corrected:** 0.1.7 and 0.1.8 wrote the id in hex, so base 16 was right for
+those, and the 1.0 decoder parses hex there too.) Any join
 against server records keyed on GameID fails. It is also a textbook case for
 this proposal: 2.3.0 switches to hex, so base-16 becomes *correct* for files
 written from then on. The parse is version-dependent and currently isn't.
@@ -269,7 +275,7 @@ but prep has neither, so on prep `pitchesPerPosition()` raises on every file
 since 1.9.2 and `wasQuit()` is unconditionally `True`. That is an argument for
 landing the 2.3 work onto prep rather than main.
 
-**One retraction.** `safe_int`'s comma stripping has no target. Two independent
+**One retraction, itself retracted.** `safe_int`'s comma stripping has no target. Two independent
 sweeps of the tracker across all 25 releases found no `imbue`, no locale, and no
 grouped numeric output anywhere — every number goes through `std::to_string` or
 default stream formatting. The real type hazard is the opposite one: integers
@@ -277,6 +283,11 @@ emitted *inside quotes*, which is stable across every release and affects
 `GameID`, `Team`, `Event Num`, `Ball Power`, `Vert/Horiz Angle`, `RNG1-3` and
 `Ball Hang Time`. Comma stripping is harmless, but it is defending against
 something that has never been written.
+
+**Corrected:** it has been written. Real files in the fixture matrix carry
+comma-grouped integers (`"Ball Angle": "1,016"` in 1.9.x and 2.0.2 files), from
+the locale of whatever decoded them, if not from the tracker itself. The 1.0
+decoder strips commas from every quoted number, `GameID` included.
 
 One thing this review *retracted*: I suspected the hard-coded version lists were
 wrong because a `1.8.0` or `1.9.0` file would fall through them. No such release
@@ -294,3 +305,9 @@ version that was actually shipped. The lists are still the wrong *mechanism*
 3. Where does this live under the module map — `stat_file/` (it decodes) or
    alongside `rio_value.py` (it's schema knowledge)? The boundary in `CLAUDE.md`
    suggests the latter, since `stat_file/` is meant to parse, not interpret.
+
+**Resolved in 1.0:** an unparseable or pre-0.1.7 version is refused with a
+`StatFileError` rather than read as `UNKNOWN`; corrections always apply, since
+encoded ids are the source of truth and the raw file is there for anyone who
+wants it uncorrected; and the rules live in `_decode.py`, the one module that
+reads stat files, with `stat_file/` and `rio_value.py` deleted.
