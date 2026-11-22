@@ -1,496 +1,128 @@
-"""Validate the hit simulator against recorded stat-file contact events.
+"""Check the hit simulator against the contacts stat files recorded.
 
-Because a recorded event carries its own RNG seeds, the simulator should
-reproduce that event's contact-stage outputs *exactly* (angles, power, velocity)
-and its contact classification. This module compares simulated vs recorded
-values across one file, many files, or a directory, and reports per-field match
-rates plus example mismatches.
+A recorded contact carries its own RNG values, so re-simulating it with
+``HitInputs.from_event`` should give back exactly what the client wrote: the
+contact type, the launch angles, the power and the ball's velocity. This
+reports how often each one matches, over a file or a folder of files, with a
+few mismatches to look at.
 
-Primary (deterministic, exact/tol) fields -- these are the real validation:
-    contact_type, contact_absolute, contact_quality,
-    horizontal_angle, vertical_angle, power, velocity_x/y/z
+    python tools/hit_sim_validation.py STAT_FILE_OR_FOLDER [--examples N]
 
-Landing position is available via include_landing=True but is informational
-only: for a caught ball the stat file records the FIELDER's location, not where
-the ball would have hit the ground, so mismatches there are expected.
-
-Usage:
-    import hit_sim_validation as v  # from tools/
-    report = v.validate_file("decoded.json")
-    print(report.summary())
-
-    report = v.validate_directory(r"path/to/StatFiles")     # aggregates
-    # or programmatically inspect report.fields[...].mismatches
-
-CLI:
-    python tools/hit_sim_validation.py <file-or-directory> [--landing]
+The test suite holds the fixtures to this (``tests/sim/test_from_event.py``);
+this is for running it over a large collection.
 """
 
 from __future__ import annotations
 
-import json
+import argparse
+import math
+import pathlib
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from pyrio import hit_simulation as hs
-from pyrio.constants import game_constants
-from pyrio.stat_file_parser import EventObj, StatObj
+import pyrio
+from pyrio import Contact, StatFileError
+from pyrio.sim import simulate_contacts
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterable
+    from collections.abc import Callable
 
-# game Type of Swing codes that the simulator supports: 1 Slap, 2 Charge, 3 Star.
-_SUPPORTED_SWING_CODES = (1, 2, 3)
-
-
-def _ci(value) -> int:
-    """Parse a possibly comma-grouped integer string, e.g. '1,181' -> 1181."""
-    return int(str(value).replace(",", ""))
-
-
-# ---------------------------------------------------------------- field specs
+    from pyrio.sim import HitResult
 
 
 @dataclass(frozen=True)
-class _FieldSpec:
+class Check:
     name: str
-    recorded: Callable[[dict], Any]  # from the contact dict
-    computed: Callable[[hs.HitResult], Any]
-    tol: float | None = None  # None -> exact equality
-
-    def matches(self, contact: dict, result: hs.HitResult) -> tuple[bool, object, object]:
-        rec = self.recorded(contact)
-        com = self.computed(result)
-        ok = rec == com if self.tol is None else abs(float(rec) - float(com)) <= self.tol
-        return ok, rec, com
+    recorded: Callable[[Contact], Any]
+    simulated: Callable[[HitResult], Any]
+    tolerance: float | None = None
+    """None for exact equality."""
 
 
-def _contact_field_specs(vel_tol: float, float_tol: float) -> list[_FieldSpec]:
-    return [
-        _FieldSpec(
-            "contact_type",
-            lambda c: game_constants.to_encoded(
-                game_constants.TYPE_OF_CONTACT, c["Type of Contact"]
-            ),
-            lambda r: r.contact_type,
-        ),
-        _FieldSpec(
-            "contact_absolute",
-            lambda c: float(c["Contact Absolute"]),
-            lambda r: r.contact_absolute,
-            tol=float_tol,
-        ),
-        _FieldSpec(
-            "contact_quality",
-            lambda c: float(c["Contact Quality"]),
-            lambda r: r.contact_quality,
-            tol=float_tol,
-        ),
-        _FieldSpec(
-            "horizontal_angle", lambda c: _ci(c["Horiz Angle"]), lambda r: r.horizontal_angle
-        ),
-        _FieldSpec("vertical_angle", lambda c: _ci(c["Vert Angle"]), lambda r: r.vertical_angle),
-        _FieldSpec("power", lambda c: _ci(c["Ball Power"]), lambda r: r.power),
-        _FieldSpec(
-            "velocity_x", lambda c: c["Ball Velocity - X"], lambda r: r.velocity[0], tol=vel_tol
-        ),
-        _FieldSpec(
-            "velocity_y", lambda c: c["Ball Velocity - Y"], lambda r: r.velocity[1], tol=vel_tol
-        ),
-        _FieldSpec(
-            "velocity_z", lambda c: c["Ball Velocity - Z"], lambda r: r.velocity[2], tol=vel_tol
-        ),
-    ]
-
-
-def _landing_field_specs(landing_tol: float) -> list[_FieldSpec]:
-    return [
-        _FieldSpec(
-            "landing_x",
-            lambda c: c["Ball Landing Position - X"],
-            lambda r: r.landing[0],
-            tol=landing_tol,
-        ),
-        _FieldSpec(
-            "landing_z",
-            lambda c: c["Ball Landing Position - Z"],
-            lambda r: r.landing[2],
-            tol=landing_tol,
-        ),
-    ]
-
-
-# ---------------------------------------------------------------- report types
+CHECKS = (
+    Check("contact_type", lambda c: c.type, lambda r: r.contact_type),
+    Check("contact_absolute", lambda c: c.absolute, lambda r: r.contact_absolute, 1e-3),
+    Check("contact_quality", lambda c: c.quality, lambda r: r.contact_quality, 1e-3),
+    Check("horizontal_angle", lambda c: c.horizontal_angle, lambda r: r.horizontal_angle_raw),
+    Check("vertical_angle", lambda c: c.vertical_angle, lambda r: r.vertical_angle_raw),
+    Check("power", lambda c: c.power, lambda r: r.power),
+    *(
+        Check(
+            f"velocity_{axis}",
+            lambda c, i=i: c.velocity[i],
+            lambda r, i=i: r.velocity_per_frame[i],
+            1e-3,
+        )
+        for i, axis in enumerate("xyz")
+    ),
+)
 
 
 @dataclass
-class FieldStat:
-    name: str
-    matches: int = 0
-    total: int = 0
-    expected: int = 0  # known-mod exceptions (see KNOWN_MOD_EXCEPTIONS)
-    mismatches: list = field(default_factory=list)  # (game_id, event_num, recorded, computed)
-    expected_examples: list = field(default_factory=list)  # (game_id, event_num, exception_name)
-
-    @property
-    def rate(self) -> float:
-        # Expected exceptions count as accounted-for, not failures.
-        return (self.matches + self.expected) / self.total if self.total else 1.0
-
-    @property
-    def failures(self) -> int:
-        return self.total - self.matches - self.expected
+class Tally:
+    checked: int = 0
+    matched: int = 0
+    mismatches: list[str] = field(default_factory=list[str])
 
 
-@dataclass
-class ValidationReport:
-    fields: dict = field(default_factory=dict)  # name -> FieldStat
-    total_events: int = 0
-    contact_events: int = 0
-    simulated: int = 0
-    skipped: list = field(default_factory=list)  # (game_id, event_num, reason)
-    errors: list = field(default_factory=list)  # (game_id, event_num, message)
-    files: int = 0
-
-    def _stat(self, name: str) -> FieldStat:
-        return self.fields.setdefault(name, FieldStat(name))
-
-    def merge(self, other: ValidationReport) -> ValidationReport:
-        self.total_events += other.total_events
-        self.contact_events += other.contact_events
-        self.simulated += other.simulated
-        self.skipped += other.skipped
-        self.errors += other.errors
-        self.files += other.files
-        for name, st in other.fields.items():
-            mine = self._stat(name)
-            mine.matches += st.matches
-            mine.total += st.total
-            mine.expected += st.expected
-            mine.mismatches += st.mismatches
-            mine.expected_examples += st.expected_examples
-        return self
-
-    def all_fields_perfect(self) -> bool:
-        return all(st.failures == 0 for st in self.fields.values())
-
-    def contact_fields_perfect(self) -> bool:
-        """True if the deterministic contact-stage fields all match.
-
-        Known-mod exceptions (e.g. Remove slice) are counted as expected, not
-        failures. Excludes the informational 'landing_*' fields, which are
-        expected to diverge (the JS trajectory model was never verified).
-        """
-        return all(
-            st.failures == 0 for name, st in self.fields.items() if not name.startswith("landing_")
-        )
-
-    def summary(self, max_mismatches: int = 8) -> str:
-        lines = []
-        lines.append(
-            f"Files: {self.files} | events: {self.total_events} | "
-            f"with contact: {self.contact_events} | simulated: {self.simulated} | "
-            f"skipped: {len(self.skipped)} | errors: {len(self.errors)}"
-        )
-        lines.append("")
-        lines.append(f"{'field':18} {'match':>12} {'exp':>5} {'fail':>5}   rate")
-        lines.append("-" * 56)
-        for name, st in self.fields.items():
-            lines.append(
-                f"{name:18} {st.matches:>6}/{st.total:<5} {st.expected:>5} "
-                f"{st.failures:>5} {st.rate * 100:6.2f}%"
-            )
-
-        # group skip reasons
-        if self.skipped:
-            reasons: dict[str, int] = {}
-            for _, _, reason in self.skipped:
-                key = reason.split(":")[0] if ":" in reason else reason
-                reasons[key] = reasons.get(key, 0) + 1
-            lines.append("")
-            lines.append("Skipped reasons:")
-            for reason, n in sorted(reasons.items(), key=lambda kv: -kv[1]):
-                lines.append(f"  {n:>4}  {reason}")
-
-        # known-mod exceptions, grouped by exception name
-        exc_counts: dict[str, int] = {}
-        for st in self.fields.values():
-            for _, _, exc_name in st.expected_examples:
-                exc_counts[exc_name] = exc_counts.get(exc_name, 0) + 1
-        if exc_counts:
-            lines.append("")
-            lines.append("Expected (known mod exceptions):")
-            for exc_name, n in sorted(exc_counts.items(), key=lambda kv: -kv[1]):
-                lines.append(f"  {n:>4}  {exc_name}")
-
-        # mismatch examples per field
-        flagged = [st for st in self.fields.values() if st.mismatches]
-        if flagged:
-            lines.append("")
-            lines.append("Example mismatches:")
-            for st in flagged:
-                lines.append(f"  [{st.name}] {len(st.mismatches)} total")
-                for gid, ev, rec, com in st.mismatches[:max_mismatches]:
-                    lines.append(f"      game {gid} ev{ev}: recorded={rec} computed={com}")
-
-        if self.errors:
-            lines.append("")
-            lines.append("Errors:")
-            for gid, ev, msg in self.errors[:max_mismatches]:
-                lines.append(f"  game {gid} ev{ev}: {msg}")
-
-        return "\n".join(lines)
+def agrees(check: Check, recorded: Any, simulated: Any) -> bool:
+    if recorded is None:
+        return True  # an older client didn't write it
+    if check.tolerance is None:
+        return recorded == simulated
+    return math.isclose(recorded, simulated, abs_tol=check.tolerance)
 
 
-# ---------------------------------------------------------------- core driver
-
-
-def _ball_reached_ground(contact: dict) -> bool:
-    """True if the recorded landing is a real ground contact (not a fielder).
-
-    For a ball caught in the air the stat file stores the fielder's location in
-    'Ball Landing Position', so those events must be excluded from any landing
-    comparison.
-    """
-    sec = contact.get("Contact Result - Secondary")
-    if sec is None:
-        return True
-    return (
-        game_constants.to_encoded(game_constants.SECONDARY_CONTACT_RESULT, sec) != 0
-    )  # 0 = Out-caught
-
-
-# ---------------------------------------------------------------- known mod exceptions
-# Some matches run gecko-code mods that change in-game behavior the vanilla
-# simulator doesn't model, so the recording legitimately diverges from the sim.
-# Each exception is gated on the mod's tag (the `name` from the ProjectRio
-# /tag/list) being active for the match, only excuses its listed fields, and
-# only for events its predicate identifies. See rio_tags.active_tags_for_stat.
-
-
-@dataclass(frozen=True)
-class KnownModException:
-    name: str  # label for the report
-    tag: str  # gecko tag name that must be active
-    fields: frozenset  # field names this exception may excuse
-    predicate: Callable  # (event, contact, result) -> bool
-
-
-def _is_slice_event(event, contact, result) -> bool:
-    """A non-line-drive star swing hit on frame 2 or 10 (the "slice").
-
-    Vanilla sends these straight up the middle (raw horizontal angle 0x400);
-    the "Remove slice" mod replaces them with foul balls, so the recorded
-    horizontal trajectory diverges from the sim.
-    """
-    swing = event.pitch_dict().get("Type of Swing")
-    if (
-        swing is None or game_constants.to_encoded(game_constants.TYPE_OF_SWING, swing) != 3
-    ):  # 3 = Star
-        return False
-    try:
-        frame = _ci(contact.get("Frame of Swing Upon Contact"))
-    except (TypeError, ValueError):
-        return False
-    if frame not in (2, 10):
-        return False
-    # Line-drive star swings (non-captain star type 3) don't slice.
-    batter = hs.BatterAttributes.from_name(event.batter().name)
-    is_line_drive_star = batter.captain_star_hit_pitch == 0 and batter.non_captain_star_swing == 3
-    return not is_line_drive_star
-
-
-# All deterministic contact-stage field names (the toad bat-reach fix shifts the
-# whole contact, so it can affect any of them).
-_CONTACT_FIELD_NAMES = frozenset(s.name for s in _contact_field_specs(0.0, 0.0))
-
-# Non-red Toad color variants; the "Fix Non-red Toad Hitboxes and Bat Reach" mod
-# gives these Red Toad's bat reach, changing where/whether contact lands.
-_NON_RED_TOADS = frozenset({"Toad(B)", "Toad(Y)", "Toad(G)", "Toad(P)"})
-
-
-def _is_non_red_toad_batter(event, contact, result) -> bool:
-    # from_name normalizes either a name or an encoded char id to the canonical name.
-    return hs.BatterAttributes.from_name(event.batter().name).name in _NON_RED_TOADS
-
-
-KNOWN_MOD_EXCEPTIONS = [
-    KnownModException(
-        name="Slice (up-the-middle star swing)",
-        tag="Remove slice",
-        fields=frozenset({"horizontal_angle", "velocity_x", "velocity_z"}),
-        predicate=_is_slice_event,
-    ),
-    KnownModException(
-        name="Non-red toad bat reach",
-        tag="Fix Non-red Toad Hitboxes and Bat Reach",
-        fields=_CONTACT_FIELD_NAMES,
-        predicate=_is_non_red_toad_batter,
-    ),
-]
-
-
-def _excused(field_name, event, contact, result, active_tags):
-    """Return the KnownModException excusing this field mismatch, or None."""
-    for exc in KNOWN_MOD_EXCEPTIONS:
-        if (
-            exc.tag in active_tags
-            and field_name in exc.fields
-            and exc.predicate(event, contact, result)
-        ):
-            return exc
-    return None
-
-
-def validate_statobj(
-    stat: StatObj,
-    *,
-    include_landing: bool = False,
-    landing_exclude_caught: bool = True,
-    vel_tol: float = 1e-4,
-    float_tol: float = 1e-3,
-    landing_tol: float = 1.0,
-    active_tags=None,
-    report: ValidationReport | None = None,
-) -> ValidationReport:
-    """Compare every contact event in one game against the simulator.
-
-    ``active_tags`` is the set of gecko-mod tag names active for this match.
-    Mismatches attributable to an active mod (KNOWN_MOD_EXCEPTIONS) are counted
-    as expected rather than failures. Defaults to none; pass the match's tags
-    (e.g. ``RioWeb.game_mode_tags(stat.game_mode())``) to enable mod excusing.
-    """
-    report = report or ValidationReport()
-    report.files += 1
-    try:
-        game_id = stat.gameID()
-    except Exception:
-        game_id = "?"
-
-    if active_tags is None:
-        active_tags = frozenset()  # no auto tag resolution; keep offline-friendly
-
-    specs = _contact_field_specs(vel_tol, float_tol)
-    if include_landing:
-        specs = specs + _landing_field_specs(landing_tol)
-
-    for i, _ev in enumerate(stat.events()):
-        report.total_events += 1
-        event = EventObj(stat, i)
-        contact = event.contact_dict()
-        if not contact:
-            continue
-        report.contact_events += 1
-
-        swing = event.pitch_dict().get("Type of Swing")
-        swing_code = (
-            game_constants.to_encoded(game_constants.TYPE_OF_SWING, swing)
-            if swing is not None
-            else None
-        )
-        if swing_code not in _SUPPORTED_SWING_CODES:
-            report.skipped.append((game_id, i, f"unsupported swing: {swing!r}"))
-            continue
-
+def validate(paths: list[pathlib.Path]) -> tuple[dict[str, Tally], int, list[str]]:
+    tallies = {check.name: Tally() for check in CHECKS}
+    contacts = 0
+    skipped: list[str] = []
+    for path in paths:
         try:
-            result = hs.simulate_hit_from_event(event, active_tags)
-        except ValueError as ex:
-            report.skipped.append((game_id, i, f"value error: {ex}"))
+            game = pyrio.read_game(path)
+        except StatFileError as e:
+            skipped.append(f"{path.name}: {e}")
             continue
-        except Exception as ex:
-            report.errors.append((game_id, i, f"{type(ex).__name__}: {ex}"))
-            continue
-
-        report.simulated += 1
-        skip_landing = landing_exclude_caught and not _ball_reached_ground(contact)
-        for spec in specs:
-            if skip_landing and spec.name.startswith("landing_"):
-                continue
-            try:
-                ok, rec, com = spec.matches(contact, result)
-            except (KeyError, TypeError, ValueError):
-                continue  # field absent for this event (e.g. some fouls)
-            st = report._stat(spec.name)
-            st.total += 1
-            if ok:
-                st.matches += 1
-                continue
-            exc = _excused(spec.name, event, contact, result, active_tags)
-            if exc:
-                st.expected += 1
-                st.expected_examples.append((game_id, i, exc.name))
-            else:
-                st.mismatches.append((game_id, i, rec, com))
-
-    return report
+        events = {e.number: e for e in game.events}
+        for record in simulate_contacts(game):
+            contact = events[record.event_number].contact
+            assert contact is not None
+            contacts += 1
+            for check in CHECKS:
+                recorded = check.recorded(contact)
+                simulated = check.simulated(record.simulation)
+                tally = tallies[check.name]
+                tally.checked += 1
+                if agrees(check, recorded, simulated):
+                    tally.matched += 1
+                else:
+                    tally.mismatches.append(
+                        f"{path.name} event {record.event_number}: "
+                        f"recorded {recorded}, simulated {simulated}"
+                    )
+    return tallies, contacts, skipped
 
 
-def validate_file(path, **opts) -> ValidationReport:
-    """Validate a single decoded stat-file path."""
-    with Path(path).open() as f:
-        stat = StatObj(json.load(f))
-    return validate_statobj(stat, **opts)
-
-
-def _iter_decoded_files(directory) -> Iterable[Path]:
-    for p in sorted(Path(directory).iterdir()):
-        if p.is_file() and "decoded" in p.name and p.suffix == ".json":
-            yield p
-
-
-def validate_directory(directory, **opts) -> ValidationReport:
-    """Validate every decoded stat file in a directory (aggregated report)."""
-    report = ValidationReport()
-    for path in _iter_decoded_files(directory):
-        try:
-            with path.open() as f:
-                stat = StatObj(json.load(f))
-        except (json.JSONDecodeError, OSError) as ex:
-            report.errors.append((str(path), -1, f"load failed: {ex}"))
-            continue
-        validate_statobj(stat, report=report, **opts)
-    return report
-
-
-def validate(path, **opts) -> ValidationReport:
-    """Validate a file or directory (dispatches on path type)."""
-    return validate_directory(path, **opts) if Path(path).is_dir() else validate_file(path, **opts)
-
-
-def main(argv=None):
-    import argparse
-
-    parser = argparse.ArgumentParser(description="Validate the hit simulator against stat files")
-    parser.add_argument("path", help="decoded stat file or a directory of them")
-    parser.add_argument(
-        "--landing",
-        action="store_true",
-        help="also compare landing position (informational; the JS "
-        "trajectory model is unverified, so misses are expected)",
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    parser.add_argument(
-        "--include-caught-landing",
-        action="store_true",
-        help="include caught balls in the landing comparison "
-        "(their recorded landing is the fielder's position)",
-    )
-    parser.add_argument(
-        "--no-tags",
-        action="store_true",
-        help="don't resolve match tags from the ProjectRio API; "
-        "known-mod exceptions (e.g. Remove slice) won't be excused",
-    )
+    parser.add_argument("path", type=pathlib.Path, help="a stat file or a folder of them")
+    parser.add_argument("--examples", type=int, default=3, help="mismatches to show per field")
     args = parser.parse_args(argv)
-    report = validate(
-        args.path,
-        include_landing=args.landing,
-        landing_exclude_caught=not args.include_caught_landing,
-        active_tags=frozenset() if args.no_tags else None,
-    )
-    print(report.summary())
-    # Exit status reflects the deterministic fields only; landing is informational.
-    return 0 if report.contact_fields_perfect() and not report.errors else 1
+
+    root: pathlib.Path = args.path
+    paths = sorted(root.rglob("*.json")) if root.is_dir() else [root]
+    tallies, contacts, skipped = validate(paths)
+    print(f"{len(paths)} files, {contacts} simulated contacts, {len(skipped)} files skipped")
+    for name, tally in tallies.items():
+        rate = tally.matched / tally.checked if tally.checked else math.nan
+        print(f"  {name:18} {tally.matched:>6}/{tally.checked:<6} {rate:7.2%}")
+        for line in tally.mismatches[: args.examples]:
+            print(f"      {line}")
+    for line in skipped:
+        print(f"  skipped {line}")
+    return 0
 
 
 if __name__ == "__main__":

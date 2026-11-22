@@ -17,7 +17,6 @@ from ._characters import (
     StarSwing,
     VerticalHitTrajectory,
 )
-from ._stats import BattingLine, PitchingLine, format_batting_line, format_pitching_line
 from ._codes import (
     AtBatResult,
     Bases,
@@ -61,16 +60,17 @@ from ._game import (
     Version,
 )
 from ._serialize import to_jsonable
+from ._stats import BattingLine, PitchingLine, format_batting_line, format_pitching_line
 from ._team_names import CAPTAIN_TEAMS, CaptainTeams, SignatureTeam, TeamName, team_name
 
 __version__ = _version("projectrio")
 
 __all__ = [
+    "CAPTAIN_TEAMS",
     "Ability",
     "AtBatResult",
     "Bases",
     "BattingLine",
-    "CAPTAIN_TEAMS",
     "CaptainStar",
     "CaptainTeams",
     "Character",
@@ -129,71 +129,3 @@ __all__ = [
     "team_name",
     "to_jsonable",
 ]
-
-# --- Pre-1.0 -----------------------------------------------------------------
-# Not in __all__. The 1.0 rebuild replaces these step by step and deletes them
-# in step 7 (docs/v1.0.0-audit.md, section 9). Their coded values are the old
-# pyrio.rio_value classes, imported from there, not the enums above.
-
-# Stat file parsing
-from .stat_file_parser import (
-    StatObj,
-    EventSearch,
-    EventObj,
-    HudObj,
-    RunnerObj,
-    load_stat_file,
-    iter_stat_files,
-)
-
-# API parameter lists and endpoint constants
-from .api import (
-    Endpoint,
-    ParameterList,
-    GamesParameterList,
-    EventsParameterList,
-    LandingDataParameterList,
-    StarChancesParameterList,
-    StatsParameterList,
-    LandingData,
-)
-
-# Web API client
-from .rio_web import RioWeb
-
-# Custom exceptions
-from .exceptions import (
-    RioAPIError,
-    RioAuthError,
-    RioNotFoundError,
-    UnknownRioValueError,
-)
-
-# Stat formatters and derived stat calculators
-from .stat_formatters import (
-    batting_avg,
-    slugging_pct,
-    on_base_pct,
-    ops,
-    so_pct,
-    derive_batting,
-    era,
-    innings_pitched,
-    k_pct,
-    opp_avg,
-    derive_pitching,
-)
-
-# Glicko-2 rating
-from .glicko2 import Player as GlickoPlayer
-from .glicko_calculator import glicko2_win_probability
-
-# Hit simulator (deterministic port of the MSSB batting calculator)
-from .hit_simulation import (
-    simulate_hit,
-    simulate_hit_from_event,
-    hit_inputs_from_event,
-    HitInputs,
-    HitResult,
-)
-from . import hit_analysis, stadiums

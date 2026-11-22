@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import random
-
 import pytest
 
 from pyrio import Stadium
@@ -36,16 +34,3 @@ def test_boundary_crossing():
     assert out is not None
     assert 90.0 < out[2] < 130.0
     assert boundary_crossing(Stadium.MARIO_STADIUM, [(0.0, 1.0, 10.0), (0.0, 1.0, 20.0)]) is None
-
-
-def test_boundary_crossing_matches_the_old_module():
-    # Transitional, until step 7 deletes pyrio.stadiums.
-    from pyrio import stadiums
-
-    rng = random.Random(9)
-    for _ in range(300):
-        stadium = rng.choice(list(Stadium))
-        path = [(rng.uniform(-90, 90), rng.uniform(0, 30), rng.uniform(-10, 140)) for _ in range(5)]
-        assert boundary_crossing(stadium, path) == stadiums.boundary_intersection(
-            path, stadium.label
-        )

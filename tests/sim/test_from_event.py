@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pathlib
-from typing import Any
 
 import pytest
 
@@ -62,18 +61,6 @@ def test_encoded_and_decoded_files_give_the_same_inputs():
     encoded = [i for _, i in simulatable(pyrio.read_game(GAME_FILE))]
     decoded = [i for _, i in simulatable(pyrio.read_game(DECODED_FILE))]
     assert encoded == decoded
-
-
-def test_matches_the_pre_1_0_bridge(recorded_legacy_inputs: list[Any]):
-    """Transitional: the old stat-file bridge and from_event drive identical hits."""
-    from pyrio import hit_simulation as legacy
-
-    from .test_hit_parity import assert_same
-
-    new = [i for _, i in simulatable(pyrio.read_game(DECODED_FILE))]
-    assert len(new) == len(recorded_legacy_inputs)
-    for inputs, old in zip(new, recorded_legacy_inputs, strict=True):
-        assert_same(simulate_hit(inputs), legacy.simulate_hit(old))
 
 
 def test_a_five_star_swing_is_rebuilt_fully_charged():

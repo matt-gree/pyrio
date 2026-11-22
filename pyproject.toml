@@ -23,11 +23,8 @@ classifiers = [
     "Topic :: Games/Entertainment",
     "Typing :: Typed",
 ]
-dependencies = [
-    # Transitional: `import pyrio` loads rio_web, which needs requests. Step 7 of
-    # docs/v1.0.0-audit.md deletes rio_web, and this list becomes empty.
-    "requests>=2.29",
-]
+# The core needs only the standard library; each job's dependency is an extra.
+dependencies = []
 
 [project.optional-dependencies]
 web = ["httpx>=0.27"]
@@ -52,15 +49,11 @@ dev = [
     "import-linter>=2.1",
     "build>=1.2",
     "twine>=6",
-    { include-group = "legacy" },
-]
-# Transitional: what the pre-1.0 modules and their tests import. Step 7 deletes
-# those modules and this group with them.
-legacy = [
-    "matplotlib>=3.7",
-    "numpy>=2.0",
+    # What the extras' tests and type checks need.
+    "httpx>=0.27",
     "pandas>=2.0",
-    "scipy>=1.13",
+    "pandas-stubs>=2.2",
+    "matplotlib>=3.7",
 ]
 
 [tool.hatch.build.targets.sdist]
@@ -92,42 +85,6 @@ exclude_also = ["if TYPE_CHECKING:", "@overload", "raise NotImplementedError"]
 [tool.ruff]
 line-length = 100
 src = ["src", "tests"]
-# Pre-1.0 code that the 1.0 rebuild ports or deletes (docs/v1.0.0-audit.md,
-# section 9). A file leaves this list when a step rewrites it; never add one.
-# Keep in step with [tool.pyright] exclude.
-extend-exclude = [
-    "src/pyrio/__init__.py",
-    "src/pyrio/api.py",
-    "src/pyrio/constants",
-    "src/pyrio/draw",
-    "src/pyrio/exceptions.py",
-    "src/pyrio/glicko2.py",
-    "src/pyrio/glicko_calculator.py",
-    "src/pyrio/helpers.py",
-    "src/pyrio/hit_analysis.py",
-    "src/pyrio/hit_simulation.py",
-    "src/pyrio/live_ball.py",
-    "src/pyrio/rio_value.py",
-    "src/pyrio/rio_web.py",
-    "src/pyrio/stadiums.py",
-    "src/pyrio/stat_file",
-    "src/pyrio/stat_file_parser.py",
-    "src/pyrio/stat_formatters.py",
-    "src/pyrio/team_name_algo.py",
-    "src/pyrio/web_caching.py",
-    "tests/test_character_data.py",
-    "tests/test_draw_stadium.py",
-    "tests/test_event_search.py",
-    "tests/test_hit_simulation.py",
-    "tests/test_hud.py",
-    "tests/test_live_ball.py",
-    "tests/test_lookup_values.py",
-    "tests/test_stadiums.py",
-    "tests/test_stat_parser.py",
-    "tests/test_team_name.py",
-    "tools/compare_stadium_walls.py",
-    "tools/derive_stadium_walls.py",
-]
 
 [tool.ruff.format]
 # The Markdown is prose; its code blocks sketch APIs, so ruff leaves them alone.
@@ -161,41 +118,7 @@ known-first-party = ["pyrio"]
 
 [tool.pyright]
 include = ["src", "tests", "tools", "examples"]
-# The pre-1.0 code (see [tool.ruff] extend-exclude, which this list mirrors).
-exclude = [
-    "**/__pycache__",
-    "src/pyrio/__init__.py",
-    "src/pyrio/api.py",
-    "src/pyrio/constants",
-    "src/pyrio/draw",
-    "src/pyrio/exceptions.py",
-    "src/pyrio/glicko2.py",
-    "src/pyrio/glicko_calculator.py",
-    "src/pyrio/helpers.py",
-    "src/pyrio/hit_analysis.py",
-    "src/pyrio/hit_simulation.py",
-    "src/pyrio/live_ball.py",
-    "src/pyrio/rio_value.py",
-    "src/pyrio/rio_web.py",
-    "src/pyrio/stadiums.py",
-    "src/pyrio/stat_file",
-    "src/pyrio/stat_file_parser.py",
-    "src/pyrio/stat_formatters.py",
-    "src/pyrio/team_name_algo.py",
-    "src/pyrio/web_caching.py",
-    "tests/test_character_data.py",
-    "tests/test_draw_stadium.py",
-    "tests/test_event_search.py",
-    "tests/test_hit_simulation.py",
-    "tests/test_hud.py",
-    "tests/test_live_ball.py",
-    "tests/test_lookup_values.py",
-    "tests/test_stadiums.py",
-    "tests/test_stat_parser.py",
-    "tests/test_team_name.py",
-    "tools/compare_stadium_walls.py",
-    "tools/derive_stadium_walls.py",
-]
+exclude = ["**/__pycache__"]
 pythonVersion = "3.11"
 typeCheckingMode = "standard"
 strict = ["src"]
@@ -204,10 +127,7 @@ venvPath = "."
 venv = ".venv"
 
 # --- import-linter -----------------------------------------------------------
-# The layering from docs/v1.0.0-audit.md, section 7. A layer in parentheses is
-# optional, so a contract can name a module before the step that writes it.
-# Contracts that need a module to exist (forbidden, independence) arrive with
-# the step that writes the module: pyrio.web's isolation comes in step 5.
+# The layering from docs/v1.0.0-audit.md, section 7.
 
 [tool.importlinter]
 root_package = "pyrio"
@@ -217,29 +137,27 @@ include_external_packages = true
 name = "Core layers"
 type = "layers"
 layers = [
-    "(pyrio._decode) | (pyrio._serialize)",
-    "(pyrio._game)",
-    "(pyrio._stats) | (pyrio._team_names)",
-    "(pyrio._codes) : (pyrio._characters) : (pyrio._names)",
-    "(pyrio._enum)",
-    "(pyrio._errors)",
+    "pyrio._decode | pyrio._serialize",
+    "pyrio._game",
+    "pyrio._stats | pyrio._team_names",
+    "pyrio._codes : pyrio._characters : pyrio._names",
+    "pyrio._enum",
+    "pyrio._errors",
 ]
 
 [[tool.importlinter.contracts]]
 name = "Public submodules sit above the core, and the core imports none of them"
 type = "layers"
 layers = [
-    "(pyrio.web) | (pyrio.plot) | (pyrio.pandas) | (pyrio.ratings)",
-    "(pyrio.svg) | (pyrio.sim)",
-    "(pyrio.geometry)",
-    "(pyrio._errors) : (pyrio._enum) : (pyrio._codes) : (pyrio._characters) : (pyrio._names) : (pyrio._stats) : (pyrio._team_names) : (pyrio._game) : (pyrio._decode) : (pyrio._serialize)",
+    "pyrio.web | pyrio.plot | pyrio.pandas | pyrio.ratings",
+    "pyrio.svg | pyrio.sim",
+    "pyrio.geometry",
+    "pyrio._errors : pyrio._enum : pyrio._codes : pyrio._characters : pyrio._names : pyrio._stats : pyrio._team_names : pyrio._game : pyrio._decode : pyrio._serialize",
 ]
 
 [[tool.importlinter.contracts]]
-name = "The core needs only the standard library, and none of the pre-1.0 modules"
+name = "The core, geometry, sim, svg and ratings need only the standard library"
 type = "forbidden"
-# A forbidden contract needs its modules to exist, so each step adds the core
-# modules it writes here.
 source_modules = [
     "pyrio.__main__",
     "pyrio._characters",
@@ -252,23 +170,12 @@ source_modules = [
     "pyrio._serialize",
     "pyrio._stats",
     "pyrio._team_names",
+    "pyrio.geometry",
+    "pyrio.ratings",
+    "pyrio.sim",
+    "pyrio.svg",
 ]
-forbidden_modules = [
-    "httpx",
-    "matplotlib",
-    "numpy",
-    "pandas",
-    "requests",
-    "scipy",
-    "pyrio.api",
-    "pyrio.constants",
-    "pyrio.exceptions",
-    "pyrio.rio_value",
-    "pyrio.rio_web",
-    "pyrio.stat_file",
-    "pyrio.stat_file_parser",
-    "pyrio.team_name_algo",
-]
+forbidden_modules = ["httpx", "matplotlib", "pandas"]
 
 [[tool.importlinter.contracts]]
 name = "pyrio.web is a leaf: nothing outside it imports it"
@@ -283,27 +190,13 @@ protected_modules = ["httpx"]
 allowed_importers = ["pyrio.web"]
 
 [[tool.importlinter.contracts]]
-name = "Geometry, sim and svg need only the standard library and the core"
-type = "forbidden"
-source_modules = ["pyrio.geometry", "pyrio.sim", "pyrio.svg"]
-forbidden_modules = [
-    "httpx",
-    "matplotlib",
-    "numpy",
-    "pandas",
-    "requests",
-    "scipy",
-    "pyrio.api",
-    "pyrio.constants",
-    "pyrio.exceptions",
-    "pyrio.helpers",
-    "pyrio.hit_analysis",
-    "pyrio.hit_simulation",
-    "pyrio.live_ball",
-    "pyrio.rio_value",
-    "pyrio.rio_web",
-    "pyrio.stadiums",
-    "pyrio.stat_file",
-    "pyrio.stat_file_parser",
-    "pyrio.team_name_algo",
-]
+name = "Only pyrio.pandas imports pandas"
+type = "protected"
+protected_modules = ["pandas"]
+allowed_importers = ["pyrio.pandas"]
+
+[[tool.importlinter.contracts]]
+name = "Only pyrio.plot imports matplotlib"
+type = "protected"
+protected_modules = ["matplotlib"]
+allowed_importers = ["pyrio.plot"]

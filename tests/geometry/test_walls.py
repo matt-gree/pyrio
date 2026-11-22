@@ -64,33 +64,3 @@ def test_wall_crossing_interpolates_the_wall_plane():
     assert point[1] == pytest.approx(10.0 - 2.0 * (100.0445 - 90.0) / 20.0)
     assert wall_crossing(Stadium.MARIO_STADIUM, [(0.0, 1.0, 10.0), (0.0, 1.0, 20.0)]) is None
     assert wall_crossing(Stadium.MARIO_STADIUM, []) is None
-
-
-# --- transitional: pinned to the pre-1.0 module until step 7 deletes it ----------
-
-
-def test_the_table_is_the_old_modules():
-    from pyrio.stadiums import STADIUM_WALLS
-
-    for stadium in Stadium:
-        old = STADIUM_WALLS[stadium.label]
-        segments = walls(stadium)
-        assert [s.start_x for s in segments] == old["starting_x"]
-        assert [s.end_x for s in segments] == old["ending_x"]
-        assert [s.height for s in segments] == old["wall_height"]
-        assert [s.slope for s in segments] == old["m"]
-        assert [s.intercept for s in segments] == old["c"]
-
-
-def test_answers_match_the_old_module():
-    import random
-
-    from pyrio import stadiums
-
-    rng = random.Random(3)
-    for _ in range(300):
-        stadium = rng.choice(list(Stadium))
-        path = [(rng.uniform(-70, 70), rng.uniform(0, 30), rng.uniform(60, 130)) for _ in range(6)]
-        path.sort(key=lambda p: p[2])
-        assert clears_wall(stadium, path) == stadiums.is_home_run(path, stadium.label)
-        assert wall_crossing(stadium, path) == stadiums.wall_collision_point(path, stadium.label)

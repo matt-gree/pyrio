@@ -262,38 +262,3 @@ def test_captains_are_the_logo_captains():
     captains = {c for c in Character if c.is_captain}
     assert captains == {team.captain for team in TeamName}
     assert len(captains) == 12
-
-
-def test_attributes_match_the_pre_1_0_loader():
-    """Transitional: the new records against constants/character_data, until step 7 deletes it."""
-    from pyrio.constants.character_data import character_attributes
-
-    for character in Character:
-        for new, old in (
-            (character.attributes, character_attributes(character.id)),
-            (
-                character.attributes.with_superstar(),
-                character_attributes(character.id).with_superstar(),
-            ),
-        ):
-            assert new.char_class.label == old.char_class
-            assert new.is_captain == old.is_captain
-            assert {a.label for a in new.abilities} == old.abilities
-            assert new.fielding_arm.label == old.fielding_arm
-            assert new.batting_stance.label == old.batting_stance
-            assert new.horizontal_hit_trajectory.label == old.horizontal_hit_trajectory
-            assert new.vertical_hit_trajectory.label == old.vertical_hit_trajectory
-            assert (new.captain_star.label if new.captain_star else "") == old.captain_star_pitch
-            assert new.star_pitch.label == old.non_captain_star_pitch
-            assert new.star_swing.label == old.non_captain_star_hit
-            assert new.has_super_curve == old.super_curve
-            assert new.has_trimmed_bat == bool(old.trimmed_bat)
-            assert new.has_wall_splat == old.wall_splat
-            assert new.select_screen_order == old.css_sort
-            for name in (
-                "weight", "curve_ball_speed", "fast_ball_speed", "curve", "cursed_ball",
-                "curve_control", "pitching_height", "throwing_power", "speed", "slap_hit_power",
-                "charge_hit_power", "bunting", "slap_contact_size_multiplier",
-                "charge_contact_size_multiplier", "horizontal_range_near", "horizontal_range_far",
-            ):  # fmt: skip
-                assert getattr(new, name) == getattr(old, name), (character, name)

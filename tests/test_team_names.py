@@ -1,6 +1,5 @@
 """Team names: the logo table, CAPTAIN_TEAMS, and naming a team from its roster."""
 
-import random
 from collections import Counter
 
 import pytest
@@ -29,15 +28,6 @@ def test_logo_structure():
 def test_four_logos_per_captain():
     assert set(Counter(team.captain for team in TeamName).values()) == {4}
     assert all(team.captain.is_captain for team in TeamName)
-
-
-def test_captains_match_the_pre_1_0_table():
-    """Transitional: against rio_value.TeamName, until step 7 deletes it."""
-    from pyrio.rio_value import TeamName as OldTeamName
-
-    for team in TeamName:
-        assert team.captain.label == OldTeamName.from_raw(team.id).captain.name
-        assert team.role == OldTeamName.from_raw(team.id).role
 
 
 # --- team_name and CAPTAIN_TEAMS ---------------------------------------------
@@ -167,24 +157,3 @@ def test_captain_teams_are_read_only():
         CAPTAIN_TEAMS[Character.MARIO] = CAPTAIN_TEAMS[Character.LUIGI]  # type: ignore[index]
     with pytest.raises(AttributeError):
         CAPTAIN_TEAMS[Character.MARIO].default = TeamName.LUIGI_GENTLEMEN  # type: ignore[misc]
-
-
-def test_team_name_matches_the_pre_1_0_algorithm():
-    """Transitional: against team_name_algo, until step 7 deletes it."""
-    from pyrio.team_name_algo import team_name as old_team_name
-
-    rng = random.Random(0)
-    characters = list(Character)
-    captains = [c for c in characters if c.is_captain]
-    signature_rosters = [
-        [*sorted(s.members), *[captain.family] * (9 - len(s.members))]
-        for captain, teams in CAPTAIN_TEAMS.items()
-        for s in teams.signatures
-    ]
-    rosters = [rng.choices(characters, k=9) for _ in range(3000)]
-    rosters += [[family.default for family in r] for r in signature_rosters]
-    for roster in rosters:
-        for captain in [*rng.sample(captains, 3), Character.TOAD_R]:
-            old = old_team_name([c.id for c in roster], captain.id)
-            new = team_name(roster, captain)
-            assert (new and new.label) == (old and str(old)), (roster, captain)

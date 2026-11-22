@@ -69,11 +69,3 @@ def test_fielders():
     assert set(FIELDER_LOCKOUT_FRAMES) == set(Position)
     assert FIELDER_START_LOCATIONS[Position.CENTER_FIELD] == (0.0, 0.0, 76.0)
     assert FIELDER_LOCKOUT_FRAMES[Position.CATCHER] == 40
-
-
-def test_fielders_match_the_old_tables():
-    # Transitional: helpers.py and draw/ held two copies until step 7 deletes them.
-    from pyrio.helpers import fielder_starting_positions
-
-    for position, location in FIELDER_START_LOCATIONS.items():
-        assert tuple(map(float, fielder_starting_positions[position.id])) == location

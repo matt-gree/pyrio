@@ -1,4 +1,4 @@
-"""Derive STADIUM_WALLS from the game's stadium collision models.
+"""Derive the outfield-wall table (pyrio/geometry/_data/walls.json) from the collision models.
 
 The outfield wall is the set of collision triangles of type
 BALL_COLLISION_TYPE_WALL. Collision semantics are taken from the decomp
@@ -84,24 +84,27 @@ Usage:
 <models-dir> holds one JSON collision file per stadium, named after it, each
 containing "Triangle Collections".
 """
+
 from __future__ import annotations
 
+import itertools
 import json
 import math
 import pathlib
 import sys
 
-WALL_COLLISION = 0x02        # BALL_COLLISION_TYPE_WALL
-FOUL_FLAG = 0x80             # BALL_COLLISION_TYPE_FOUL, a flag not a type
-TYPE_MASK = 0x7F             # what the game masks with (ball_physics.c:2295)
-MIN_WALL_DISTANCE = 40.0     # nearer than this is backstop / dugout
-MERGE_TOLERANCE = 1e-3       # when two adjacent intervals are the same line
-MIN_SEGMENT_WIDTH = 1e-3     # narrower than this is a numerical sliver
-COINCIDENT_Z = 1e-3          # panels this close in z are the same surface
-ON_WALL_Z = 0.05             # a triangle this close in z stands on that wall
+WALL_COLLISION = 0x02  # BALL_COLLISION_TYPE_WALL
+FOUL_FLAG = 0x80  # BALL_COLLISION_TYPE_FOUL, a flag not a type
+TYPE_MASK = 0x7F  # what the game masks with (ball_physics.c:2295)
+MIN_WALL_DISTANCE = 40.0  # nearer than this is backstop / dugout
+MERGE_TOLERANCE = 1e-3  # when two adjacent intervals are the same line
+MIN_SEGMENT_WIDTH = 1e-3  # narrower than this is a numerical sliver
+COINCIDENT_Z = 1e-3  # panels this close in z are the same surface
+ON_WALL_Z = 0.05  # a triangle this close in z stands on that wall
 
 
 # ---------------------------------------------------------------- extraction
+
 
 def wall_triangles(doc):
     """Every fair-territory outfield wall triangle, as 3 (x, y, z) corners."""
@@ -111,10 +114,10 @@ def wall_triangles(doc):
             points = collection["Points"]
             step = 3 if collection["CollectionType"] == 0 else 1
             for i in range(0, len(points) - 2, step):
-                tri = points[i:i + 3]
+                tri = points[i : i + 3]
                 coll_type = tri[2]["CollisionType"]
                 if coll_type & FOUL_FLAG:
-                    continue        # wall, but in foul territory
+                    continue  # wall, but in foul territory
                 if (coll_type & TYPE_MASK) != WALL_COLLISION:
                     continue
                 pts = [(p["Point"]["X"], p["Point"]["Y"], p["Point"]["Z"]) for p in tri]
@@ -142,12 +145,13 @@ def wall_lines(tris):
             continue
         (x0, _, z0), (x1, _, z1) = sorted(top)
         if abs(x1 - x0) < 1e-6:
-            continue        # edge-on, no x extent
+            continue  # edge-on, no x extent
         out.append((x0, x1, z0, z1))
     return out
 
 
 # ------------------------------------------------------------------- height
+
 
 def _covers(tri, x):
     xs = [p[0] for p in tri]
@@ -207,6 +211,7 @@ def wall_height_at(tris, x, m, c):
 
 # ------------------------------------------------------------------ segments
 
+
 def _z_at(line, x):
     x0, x1, z0, z1 = line
     return z0 + (z1 - z0) * ((x - x0) / (x1 - x0))
@@ -237,10 +242,12 @@ def nearest_wall(lines, tris, x):
             if height is None:
                 continue
             height = round(height, 4)
-            if best is None or z < best[0] - COINCIDENT_Z:
-                best = (z, height)
-            elif z < best[0] + COINCIDENT_Z and height > best[1]:
-                best = (z, height)
+            if best is not None:
+                best_z, best_height = best
+                nearer = z < best_z - COINCIDENT_Z
+                if not (nearer or (z < best_z + COINCIDENT_Z and height > best_height)):
+                    continue
+            best = (z, height)
     return best
 
 
@@ -259,7 +266,7 @@ def _breakpoints(lines, tris):
     for tri in tris:
         marks.update(p[0] for p in tri)
     for i, a in enumerate(lines):
-        for b in lines[i + 1:]:
+        for b in lines[i + 1 :]:
             lo, hi = max(a[0], b[0]), min(a[1], b[1])
             if hi - lo <= MIN_SEGMENT_WIDTH:
                 continue
@@ -286,7 +293,7 @@ def segments(lines, tris):
     """Exact (start_x, end_x, height, m, c) runs for the nearest wall."""
     marks = _breakpoints(lines, tris)
     runs = []
-    for lo, hi in zip(marks, marks[1:]):
+    for lo, hi in itertools.pairwise(marks):
         if hi - lo <= MIN_SEGMENT_WIDTH:
             continue
         mid = 0.5 * (lo + hi)
@@ -296,16 +303,20 @@ def segments(lines, tris):
         z_mid, height = chosen
         best = None
         for line in lines:
-            if line[0] <= mid <= line[1] and abs(_z_at(line, mid) - z_mid) < COINCIDENT_Z:
-                if best is None or _z_at(line, mid) < _z_at(best, mid):
-                    best = line
+            on_line = line[0] <= mid <= line[1] and abs(_z_at(line, mid) - z_mid) < COINCIDENT_Z
+            if on_line and (best is None or _z_at(line, mid) < _z_at(best, mid)):
+                best = line
         if best is None:
             continue
         m, c = _coeffs(best)
         if runs:
             px0, px1, ph, pm, pc = runs[-1]
-            if (abs(pm - m) < MERGE_TOLERANCE and abs(pc - c) < MERGE_TOLERANCE
-                    and ph == height and abs(px1 - lo) < MIN_SEGMENT_WIDTH):
+            if (
+                abs(pm - m) < MERGE_TOLERANCE
+                and abs(pc - c) < MERGE_TOLERANCE
+                and ph == height
+                and abs(px1 - lo) < MIN_SEGMENT_WIDTH
+            ):
                 runs[-1] = (px0, hi, ph, pm, pc)
                 continue
         runs.append((lo, hi, height, m, c))
@@ -314,8 +325,10 @@ def segments(lines, tris):
     # Castle's corner a 0.59m tower panel abuts the fence: 2dp moves a boundary
     # by up to 5mm, enough to hand a slice of one segment the neighbouring
     # surface's z (2.6m away) and height. 4dp bounds that at 50um.
-    return [(round(x0, 4), round(x1, 4), round(h, 2), round(m, 6), round(c, 4))
-            for x0, x1, h, m, c in runs]
+    return [
+        (round(x0, 4), round(x1, 4), round(h, 2), round(m, 6), round(c, 4))
+        for x0, x1, h, m, c in runs
+    ]
 
 
 def degenerate(segs):
@@ -353,23 +366,15 @@ def validate(lines, tris, segs, per_segment=40):
 
 
 def emit(name, segs) -> str:
-    sx = ", ".join(f"{s[0]}" for s in segs)
-    ex = ", ".join(f"{s[1]}" for s in segs)
-    h = ", ".join(f"{s[2]}" for s in segs)
-    m = ", ".join(f"{s[3]}" for s in segs)
-    c = ", ".join(f"{s[4]}" for s in segs)
-    return (f'    "{name}": {{\n'
-            f'        "starting_x": [{sx}],\n'
-            f'        "ending_x": [{ex}],\n'
-            f'        "wall_height": [{h}],\n'
-            f'        "m": [{m}],\n'
-            f'        "c": [{c}],\n'
-            f'    }},\n')
+    """One stadium's entry in walls.json's layout."""
+    keys = ("start_x", "end_x", "height", "slope", "intercept")
+    rows = ",\n".join("    " + json.dumps(dict(zip(keys, seg, strict=True))) for seg in segs)
+    return f'  "{name}": [\n{rows}\n  ]'
 
 
 def main(argv):
     if len(argv) < 2:
-        print(__doc__.strip().split("Usage:")[1].strip(), file=sys.stderr)
+        print((__doc__ or "").strip().split("Usage:")[1].strip(), file=sys.stderr)
         return 2
     models = pathlib.Path(argv[1])
     validate_only = "--validate-only" in argv
@@ -385,15 +390,15 @@ def main(argv):
         dz, dh, n = validate(lines, tris, segs)
         bad = degenerate(segs)
         note = f"   NOT USABLE: {len(bad)} degenerate segment(s)" if bad else ""
-        report.append(f"{path.stem:16} {len(lines):>3} lines -> {len(segs):>3} segments"
-                      f"   max dz={dz:.3f}m  max dh={dh:.3f}  ({n} samples){note}")
+        report.append(
+            f"{path.stem:16} {len(lines):>3} lines -> {len(segs):>3} segments"
+            f"   max dz={dz:.3f}m  max dh={dh:.3f}  ({n} samples){note}"
+        )
         blocks.append(emit(path.stem, segs))
 
     print("\n".join(report), file=sys.stderr)
     if not validate_only:
-        print("STADIUM_WALLS = {")
-        print("".join(blocks), end="")
-        print("}")
+        print("{\n" + ",\n".join(blocks) + "\n}")
     return 0
 
 
