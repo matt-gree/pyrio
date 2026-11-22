@@ -28,6 +28,7 @@ from .._codes import (
     InputDirection,
     MoonshotStatus,
     PitchType,
+    Side,
     Stadium,
     SwingType,
 )
@@ -38,6 +39,7 @@ from ._physics import GRAVITY_PER_FRAME_SQUARED, VELOCITY_KEPT_PER_FRAME
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
+    from .._game import Event
     from ..geometry import Point
 
 __all__ = [
@@ -186,6 +188,63 @@ class HitInputs:
     """The three RNG values a stat file records for the contact (``RNG1``-``RNG3``)."""
 
     overrides: HitOverrides = HitOverrides()
+
+    @classmethod
+    def from_event(
+        cls, event: Event, *, stadium: Stadium, mods: frozenset[Mod] = frozenset()
+    ) -> HitInputs:
+        """The inputs that produced a recorded contact, to simulate it again.
+
+        ``stadium`` is the game's (``game.stadium``); ``mods`` are the gecko mods
+        the game was played with, which a stat file doesn't record (see
+        ``TAG_TO_MOD``). Raises ``ValueError`` for an event with no contact, a
+        bunt, or a file too old to record the swing's RNG.
+
+        A star swing is rebuilt from what the player did: five-star moonshots
+        are fully charged. One without the stars to spend it ("Walu tech") was a
+        charge swing with no charge held, which is what the game played.
+        """
+        pitch, contact = event.pitch, event.contact
+        if pitch is None or contact is None:
+            raise ValueError(f"event {event.number} has no contact to simulate")
+        if contact.rng is None or contact.location is None or pitch.bat_location is None:
+            raise ValueError(f"event {event.number} is from a client too old to simulate")
+        batter, pitcher = event.batter_spot, event.pitcher_spot
+        state = event.state
+        stars = state.away_stars if state.batting_side is Side.AWAY else state.home_stars
+        swing = pitch.swing
+        charge_up, charge_down = contact.charge_power_up, contact.charge_power_down
+        if swing is SwingType.STAR:
+            off_captain = batter.character.attributes.captain_star is not None and not (
+                batter.is_captain
+            )
+            if stars == 0 or (stars == 1 and off_captain):
+                swing, charge_down = SwingType.CHARGE, 0.0
+            elif contact.moonshot is MoonshotStatus.MOONSHOT:
+                charge_up = 1.0
+        return cls(
+            batter=batter.character,
+            pitcher=pitcher.character,
+            pitch=pitch.type,
+            charge=None if pitch.charge_type is ChargeType.NONE else pitch.charge_type,
+            swing=swing,
+            hand=batter.batting_hand,
+            stick=contact.input_direction,
+            batter_x=pitch.bat_location[0],
+            ball_x=contact.location[0],
+            ball_z=contact.location[1],
+            charge_up=charge_up,
+            charge_down=charge_down,
+            contact_frame=contact.swing_frame,
+            chem_links_on_base=state.chemistry_links_on_base,
+            stars=stars,
+            is_captain=batter.is_captain,
+            batter_is_superstar=batter.is_superstar,
+            pitcher_is_superstar=pitcher.is_superstar,
+            stadium=stadium,
+            mods=mods,
+            seeds=contact.rng,
+        )
 
     def __post_init__(self) -> None:
         if self.swing not in (SwingType.SLAP, SwingType.CHARGE, SwingType.STAR):

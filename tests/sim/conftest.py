@@ -16,7 +16,7 @@ def recorded_legacy_inputs() -> list[Any]:
     """The pre-1.0 module's inputs for every simulated contact in the fixture game.
 
     Transitional, like the parity tests that use it: built with the pre-1.0
-    stat-file reader until ``HitInputs.from_event`` exists.
+    stat-file reader, for comparison with ``HitInputs.from_event``.
     """
     import pyrio
     from pyrio.hit_simulation import hit_inputs_from_event

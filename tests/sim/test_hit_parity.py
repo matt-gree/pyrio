@@ -2,8 +2,8 @@
 
 Transitional: this pins ``pyrio.sim`` to ``pyrio.hit_simulation`` while both
 exist, so the port is proven to change nothing. Step 7 deletes the old module
-and this file with it; by then ``HitInputs.from_event`` and a test against the
-recorded contacts take over.
+and this file with it; ``test_from_event.py``, against the recorded contacts,
+takes over.
 
 The star-swing resolution is new (the old module took the outcome as inputs),
 so the adapter below restates the game's rules to drive the old module; the
