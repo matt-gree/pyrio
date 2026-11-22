@@ -127,7 +127,6 @@ extend-exclude = [
     "tests/test_team_name.py",
     "tools/compare_stadium_walls.py",
     "tools/derive_stadium_walls.py",
-    "examples/game_summary.py",
 ]
 
 [tool.ruff.format]
@@ -196,7 +195,6 @@ exclude = [
     "tests/test_team_name.py",
     "tools/compare_stadium_walls.py",
     "tools/derive_stadium_walls.py",
-    "examples/game_summary.py",
 ]
 pythonVersion = "3.11"
 typeCheckingMode = "standard"
