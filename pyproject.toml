@@ -246,8 +246,10 @@ type = "forbidden"
 source_modules = [
     "pyrio._characters",
     "pyrio._codes",
+    "pyrio._decode",
     "pyrio._enum",
     "pyrio._errors",
+    "pyrio._game",
     "pyrio._names",
     "pyrio._stats",
     "pyrio._team_names",

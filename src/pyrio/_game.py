@@ -262,8 +262,10 @@ class Fielding:
     spot: RosterSpot
     position: Position | None
     """The position the fielder was playing, or ``None`` if Rio recorded none."""
-    action: FielderAction
-    jumped: bool
+    action: FielderAction | None
+    """``None`` before Rio 0.1.9, which could write uninitialised memory here."""
+    jumped: bool | None
+    """``None`` before Rio 0.1.9, as ``action``."""
     manual_select: ManualSelect | None
     """Which fielder the player had selected. ``None`` before Rio 1.9.2, which
     recorded a different value under the same key."""
