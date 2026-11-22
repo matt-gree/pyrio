@@ -1,0 +1,59 @@
+{
+  "Tag Sets": [
+    {
+      "comm_id": 1,
+      "comm_type": "Official",
+      "end_date": 1785000000,
+      "id": 198,
+      "name": "S13 Superstars Off",
+      "start_date": 1777000000,
+      "tag_ids": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "tags": [
+        {
+          "active": true,
+          "comm_id": 1,
+          "date_created": 1700000000,
+          "desc": "Project Rio tag",
+          "id": 1,
+          "name": "Project Rio",
+          "type": "Community"
+        },
+        {
+          "active": true,
+          "comm_id": 1,
+          "date_created": 1700000000,
+          "desc": "Stars Off tag",
+          "id": 2,
+          "name": "Stars Off",
+          "type": "Component"
+        },
+        {
+          "active": true,
+          "comm_id": 1,
+          "date_created": 1700000000,
+          "desc": "S13 Superstars Off tag",
+          "id": 3,
+          "name": "S13 Superstars Off",
+          "type": "Competition"
+        },
+        {
+          "active": true,
+          "comm_id": 1,
+          "date_created": 1700000000,
+          "desc": "Hazards Off tag",
+          "gecko_code": "04000000 00000000\n",
+          "gecko_code_desc": "No hazards",
+          "id": 4,
+          "name": "Hazards Off",
+          "type": "Gecko Code"
+        }
+      ],
+      "type": "Season"
+    }
+  ]
+}

@@ -1,0 +1,46 @@
+{
+  "games": [
+    {
+      "away_captain": "Bowser Jr",
+      "away_player": "SpiceOrange",
+      "away_score": 9,
+      "date_time_end": 1781808415,
+      "date_time_start": 1781806615,
+      "game_id": 3896251267,
+      "home_captain": "Mario",
+      "home_player": "MattGree",
+      "home_score": 12,
+      "innings_played": 9,
+      "innings_selected": 9,
+      "loser_incoming_elo": 1580,
+      "loser_player": "SpiceOrange",
+      "loser_result_elo": 1571,
+      "stadium": 1,
+      "tag_set": 198,
+      "winner_incoming_elo": 1612,
+      "winner_player": "MattGree",
+      "winner_result_elo": 1621
+    },
+    {
+      "away_captain": null,
+      "away_player": null,
+      "away_score": null,
+      "date_time_end": null,
+      "date_time_start": null,
+      "game_id": null,
+      "home_captain": null,
+      "home_player": null,
+      "home_score": null,
+      "innings_played": null,
+      "innings_selected": null,
+      "loser_incoming_elo": 1600,
+      "loser_player": "MattGree",
+      "loser_result_elo": null,
+      "stadium": null,
+      "tag_set": 198,
+      "winner_incoming_elo": 1560,
+      "winner_player": "SpiceOrange",
+      "winner_result_elo": null
+    }
+  ]
+}

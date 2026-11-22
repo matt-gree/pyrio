@@ -1,0 +1,45 @@
+{
+  "games": [
+    {
+      "away_captain": "Bowser Jr",
+      "away_roster": [
+        19,
+        3,
+        7,
+        21,
+        41,
+        44,
+        16,
+        45,
+        49
+      ],
+      "away_score": 9,
+      "away_user": "SpiceOrange",
+      "date_time_end": 1781808415,
+      "date_time_start": 1781806615,
+      "game_id": 3896251267,
+      "game_mode": 198,
+      "home_captain": "Mario",
+      "home_roster": [
+        0,
+        2,
+        17,
+        13,
+        8,
+        1,
+        31,
+        30,
+        32
+      ],
+      "home_score": 12,
+      "home_user": "MattGree",
+      "innings_played": 9,
+      "innings_selected": 9,
+      "loser_incoming_elo": 1580,
+      "loser_result_elo": 1571,
+      "stadium": 1,
+      "winner_incoming_elo": 1612,
+      "winner_result_elo": 1621
+    }
+  ]
+}

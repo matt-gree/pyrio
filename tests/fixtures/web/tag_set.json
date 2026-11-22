@@ -1,0 +1,41 @@
+{
+  "Tag Set": [
+    {
+      "comm_id": 1,
+      "end_date": 1785000000,
+      "id": 198,
+      "name": "S13 Superstars Off",
+      "start_date": 1777000000,
+      "tags": [
+        {
+          "active": true,
+          "comm_id": 1,
+          "date_created": 1700000000,
+          "desc": "Project Rio tag",
+          "id": 1,
+          "name": "Project Rio",
+          "type": "Community"
+        },
+        {
+          "active": true,
+          "comm_id": 1,
+          "date_created": 1700000000,
+          "desc": "Stars Off tag",
+          "id": 2,
+          "name": "Stars Off",
+          "type": "Component"
+        },
+        {
+          "active": true,
+          "comm_id": 1,
+          "date_created": 1700000000,
+          "desc": "S13 Superstars Off tag",
+          "id": 3,
+          "name": "S13 Superstars Off",
+          "type": "Competition"
+        }
+      ],
+      "type": "Season"
+    }
+  ]
+}

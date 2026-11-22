@@ -1,0 +1,26 @@
+{
+  "MattGree": {
+    "comm_user_id": 11,
+    "num_losses": 10,
+    "num_ties": 0,
+    "num_wins": 30,
+    "rating": 1621,
+    "username": "MattGree"
+  },
+  "SpiceOrange": {
+    "comm_user_id": 12,
+    "num_losses": 18,
+    "num_ties": 1,
+    "num_wins": 22,
+    "rating": 1571,
+    "username": "SpiceOrange"
+  },
+  "Zed": {
+    "comm_user_id": 13,
+    "num_losses": 0,
+    "num_ties": 0,
+    "num_wins": 5,
+    "rating": 1700,
+    "username": "Zed"
+  }
+}

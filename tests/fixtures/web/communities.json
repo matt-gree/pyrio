@@ -1,0 +1,24 @@
+{
+  "Communities": [
+    {
+      "date_created": 1650000000,
+      "desc": "The official community",
+      "id": 1,
+      "name": "Project Rio",
+      "private": false,
+      "tag_set_limit": 5,
+      "type": "Official",
+      "url": "abc123"
+    },
+    {
+      "date_created": 1650000000,
+      "desc": null,
+      "id": 7,
+      "name": "NNL",
+      "private": true,
+      "tag_set_limit": 5,
+      "type": "Unofficial",
+      "url": null
+    }
+  ]
+}

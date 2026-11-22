@@ -1,0 +1,22 @@
+{
+  "Members": [
+    {
+      "active": true,
+      "admin": true,
+      "banned": null,
+      "date_joined": 1650000000,
+      "id": 11,
+      "invited": false,
+      "user_id": 1
+    },
+    {
+      "active": true,
+      "admin": false,
+      "banned": false,
+      "date_joined": 1650000000,
+      "id": 12,
+      "invited": false,
+      "user_id": 2
+    }
+  ]
+}

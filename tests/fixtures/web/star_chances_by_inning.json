@@ -1,0 +1,24 @@
+{
+  "Data": [
+    {
+      "batter_win": 7,
+      "eligible_event": 120,
+      "games": 2,
+      "half_inning": 0,
+      "inning": 1,
+      "pitcher_win": 11,
+      "star_chances": 18,
+      "total_events": 140
+    },
+    {
+      "batter_win": 7,
+      "eligible_event": 120,
+      "games": 2,
+      "half_inning": 1,
+      "inning": 1,
+      "pitcher_win": 11,
+      "star_chances": 3,
+      "total_events": 140
+    }
+  ]
+}
