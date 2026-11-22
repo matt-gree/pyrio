@@ -12,18 +12,35 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from .._codes import AtBatResult, PrimaryContactResult, SecondaryContactResult
+from .._codes import (
+    AtBatResult,
+    PrimaryContactResult,
+    SecondaryContactResult,
+    Side,
+    SwingType,
+)
 from ..geometry import clears_wall
+from ._hit import HitInputs, simulate_hit
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable
 
     from .._characters import Character
-    from .._codes import Side, Stadium, SwingType
+    from .._codes import Stadium
+    from .._game import Game
     from ..geometry import Point
-    from ._hit import HitResult
+    from ._hit import HitResult, Mod
 
-__all__ = ["ContactRecord", "Highlights", "best", "find_highlights", "format_highlights"]
+__all__ = [
+    "ContactRecord",
+    "Highlights",
+    "best",
+    "find_highlights",
+    "format_highlights",
+    "simulate_contacts",
+]
+
+_SIMULATED_SWINGS = (SwingType.SLAP, SwingType.CHARGE, SwingType.STAR)
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -85,6 +102,43 @@ class ContactRecord:
     @property
     def is_hit(self) -> bool:
         return self.result.is_hit
+
+
+def simulate_contacts(
+    game: Game, *, mods: frozenset[Mod] = frozenset()
+) -> tuple[ContactRecord, ...]:
+    """Every slap, charge and star swing the batter connected on, simulated again.
+
+    Each contact is rebuilt with :meth:`HitInputs.from_event` from the RNG
+    values the stat file records, at the game's stadium. Bunts aren't
+    simulated, and a file from a client too old to record the RNG gives an
+    empty tuple. ``mods`` are the gecko codes the game was played with.
+    """
+    records: list[ContactRecord] = []
+    for event in game.events:
+        pitch, contact = event.pitch, event.contact
+        if pitch is None or contact is None or contact.rng is None:
+            continue
+        if pitch.swing not in _SIMULATED_SWINGS:
+            continue
+        inputs = HitInputs.from_event(event, stadium=game.stadium, mods=mods)
+        side = event.state.batting_side
+        records.append(
+            ContactRecord(
+                event_number=event.number,
+                inning=event.state.inning,
+                batting_side=side,
+                player=(game.away if side is Side.AWAY else game.home).player,
+                batter=event.batter_spot.character,
+                swing=pitch.swing,
+                result=event.result,
+                primary_result=contact.primary_result,
+                secondary_result=contact.secondary_result,
+                rbi=event.rbi,
+                simulation=simulate_hit(inputs),
+            )
+        )
+    return tuple(records)
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

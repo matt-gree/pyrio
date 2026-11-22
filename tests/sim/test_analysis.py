@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import pathlib
 from dataclasses import replace
 
+import pyrio
 from pyrio import (
     AtBatResult,
     Character,
@@ -22,6 +24,7 @@ from pyrio.sim import (
     best,
     find_highlights,
     format_highlights,
+    simulate_contacts,
     simulate_hit,
 )
 
@@ -107,3 +110,44 @@ def test_format_highlights():
     assert lines[0].startswith("HARDEST HIT: Mario (Player) - 400 power Caught")
     assert any(line.startswith("ROBBED HOME RUN") for line in lines)
     assert format_highlights(find_highlights([])) == []
+
+
+FIXTURES = pathlib.Path(__file__).parent.parent / "fixtures"
+GAME_FILE = FIXTURES / "20260618T191655_SpiceOrange-Vs-MattGree_3896251267.json"
+
+
+def test_simulate_contacts_covers_every_swing_that_connected():
+    game = pyrio.read_game(GAME_FILE)
+    records = simulate_contacts(game)
+    swings = (SwingType.SLAP, SwingType.CHARGE, SwingType.STAR)
+    expected = [
+        e
+        for e in game.events
+        if e.contact is not None and e.pitch is not None and e.pitch.swing in swings
+    ]
+    assert [r.event_number for r in records] == [e.number for e in expected]
+    for record, event in zip(records, expected, strict=True):
+        assert event.contact is not None
+        assert record.batter is event.batter_spot.character
+        assert record.batting_side is event.state.batting_side
+        assert record.result is event.result
+        assert record.secondary_result is event.contact.secondary_result
+        side = game.away if record.batting_side is Side.AWAY else game.home
+        assert record.player == side.player
+
+
+def test_simulate_contacts_reproduces_the_recorded_contact():
+    records = simulate_contacts(pyrio.read_game(GAME_FILE))
+    game = pyrio.read_game(GAME_FILE)
+    by_number = {e.number: e for e in game.events}
+    exact = 0
+    for r in records:
+        contact = by_number[r.event_number].contact
+        assert contact is not None
+        exact += r.simulation.contact_type is contact.type
+    assert exact / len(records) >= 0.9
+
+
+def test_simulate_contacts_is_empty_for_files_without_rng():
+    old = pyrio.read_game(next((FIXTURES / "stat_files" / "0.1.7a").glob("*.json")))
+    assert simulate_contacts(old) == ()

@@ -17,7 +17,14 @@ stadium's collision mesh and hazards, until the play is settled::
 
 from __future__ import annotations
 
-from ._analysis import ContactRecord, Highlights, best, find_highlights, format_highlights
+from ._analysis import (
+    ContactRecord,
+    Highlights,
+    best,
+    find_highlights,
+    format_highlights,
+    simulate_contacts,
+)
 from ._hit import (
     TAG_TO_MOD,
     HitInputs,
@@ -53,6 +60,7 @@ __all__ = [
     "format_highlights",
     "play_out",
     "simulate_all_zones",
+    "simulate_contacts",
     "simulate_hit",
     "simulate_trajectory",
 ]

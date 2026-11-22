@@ -285,9 +285,9 @@ protected_modules = ["httpx"]
 allowed_importers = ["pyrio.web"]
 
 [[tool.importlinter.contracts]]
-name = "Geometry and sim need only the standard library and the core"
+name = "Geometry, sim and svg need only the standard library and the core"
 type = "forbidden"
-source_modules = ["pyrio.geometry", "pyrio.sim"]
+source_modules = ["pyrio.geometry", "pyrio.sim", "pyrio.svg"]
 forbidden_modules = [
     "httpx",
     "matplotlib",

@@ -196,6 +196,7 @@ SIM = [
     "format_highlights",
     "play_out",
     "simulate_all_zones",
+    "simulate_contacts",
     "simulate_hit",
     "simulate_trajectory",
 ]
@@ -206,3 +207,23 @@ def test_sim_names():
 
     assert sorted(pyrio.sim.__all__) == SIM
     assert all(hasattr(pyrio.sim, name) for name in SIM)
+
+
+SVG = ["Flight", "Mark", "MarkShape", "spray_chart", "stadium"]
+
+
+def test_svg_names():
+    import pyrio.svg
+
+    assert sorted(pyrio.svg.__all__) == SVG
+    assert all(hasattr(pyrio.svg, name) for name in SVG)
+
+
+def test_plot_names():
+    plot = pytest.importorskip("pyrio.plot", exc_type=ImportError)
+    assert sorted(plot.__all__) == ["spray_chart", "stadium"]
+
+
+def test_pandas_names():
+    pandas = pytest.importorskip("pyrio.pandas", exc_type=ImportError)
+    assert pandas.__all__ == ["frame"]
