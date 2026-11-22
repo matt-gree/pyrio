@@ -126,7 +126,6 @@ extend-exclude = [
     "tests/test_stadiums.py",
     "tests/test_stat_parser.py",
     "tests/test_team_name.py",
-    "tools/check_live_ball_parity.py",
     "tools/compare_stadium_walls.py",
     "tools/derive_stadium_walls.py",
     "examples/game_summary.py",
@@ -197,7 +196,6 @@ exclude = [
     "tests/test_stadiums.py",
     "tests/test_stat_parser.py",
     "tests/test_team_name.py",
-    "tools/check_live_ball_parity.py",
     "tools/compare_stadium_walls.py",
     "tools/derive_stadium_walls.py",
     "examples/game_summary.py",
@@ -287,3 +285,30 @@ name = "Only pyrio.web imports httpx"
 type = "protected"
 protected_modules = ["httpx"]
 allowed_importers = ["pyrio.web"]
+
+[[tool.importlinter.contracts]]
+name = "Geometry and sim need only the standard library and the core"
+type = "forbidden"
+source_modules = ["pyrio.geometry", "pyrio.sim"]
+forbidden_modules = [
+    "httpx",
+    "matplotlib",
+    "numpy",
+    "pandas",
+    "requests",
+    "scipy",
+    "pyrio.api",
+    "pyrio.constants",
+    "pyrio.exceptions",
+    "pyrio.helpers",
+    "pyrio.hit_analysis",
+    "pyrio.hit_sim_validation",
+    "pyrio.hit_simulation",
+    "pyrio.live_ball",
+    "pyrio.rio_value",
+    "pyrio.rio_web",
+    "pyrio.stadiums",
+    "pyrio.stat_file",
+    "pyrio.stat_file_parser",
+    "pyrio.team_name_algo",
+]

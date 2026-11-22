@@ -1,19 +1,25 @@
-"""Check pyrio's live_ball against RioVisualizer's physics.py, its source.
+"""Check pyrio.sim's live ball against RioVisualizer's physics.py, its source.
 
-live_ball is a port. RioVisualizer remains the reference implementation, so the
-question this answers is not "is the physics right" but "did the port change
-anything" -- and the bar is exact: same outcome, same land frame, same
-trajectory point for point, same events.
+The live ball is a port. RioVisualizer's implementation is the reference, so
+the question here is not "is the physics right" but "did the port change
+anything", and the bar is exact: same outcome, land frame, trajectory point
+for point, and events, run on RioVisualizer's own copy of the stadium data.
 
-It lives here rather than in tests/ because it needs a RioVisualizer checkout,
-which pyrio does not depend on. Run it after touching live_ball, and after
-pulling RioVisualizer.
+RioVisualizer now imports its physics from pyrio, so its current physics.py
+is a shim. The reference is then the last revision of that file that still
+held the implementation, read from RioVisualizer's git history; ``--ref=REV``
+names one instead.
+
+It lives in tools/ rather than tests/ because it needs a RioVisualizer
+checkout, which pyrio does not depend on. Run it after touching the live
+ball, and after pulling RioVisualizer.
 
 Usage:
-    python tools/check_live_ball_parity.py [path/to/RioVisualizer] [--seeds=N]
+    python tools/check_live_ball_parity.py [path/to/RioVisualizer] [--seeds=N] [--ref=REV]
 
 Defaults to ../RioVisualizer, or set RIO_VISUALIZER.
 """
+
 from __future__ import annotations
 
 import collections
@@ -23,31 +29,60 @@ import math
 import os
 import pathlib
 import random
+import subprocess
 import sys
+import tempfile
+from typing import TYPE_CHECKING, Any
+
+from pyrio import Stadium
+from pyrio.sim import LiveBallEvent, LiveBallResult, play_out
+
+if TYPE_CHECKING:
+    from types import ModuleType
 
 _HERE = pathlib.Path(__file__).resolve().parent
-sys.path.insert(0, str(_HERE.parent / "src"))
+_PHYSICS = "rio_visualizer/physics.py"
+_SHIM_MARKER = "from pyrio"
 
 
-def _load(path: pathlib.Path, name: str):
-    spec = importlib.util.spec_from_file_location(name, path)
+def _git(root: pathlib.Path, *args: str) -> str:
+    return subprocess.run(
+        ["git", "-C", str(root), *args], capture_output=True, text=True, check=True
+    ).stdout
+
+
+def reference_source(root: pathlib.Path, ref: str | None) -> tuple[str, str]:
+    """(where it came from, source) of RioVisualizer's own live-ball implementation."""
+    if ref is not None:
+        return f"{_PHYSICS} at {ref}", _git(root, "show", f"{ref}:{_PHYSICS}")
+    current = (root / _PHYSICS).read_text(encoding="utf-8")
+    if _SHIM_MARKER not in current:
+        return f"{_PHYSICS} (working tree)", current
+    for rev in _git(root, "log", "--format=%h", "--", _PHYSICS).split():
+        source = _git(root, "show", f"{rev}:{_PHYSICS}")
+        if _SHIM_MARKER not in source:
+            return f"{_PHYSICS} at {rev}", source
+    raise SystemExit(f"no revision of {_PHYSICS} holds the implementation; pass --ref")
+
+
+def load_module(source: str, name: str) -> ModuleType:
+    with tempfile.NamedTemporaryFile("w", suffix=".py", delete=False, encoding="utf-8") as f:
+        f.write(source)
+    spec = importlib.util.spec_from_file_location(name, f.name)
+    assert spec is not None
+    assert spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     sys.modules[name] = module
     spec.loader.exec_module(module)
     return module
 
 
-def flight(seed: int, frames: int = 90):
-    """A synthetic batted ball, spread over the azimuths and launch angles the
-    game produces. Not a recorded hit -- the point is to drive both engines
-    down the same branches, not to be realistic."""
-    rng = random.Random(seed)
-    speed = 1.4 + rng.random() * 1.6
-    azimuth = math.radians(-50 + rng.random() * 100)
-    elevation = math.radians(8 + rng.random() * 45)
-    vx = speed * math.sin(azimuth) * math.cos(elevation)
-    vy = speed * math.sin(elevation)
-    vz = speed * math.cos(azimuth) * math.cos(elevation)
+def launch(speed: float, azimuth_deg: float, elevation_deg: float, frames: int) -> list[Any]:
+    """A batted ball under drag and gravity, as the hit simulation flies it."""
+    a, e = math.radians(azimuth_deg), math.radians(elevation_deg)
+    vx = speed * math.sin(a) * math.cos(e)
+    vy = speed * math.sin(e)
+    vz = speed * math.cos(a) * math.cos(e)
     x, y, z = 0.0, 1.0, 0.0
     points = [(x, y, z)]
     for _ in range(frames):
@@ -59,68 +94,143 @@ def flight(seed: int, frames: int = 90):
     return points
 
 
-def main(argv):
+def flight(seed: int) -> list[Any]:
+    """A synthetic flight, spread over the azimuths and launch angles the game produces.
+
+    Not a recorded hit: the point is to drive both engines down the same branches.
+    """
+    rng = random.Random(seed)
+    speed = 1.4 + rng.random() * 1.6
+    return launch(speed, -50 + rng.random() * 100, 8 + rng.random() * 45, 90)
+
+
+_FIELDS = {
+    "surface": "surface",
+    "hazard": "hazard",
+    "result": "result",
+    "block": "variant",
+    "label": "label",
+    "fall_speed": "fall",
+    "heading_deg": "heading",
+    "spin": "spin",
+    "is_star_plant": "star",
+}
+
+
+def as_reference(result: LiveBallResult) -> dict[str, Any]:
+    """A result in physics.py's dict form."""
+
+    def event(e: LiveBallEvent) -> dict[str, Any]:
+        out: dict[str, Any] = {
+            "frame": e.frame,
+            "type": e.outcome.value if e.outcome else e.kind.value,
+            "pos": list(e.location),
+        }
+        for name, key in _FIELDS.items():
+            if (value := getattr(e, name)) is not None:
+                out[key] = value
+        if e.hazard_kind is not None:
+            out["what"] = e.hazard_kind.value
+        if e.is_assumed:
+            out["assumed"] = True
+        if e.is_approximate:
+            out["approx"] = True
+        return out
+
+    return {
+        "outcome": result.outcome.value,
+        "land_frame": result.land_frame,
+        "points": [list(p) for p in result.trajectory],
+        "events": [event(e) for e in result.events],
+    }
+
+
+def normalised(result: dict[str, Any]) -> dict[str, Any]:
+    """physics.py's result with ``assumed: False`` dropped (the port leaves it unsaid)."""
+    events = [
+        {k: v for k, v in e.items() if not (k == "assumed" and v is False)}
+        for e in result["events"]
+    ]
+    keys = ("outcome", "land_frame", "points")
+    return {**{k: result[k] for k in keys}, "events": events}
+
+
+def main(argv: list[str]) -> int:
     args = [a for a in argv[1:] if not a.startswith("--")]
     # 40 is the smallest round number that reaches every event type the
-    # hazards can raise, capture/release/star included; fewer leaves the port
-    # unverified for them, and the run says so when that happens.
+    # hazards raise, capture, release and star included.
     seeds = 40
+    ref: str | None = None
     for a in argv[1:]:
         if a.startswith("--seeds="):
             seeds = int(a.split("=", 1)[1])
-    root = pathlib.Path(args[0] if args else os.environ.get("RIO_VISUALIZER", _HERE.parent.parent / "RioVisualizer"))
-    physics = root / "rio_visualizer" / "physics.py"
+        elif a.startswith("--ref="):
+            ref = a.split("=", 1)[1]
+    default = os.environ.get("RIO_VISUALIZER", str(_HERE.parent.parent / "RioVisualizer"))
+    root = pathlib.Path(args[0] if args else default)
     data = root / "rio_visualizer" / "data"
-    if not physics.is_file():
-        print(f"no RioVisualizer physics.py at {physics}\n\n"
-              + __doc__.strip().split("Usage:")[1].strip(), file=sys.stderr)
+    if not (root / _PHYSICS).is_file():
+        usage = (__doc__ or "").split("Usage:")[1].strip()
+        print(f"no RioVisualizer at {root}\n\n{usage}", file=sys.stderr)
         return 2
 
-    reference = _load(physics, "_rv_physics")
-    from pyrio import live_ball
+    where, source = reference_source(root, ref)
+    reference = load_module(source, "_rv_physics")
+    print(f"reference: {where}")
 
-    def reference_stadium(name):
-        stadium = json.loads((data / "stadiums" / f"{name}.json").read_text())
+    def reference_stadium(name: str) -> dict[str, Any]:
+        stadium = json.loads((data / "stadiums" / f"{name}.json").read_text(encoding="utf-8"))
         park = data / "extras" / f"{name}.park.json"
         if park.is_file():
-            stadium["Park"] = json.loads(park.read_text())
+            stadium["Park"] = json.loads(park.read_text(encoding="utf-8"))
         return stadium
 
-    names = live_ball.list_stadiums()
-    total = matched = 0
-    failures = []
-    outcomes, events = collections.Counter(), collections.Counter()
-    for name in names:
-        theirs, ours = reference_stadium(name), live_ball.load_stadium(name)
+    runs: list[tuple[Stadium, str, list[Any], int, bool]] = []
+    for stadium in Stadium:
         for seed in range(seeds):
-            path = flight(seed)
             for hazards in (True, False):
-                a = reference.continue_ball(theirs, path, seed=seed, hazards=hazards)
-                b = live_ball.continue_ball(ours, path, seed=seed, hazards=hazards)
-                total += 1
-                if (a["outcome"] == b["outcome"] and a["land_frame"] == b["land_frame"]
-                        and a["points"] == b["points"] and a["events"] == b["events"]):
-                    matched += 1
-                else:
-                    failures.append((name, seed, hazards, a["outcome"], b["outcome"]))
-                outcomes[b["outcome"]] += 1
-                for e in b["events"]:
-                    events[e["type"]] += 1
+                runs.append((stadium, f"seed {seed}", flight(seed), seed, hazards))
+    # The seeded flights never land on a Toy Field panel; these do.
+    for speed in (0.6, 0.8, 1.0, 1.2, 1.4, 1.6):
+        for azimuth in (-30.0, 0.0, 25.0):
+            path = launch(speed, azimuth, 25.0, 150)
+            runs.append((Stadium.TOY_FIELD, f"panel {speed}/{azimuth}", path, 0, True))
 
-    print(f"{matched}/{total} runs identical across {len(names)} stadiums "
-          f"({seeds} flights, hazards on and off)")
+    theirs = {stadium: reference_stadium(stadium.label) for stadium in Stadium}
+    matched = 0
+    failures: list[tuple[Stadium, str, bool, str, str]] = []
+    outcomes: collections.Counter[str] = collections.Counter()
+    events: collections.Counter[str] = collections.Counter()
+    for stadium, label, path, seed, hazards in runs:
+        a = normalised(reference.continue_ball(theirs[stadium], path, seed=seed, hazards=hazards))
+        b = as_reference(play_out(stadium, path, seed=seed, hazards=hazards))
+        if a == b:
+            matched += 1
+        else:
+            failures.append((stadium, label, hazards, a["outcome"], b["outcome"]))
+        outcomes[b["outcome"]] += 1
+        events.update(e["type"] for e in b["events"])
+
+    print(
+        f"{matched}/{len(runs)} runs identical across {len(Stadium)} stadiums "
+        f"({seeds} seeded flights, hazards on and off, plus Toy Field's panels)"
+    )
     print(f"  outcomes reached: {dict(outcomes)}")
     print(f"  events reached:   {dict(events)}")
     if failures:
         print("\nDIVERGED:")
-        for name, seed, hazards, theirs_out, ours_out in failures[:20]:
-            print(f"  {name:15} seed={seed:<3} hazards={hazards!s:<5} "
-                  f"reference {theirs_out!r} vs port {ours_out!r}")
+        for stadium, label, hazards, theirs_out, ours_out in failures[:20]:
+            print(
+                f"  {stadium.label:15} {label:14} hazards={hazards!s:<5} "
+                f"reference {theirs_out!r} vs port {ours_out!r}"
+            )
         return 1
-    missing = {"capture", "release", "hazard", "star", "wall", "land", "bounce"} - set(events)
-    if missing:
-        print(f"\nNote: these event types were never reached, so the port is "
-              f"unverified for them: {sorted(missing)}")
+    wanted = {"capture", "release", "hazard", "star", "wall", "land", "bounce", "panel"}
+    if missing := wanted - set(events):
+        print(
+            "\nNote: these event types were never reached, so the port is unverified "
+            f"for them: {sorted(missing)}"
+        )
     return 0
 
 
