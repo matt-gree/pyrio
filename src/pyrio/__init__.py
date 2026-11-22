@@ -60,6 +60,7 @@ from ._game import (
     Team,
     Version,
 )
+from ._serialize import to_jsonable
 from ._team_names import CAPTAIN_TEAMS, CaptainTeams, SignatureTeam, TeamName, team_name
 
 __version__ = _version("projectrio")
@@ -126,6 +127,7 @@ __all__ = [
     "read_game",
     "read_hud",
     "team_name",
+    "to_jsonable",
 ]
 
 # --- Pre-1.0 -----------------------------------------------------------------

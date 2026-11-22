@@ -35,6 +35,9 @@ pandas = ["pandas>=2.0"]
 plot = ["matplotlib>=3.7"]
 all = ["projectrio[web,pandas,plot]"]
 
+[project.scripts]
+pyrio = "pyrio.__main__:main"
+
 [project.urls]
 Repository = "https://github.com/matt-gree/pyrio"
 Issues = "https://github.com/matt-gree/pyrio/issues"
@@ -244,6 +247,7 @@ type = "forbidden"
 # A forbidden contract needs its modules to exist, so each step adds the core
 # modules it writes here.
 source_modules = [
+    "pyrio.__main__",
     "pyrio._characters",
     "pyrio._codes",
     "pyrio._decode",
@@ -251,6 +255,7 @@ source_modules = [
     "pyrio._errors",
     "pyrio._game",
     "pyrio._names",
+    "pyrio._serialize",
     "pyrio._stats",
     "pyrio._team_names",
 ]

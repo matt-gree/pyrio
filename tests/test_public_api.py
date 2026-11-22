@@ -73,6 +73,7 @@ CORE = [
     "read_game",
     "read_hud",
     "team_name",
+    "to_jsonable",
 ]
 
 
