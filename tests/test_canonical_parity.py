@@ -10,6 +10,7 @@ var, which makes a missing checkout an error (CI's parity job sets it).
 Without it the test looks for a sibling ``../ProjectRio`` and skips if absent.
 """
 
+import ast
 import os
 import pathlib
 import re
@@ -309,30 +310,39 @@ def _canonical_field_names():
 
 
 def _pyrio_field_literals():
-    """Explicit field names read off the stat/HUD JSON containers.
+    """Field names the decoder reads: string literals passed to a call or listed in a tuple.
 
-    Restricted to accesses on the raw-data objects (statJson/hud_json/eventDict/
-    runner_json, the *_dict() views and the offensiveStats()/defensiveStats()
-    helpers) so it doesn't pick up pyrio's own output
-    dicts or value-string literals. Conservative: nested accesses (e.g. CharID
-    on a sub-dict) may be missed, which is fine for a subset guard.
+    Restricted to strings shaped like Rio's keys (capitalised words), so error
+    messages and format strings don't count. Literals inside f-strings are
+    skipped; constructed keys ("Away Roster 3") are covered by the fixtures.
     """
-    pkg = pathlib.Path(__file__).resolve().parent.parent / "src" / "pyrio" / "stat_file"
-    containers = (
-        r"(?:statJson|hud_json|eventDict|runner_json|character"
-        r"|pitch_dict\(\)|contact_dict\(\)|first_fielder_dict\(\)"
-        r"|offensiveStats\([^()]*\)|defensiveStats\([^()]*\))"
-    )
-    pattern = containers + r"\s*(?:\[\s*|\.get\(\s*)['\"]([^'\"{}]+)['\"]"
-    lits = set()
-    for p in pkg.glob("*.py"):
-        lits |= set(re.findall(pattern, p.read_text()))
-    return lits
+    source = pathlib.Path(__file__).resolve().parent.parent / "src" / "pyrio" / "_decode.py"
+    tree = ast.parse(source.read_text())
+    in_fstrings = {
+        id(node)
+        for joined in ast.walk(tree)
+        if isinstance(joined, ast.JoinedStr)
+        for node in ast.walk(joined)
+    }
+    candidates = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call):
+            candidates += node.args
+        elif isinstance(node, ast.Tuple):
+            candidates += node.elts
+    return {
+        node.value
+        for node in candidates
+        if isinstance(node, ast.Constant)
+        and isinstance(node.value, str)
+        and id(node) not in in_fstrings
+        and re.fullmatch(r"[A-Z][A-Za-z0-9]*(?:[ -/()+]+[A-Za-z0-9()]+)*", node.value)
+    }
 
 
 # Real fields the C++ emits via a constructed key ("Runner {n}B"), so they are
 # not literal in the header/cpp even though they exist in the files.
-_FIELD_ALLOWLIST: set[str] = {"Runner 1B", "Runner 2B", "Runner 3B"}
+_FIELD_ALLOWLIST: set[str] = {"Runner Batter", "Runner 1B", "Runner 2B", "Runner 3B"}
 
 # Fields older clients wrote and the current one no longer does. pyrio still reads them
 # so old stat files parse. Each entry names the release that dropped it and what
@@ -350,8 +360,8 @@ def test_pyrio_fields_are_canonical():
     canonical = _canonical_field_names()
     literals = _pyrio_field_literals()
     # Guard against scanning nothing: a moved package once made this pass vacuously.
-    assert len(literals) > 50, (
-        f"only {len(literals)} field literals found; is the parser path right?"
+    assert len(literals) > 80, (
+        f"only {len(literals)} field literals found; is the decoder path right?"
     )
     unknown = sorted(
         k
