@@ -62,8 +62,8 @@ def test_games_decode_fully(mock, rio, contract):
 
     assert first.game_id == 3896251267
     assert first.stadium is Stadium.BOWSER_CASTLE
-    assert first.started_at == datetime(2026, 6, 18, 18, 16, 55, tzinfo=UTC)
-    assert first.ended_at.tzinfo is UTC
+    assert first.start_time == datetime(2026, 6, 18, 18, 16, 55, tzinfo=UTC)
+    assert first.end_time.tzinfo is UTC
     assert first.away.player == "SpiceOrange"
     assert first.away.captain is Character.BOWSER_JR
     assert first.home.captain is Character.MARIO

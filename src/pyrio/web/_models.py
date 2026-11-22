@@ -333,8 +333,8 @@ class GameSummary:
 
     game_id: int
     stadium: Stadium
-    started_at: datetime
-    ended_at: datetime
+    start_time: datetime
+    end_time: datetime
     away: TeamSummary
     home: TeamSummary
     innings_played: int
@@ -351,7 +351,11 @@ class GameSummary:
 
     @property
     def winner(self) -> Side | None:
-        """The side with more runs, or ``None`` for a tie."""
+        """The side with more runs, or ``None`` for a tie.
+
+        Not a core ``GameResult``: ``/games/`` doesn't return who quit, so mercy,
+        quits and crashes can't be told apart here.
+        """
         if self.home.score == self.away.score:
             return None
         return Side.HOME if self.home.score > self.away.score else Side.AWAY
@@ -375,8 +379,8 @@ class LadderGame:
     ratings: RatingUpdate
     game_id: int | None
     stadium: Stadium | None
-    started_at: datetime | None
-    ended_at: datetime | None
+    start_time: datetime | None
+    end_time: datetime | None
     away_player: str | None
     home_player: str | None
     away_captain: Character | None
@@ -406,7 +410,7 @@ class LiveGame:
     home: LiveTeam
     tag_set_id: int
     stadium: Stadium
-    started_at: datetime
+    start_time: datetime
     innings_selected: int
     inning: int
     batting_side: Side
