@@ -268,3 +268,15 @@ forbidden_modules = [
     "pyrio.stat_file_parser",
     "pyrio.team_name_algo",
 ]
+
+[[tool.importlinter.contracts]]
+name = "pyrio.web is a leaf: nothing outside it imports it"
+type = "protected"
+protected_modules = ["pyrio.web"]
+allowed_importers = ["pyrio.web"]
+
+[[tool.importlinter.contracts]]
+name = "Only pyrio.web imports httpx"
+type = "protected"
+protected_modules = ["httpx"]
+allowed_importers = ["pyrio.web"]

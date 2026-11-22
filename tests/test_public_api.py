@@ -7,6 +7,8 @@ rather than slipping in. Update the list deliberately.
 import subprocess
 import sys
 
+import pytest
+
 import pyrio
 
 CORE = [
@@ -83,3 +85,48 @@ def test_import_pyrio_does_not_import_ratings():
         [sys.executable, "-c", code], capture_output=True, text=True, check=True
     )
     assert result.stdout.strip() == "False"
+
+
+WEB = [
+    "APIConnectionError",
+    "APIError",
+    "APIResponseError",
+    "APITimeoutError",
+    "AsyncRioClient",
+    "AuthenticationError",
+    "Community",
+    "CommunityKind",
+    "CommunityMember",
+    "ContactLine",
+    "DiskCache",
+    "EventRef",
+    "FieldingLine",
+    "GameSummary",
+    "IssuedKey",
+    "LadderGame",
+    "LadderRow",
+    "LandingRow",
+    "Linescore",
+    "LiveGame",
+    "LiveTeam",
+    "NotFoundError",
+    "PlayRunner",
+    "RatingUpdate",
+    "RecordLine",
+    "RioClient",
+    "ScoringPlay",
+    "StarChanceRow",
+    "StatRow",
+    "Tag",
+    "TagKind",
+    "TagSet",
+    "TagSetKind",
+    "TeamSummary",
+    "User",
+]
+
+
+def test_web_names():
+    web = pytest.importorskip("pyrio.web", exc_type=ImportError)
+    assert sorted(web.__all__) == WEB
+    assert [name for name in web.__all__ if not hasattr(web, name)] == []
