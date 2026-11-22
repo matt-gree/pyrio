@@ -232,7 +232,7 @@ def wall_collision_point(trajectory, stadium) -> Optional[tuple]:
 # to detect a ball leaving the park (home run / off the wall / foul into the
 # netting) and find where its flight path crosses that boundary plane.
 
-_STADIUMS_DIR = os.path.join(os.path.dirname(__file__), "constants", "stadiums")
+_STADIUMS_DIR = os.path.join(os.path.dirname(__file__), "geometry", "_data", "outlines")
 
 # StatObj.stadium() normalized name -> boundary file stem.
 _STADIUM_POLY_FILES = {
@@ -256,7 +256,7 @@ def stadium_boundary(stadium: str):
     stem = _STADIUM_POLY_FILES.get(stadium)
     poly = None
     if stem:
-        path = os.path.join(_STADIUMS_DIR, stem + ".txt")
+        path = os.path.join(_STADIUMS_DIR, stadium + ".txt")
         if os.path.exists(path):
             pts = []
             with open(path) as f:

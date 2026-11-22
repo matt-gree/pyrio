@@ -3,12 +3,14 @@ import numpy as np
 from pathlib import Path
 from scipy.spatial import ConvexHull
 
-# Stadium boundary-coordinate files live in the constants package.
-_STADIUMS_DIR = Path(__file__).resolve().parent.parent / "constants" / "stadiums"
+from .._codes import Stadium
+
+# Stadium boundary-coordinate files live in pyrio.geometry, named by label.
+_STADIUMS_DIR = Path(__file__).resolve().parent.parent / "geometry" / "_data" / "outlines"
 
 
 def _stadium_path(stadium):
-    return _STADIUMS_DIR / f"{stadium}.txt"
+    return _STADIUMS_DIR / f"{Stadium[stadium.upper()].label}.txt"
 
 
 def draw_stad_3d(stadium, add_label=False):

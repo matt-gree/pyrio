@@ -63,9 +63,9 @@ import pathlib
 import random
 from typing import Any, Iterator, Optional, Sequence
 
-_CONSTANTS = pathlib.Path(__file__).resolve().parent / "constants"
-COLLISION_DIR = _CONSTANTS / "collision"
-PARK_DIR = _CONSTANTS / "parks"
+_DATA = pathlib.Path(__file__).resolve().parent / "geometry" / "_data"
+COLLISION_DIR = _DATA / "collision"
+PARK_DIR = _DATA / "parks"
 
 GRAVITY = 0.00275          # lbl_3_data_45FC
 DRAG = 0.996               # 1 - lbl_3_data_4600 / 10000
