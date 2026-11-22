@@ -17,6 +17,7 @@ stadium's collision mesh and hazards, until the play is settled::
 
 from __future__ import annotations
 
+from ._analysis import ContactRecord, Highlights, best, find_highlights, format_highlights
 from ._hit import (
     TAG_TO_MOD,
     HitInputs,
@@ -27,13 +28,30 @@ from ._hit import (
     simulate_hit,
     simulate_trajectory,
 )
+from ._live_ball import (
+    LiveBallEvent,
+    LiveBallEventKind,
+    LiveBallOutcome,
+    LiveBallResult,
+    play_out,
+)
 
 __all__ = [
     "TAG_TO_MOD",
+    "ContactRecord",
+    "Highlights",
     "HitInputs",
     "HitOverrides",
     "HitResult",
+    "LiveBallEvent",
+    "LiveBallEventKind",
+    "LiveBallOutcome",
+    "LiveBallResult",
     "Mod",
+    "best",
+    "find_highlights",
+    "format_highlights",
+    "play_out",
     "simulate_all_zones",
     "simulate_hit",
     "simulate_trajectory",
