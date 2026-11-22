@@ -221,9 +221,10 @@ class StatRow:
     same for pitching.
 
     Rio web's ``/stats/`` doesn't report earned runs, home runs allowed or
-    bunts, so ``pitching.earned_runs``, ``pitching.home_runs_allowed`` and
-    ``batting.bunts`` are 0, and so is ``pitching.era``. Use
-    ``pitching.runs_allowed`` until the server adds them.
+    bunts yet, so until the server adds them ``pitching.earned_runs``,
+    ``pitching.home_runs_allowed`` and ``batting.bunts`` are 0, and so is
+    ``pitching.era``. They're read as soon as the server sends them
+    (``earned_runs``, ``homeruns_allowed``, ``successful_bunts``).
     """
 
     game_id: int | None = None

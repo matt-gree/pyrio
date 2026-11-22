@@ -661,6 +661,11 @@ _PITCHING = {
     "pitches_thrown": "total_pitches",
     "star_pitches_thrown": "star_pitches_thrown",
 }
+# Columns Rio web stores but /stats/ doesn't select yet (ProjectRio-web d4bf233).
+# Read when present, so the server can add them without a pyrio release; until
+# then they're 0.
+_BATTING_PENDING = {"bunts": "successful_bunts"}
+_PITCHING_PENDING = {"earned_runs": "earned_runs", "home_runs_allowed": "homeruns_allowed"}
 _RECORD = {
     "away_wins": "away_wins",
     "away_losses": "away_loses",
@@ -803,7 +808,10 @@ def _contact(node: _Obj) -> ContactLine:
 
 
 def _batting(node: _Obj, shape: StatsShape) -> dict[str, object]:
-    line = BattingLine(**{field: node.count(name) for field, name in _BATTING.items()})
+    line = BattingLine(
+        **{field: node.count(name) for field, name in _BATTING.items()},
+        **{field: node.count_or_zero(name) for field, name in _BATTING_PENDING.items()},
+    )
     by_swing: dict[SwingType, ContactLine] | None = None
     if shape.by_swing:
         by_swing = {swing: _contact(split) for swing, split in _labelled(node, SwingType)}
@@ -820,7 +828,10 @@ def _batting(node: _Obj, shape: StatsShape) -> dict[str, object]:
 
 def _pitching(node: _Obj, shape: StatsShape) -> dict[str, object]:
     return {
-        "pitching": PitchingLine(**{field: node.count(name) for field, name in _PITCHING.items()}),
+        "pitching": PitchingLine(
+            **{field: node.count(name) for field, name in _PITCHING.items()},
+            **{field: node.count_or_zero(name) for field, name in _PITCHING_PENDING.items()},
+        ),
         "balls_thrown": node.count_or_zero("balls"),
         "strikes_thrown": node.count_or_zero("strikes"),
         "pitcher_wins": node.count("pitcher_wins") if shape.include_pitcher_wins else None,

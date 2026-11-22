@@ -273,13 +273,26 @@ def test_stats_with_flags_the_response_lacks_fails_clearly(mock, rio, contract):
         rio.stats()
 
 
-def test_stats_era_is_zero_because_the_server_omits_earned_runs(mock, rio, contract):
+def test_stats_era_is_zero_until_the_server_sends_earned_runs(mock, rio, contract):
     mock.get("/stats/").respond(json=contract("stats.json"))
     (row,) = rio.stats()
     assert row.pitching is not None
     assert row.pitching.earned_runs == 0
     assert row.pitching.era == 0
     assert not math.isnan(row.pitching.whip)
+
+
+def test_stats_read_earned_runs_once_the_server_sends_them(mock, rio, contract):
+    data = contract("stats.json")
+    data["Stats"]["Pitching"] |= {"earned_runs": 3, "homeruns_allowed": 1}
+    data["Stats"]["Batting"]["successful_bunts"] = 2
+    mock.get("/stats/").respond(json=data)
+    (row,) = rio.stats()
+    assert row.pitching is not None
+    assert row.batting is not None
+    assert (row.pitching.earned_runs, row.pitching.home_runs_allowed) == (3, 1)
+    assert row.pitching.era == row.pitching.era_over(9) > 0
+    assert row.batting.bunts == 2
 
 
 # --- events, star chances, landing data (section 4a) --------------------------

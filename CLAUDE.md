@@ -97,7 +97,7 @@ Guidelines, with the reasoning so you can judge edge cases. Existing code violat
 
 ### Errors
 - Network/API failures: raise from the `RioAPIError` hierarchy in `exceptions.py`. Add a subclass if a new status class deserves one.
-- Argument validation: raise `ValueError` (not `Exception`). The existing `ErrorChecker.check_team_num` raises bare `Exception` — that's a bug, fix when nearby.
+- Argument validation: raise a plain `ValueError` or `TypeError` (not `Exception`, and not a `RioError`). `RioError` subclasses are for bad *data* (unknown ids, malformed stat files, bad API responses), which callers catch; a bad argument is a bug they fix.
 - Do not `print()` warnings from library code except at client construction (where it's a usability signal, like the missing-API-key warning). Use `warnings.warn` if a real warning is needed.
 
 ### I/O and side effects

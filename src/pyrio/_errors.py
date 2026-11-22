@@ -1,4 +1,11 @@
-"""The core's exceptions. Everything pyrio raises on purpose is a :class:`RioError`."""
+"""The core's exceptions.
+
+A :class:`RioError` means the *data* was wrong: an id or name the game doesn't
+have, a malformed stat file, a bad API response. A mistake in how pyrio was
+called (a roster of eight, a negative RD) raises a plain ``ValueError`` or
+``TypeError``, as the standard library and httpx do, because it's a bug to fix,
+not a condition to catch.
+"""
 
 from __future__ import annotations
 
@@ -6,7 +13,7 @@ __all__ = ["RioError", "StatFileError", "UnknownCodeError", "UnknownNameError"]
 
 
 class RioError(Exception):
-    """Base class for every error pyrio raises on purpose."""
+    """Base class for errors in the data pyrio reads: catch this to skip bad input."""
 
 
 class UnknownCodeError(RioError, ValueError):
