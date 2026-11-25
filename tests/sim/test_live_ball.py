@@ -115,6 +115,18 @@ def test_a_thwomp_the_ball_fails_once_stays_disarmed(lead_in: list[tuple[float, 
     assert _slams(_hover(lead_in)) == {}
 
 
+@pytest.mark.parametrize("step", [0.4, 0.8, 1.5])
+def test_a_klaptrap_knocks_a_rolling_ball_once(step: float):
+    # DK Jungle sweeps its hazards from pastCoordinates[4] to the ball (checkCollision
+    # asm; the C decompile has the ends swapped). Swept the other way, the
+    # one-sided faces catch the ball a frame late and again on every frame after.
+    path = [(2.4, 0.3, 40.0 + step * f) for f in range(80)]
+    played = play_out_flight(Stadium.DK_JUNGLE, path, seed=1)
+    hits = [e.frame for e in played.events if e.hazard == "klaptrap-1"]
+    reaches_front = next(f for f, (_, _, z) in enumerate(path) if z >= 56.4)
+    assert hits == [reaches_front]
+
+
 def test_a_simulated_hit_plays_out():
     hit = simulate_hit(
         HitInputs(

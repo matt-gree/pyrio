@@ -1022,7 +1022,11 @@ class _LiveBall:
         if under:
             self.terrain = under[3]
         # Probe B: this frame's movement. Wario Palace, Yoshi Park and DK Jungle
-        # sweep their hazards over the last five frames instead, with no radius.
+        # sweep their hazards over the last five frames instead, with no radius:
+        # from pastCoordinates[4] to the ball, per the checkCollision asm (the C
+        # decompile swaps the ends). For the first four frames the game starts
+        # from the pitch's path; no hazard there is within reach of home, so
+        # this frame's movement serves.
         src, dst = _to_mesh(b.previous, gy), _to_mesh(b.location, gy)
         hazard_segment = None
         if self.stadium in _SWEEPING_STADIUMS and len(b.recent) >= 5:
