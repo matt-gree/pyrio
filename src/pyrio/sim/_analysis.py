@@ -13,19 +13,21 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from .._codes import (
+    AtBatResult,
+    DeadBallReason,
     PrimaryContactResult,
     SecondaryContactResult,
     SwingType,
 )
 from ..geometry import clears_wall
 from ._hit import HitInputs, simulate_hit
-from ._live_ball import play_out
+from ._live_ball import LiveBallOutcome, hazard_seed, play_out
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable
 
     from .._characters import Character
-    from .._codes import AtBatResult, Side, Stadium
+    from .._codes import Side, Stadium
     from .._game import Contact, Event, Game
     from ..geometry import Point
     from ._hit import HitResult, Mod
@@ -143,21 +145,57 @@ class ContactRecord:
         A ball caught on the fly stops in the glove, at the recorded catch. Any
         other ball plays out (:func:`pyrio.sim.play_out`) until it comes down
         and reaches the first fielder who touched it, or stops, or leaves the
-        park. The hazards' dice are the game's own and unrecorded, so a ball
-        that meets a hazard plays out one way the game could have.
+        park.
+
+        The game rolls dice for its hazards (how fast a Thwomp falls, which way
+        a tornado spins) that no stat file records. Without a ``seed``, this
+        tries the hit's default dice and then others, and keeps the first play
+        that ends the way the record says: a home run, a foul, a ground-rule
+        double, or a ball that stayed in play. If none does (the flight is the
+        simulation's, so a ball that barely cleared the wall may not), it
+        returns the default dice's play.
         """
         contact, fielding = self.contact, self.event.fielding
         if self.caught:
             return play_out(self.hit, caught_at=contact.landing_location)
         stop_at = None if fielding is None else (fielding.location[0], fielding.location[2])
-        return play_out(
-            self.hit,
-            seed=seed,
-            hazards=hazards,
-            max_frames=max_frames,
-            roll_frames=roll_frames,
-            stop_at=stop_at,
-        )
+
+        def attempt(dice: int | None) -> LiveBallResult:
+            return play_out(
+                self.hit,
+                seed=dice,
+                hazards=hazards,
+                max_frames=max_frames,
+                roll_frames=roll_frames,
+                stop_at=stop_at,
+            )
+
+        first = attempt(seed)
+        if seed is not None or not hazards or self._agrees(first.outcome):
+            return first
+        base = hazard_seed(self.hit.inputs.seeds)
+        for offset in range(1, _DICE_TRIES):
+            played = attempt(base + offset)
+            if self._agrees(played.outcome):
+                return played
+        return first
+
+    def _agrees(self, outcome: LiveBallOutcome) -> bool:
+        """Whether a played-out ball ends the way the stat file recorded."""
+        reason = self.event.dead_ball_reason
+        if self.result is AtBatResult.HOME_RUN or reason is DeadBallReason.HOME_RUN:
+            return outcome is LiveBallOutcome.HOME_RUN
+        if self.is_foul or reason is DeadBallReason.FOUL_BALL:
+            return outcome is LiveBallOutcome.FOUL
+        if reason is DeadBallReason.GROUND_RULE_DOUBLE:
+            return outcome is LiveBallOutcome.GROUND_RULE_DOUBLE
+        return outcome not in _DEAD_BALLS
+
+
+_DICE_TRIES = 16
+_DEAD_BALLS = frozenset(
+    {LiveBallOutcome.HOME_RUN, LiveBallOutcome.FOUL, LiveBallOutcome.GROUND_RULE_DOUBLE}
+)
 
 
 def simulate_contacts(

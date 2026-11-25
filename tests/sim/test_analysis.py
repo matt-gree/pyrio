@@ -27,6 +27,8 @@ from pyrio.sim import (
     best,
     find_highlights,
     format_highlights,
+    hazard_seed,
+    play_out,
     simulate_contacts,
     simulate_hit,
 )
@@ -188,3 +190,19 @@ def test_a_ball_in_play_stops_with_the_first_fielder():
     assert grounders
     outcomes = {r.play_out().outcome for r in grounders}
     assert LiveBallOutcome.FIELDED in outcomes
+
+
+def test_play_out_picks_hazard_dice_that_agree_with_the_record():
+    path = (
+        FIXTURES / "stat_files" / "2.1.1" / "20260219T212721_MattGree-Vs-Baltor33_1189820580.json"
+    )
+    record = next(r for r in simulate_contacts(pyrio.read_game(path)) if r.event_number == 7)
+    assert record.is_foul
+    fielding = record.event.fielding
+    stop_at = None if fielding is None else (fielding.location[0], fielding.location[2])
+    assert play_out(record.hit, stop_at=stop_at).outcome is not LiveBallOutcome.FOUL
+    assert record.play_out().outcome is LiveBallOutcome.FOUL
+    # A seed given is a seed kept.
+    assert record.play_out(seed=hazard_seed(record.hit.inputs.seeds)) == play_out(
+        record.hit, stop_at=stop_at
+    )
