@@ -112,6 +112,9 @@ from pyrio.geometry import wall_at, boundary
 contacts = simulate_contacts(game)     # every contact, re-simulated from its RNG
 find_highlights(contacts, stadium=game.stadium).deepest_robbery
 
+play = contacts[0].play_out()          # bounces, walls and hazards, to how the play ended
+play.outcome, play.trajectory[-1]
+
 wall_at(game.stadium, 0.0).height      # the centre-field wall
 ```
 

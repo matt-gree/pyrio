@@ -35,11 +35,20 @@ the end maps the old names to the new.
   `APIError` subclasses (`AuthenticationError`, `NotFoundError`, `APIResponseError`,
   `APIConnectionError`, `APITimeoutError`). Marked provisional until Rio web 2.0's API
   settles.
-- **`pyrio.sim`**: `simulate_hit`, `simulate_trajectory`, `simulate_all_zones` and
-  `play_out` (the live ball against each stadium's collision mesh and hazards), typed
-  with the enums. `HitInputs.from_event()` rebuilds a recorded contact;
-  `simulate_contacts(game)` does a whole game. Star swings resolve from `stars` and
-  `is_captain`, as in the game. `find_highlights` and `best` for game summaries.
+- **`pyrio.sim`**: `simulate_hit`, `simulate_trajectory` and `simulate_all_zones`,
+  typed with the enums; a `HitResult` keeps the `inputs` that made it. `play_out(hit)`
+  carries a hit on against its stadium's collision mesh and hazards until the play
+  settles (`play_out_flight` for any other flight), ending at a fielder (`stop_at`) or
+  in a glove (`caught_at`). `HitInputs.from_event()` rebuilds a recorded contact;
+  `simulate_contacts(game)` does a whole game, as `ContactRecord`s holding the event
+  and the hit, and `ContactRecord.play_out()` replays one to how the stat file says it
+  ended, picking hazard dice that agree with the record. Star swings resolve from
+  `stars` and `is_captain`, as in the game. `find_highlights` and `best` for game
+  summaries.
+- **Per-character batting-box and fielding data** on `CharacterAttributes`, read from
+  the game through the decomp by `tools/extract_character_tables.py`: the box ranges,
+  bat offset and move speed, the hit-by-pitch box, dive range, `bat_reach` and
+  `jogging_speed`.
 - **`pyrio.geometry`**: walls, the field boundary, collision triangles, hazards and
   physics per stadium, fielder starting spots and lockout frames.
 - **`pyrio.ratings`**: Glicko-2 as a frozen `Rating`, a pure `update()` and
