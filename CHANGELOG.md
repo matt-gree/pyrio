@@ -97,6 +97,9 @@ the end maps the old names to the new.
   name.
 - `examples/game_summary.py` silently skipped the stadium outline.
 - Building an `EventSearch` from an encoded file raised `KeyError: 2`.
+- The hit simulation gave a superstar batter superstar power but not superstar contact
+  size (a bug carried over from RioVisualizer's calculator), so it missed the contact
+  quality, power and launch of nearly every superstar contact in Superstars-On games.
 
 ### Removed
 

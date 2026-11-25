@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 import pathlib
 from typing import TYPE_CHECKING, Any
 
@@ -39,12 +40,7 @@ def simulatable(game: Game) -> list[tuple[pyrio.Event, HitInputs]]:
 
 @pytest.mark.parametrize("path", SIMULATABLE, ids=lambda p: f"{p.parent.name}/{p.name[:24]}")
 def test_recorded_contacts_simulate_to_what_was_recorded(path: pathlib.Path):
-    """Contact type and launch angles, against what the client wrote.
-
-    Power is left out: in some games it comes out 1-2 low on most contacts, the
-    same through the pre-1.0 bridge (tools/hit_sim_validation.py), which points
-    at something the simulator doesn't model rather than at from_event.
-    """
+    """Contact type, quality, launch angles and power, against what the client wrote."""
     game = pyrio.read_game(path)
     pairs = simulatable(game)
     assert len(pairs) > 10
@@ -57,9 +53,29 @@ def test_recorded_contacts_simulate_to_what_was_recorded(path: pathlib.Path):
             result.contact_type is contact.type
             and result.horizontal_angle_raw == contact.horizontal_angle
             and result.vertical_angle_raw == contact.vertical_angle
+            and contact.power in (None, result.power)
+            and (
+                contact.quality is None
+                or math.isclose(contact.quality, result.contact_quality, abs_tol=1e-3)
+            )
         ):
             exact += 1
     assert exact / len(pairs) >= 0.9, f"{exact}/{len(pairs)} contacts reproduced exactly"
+
+
+def test_superstar_batters_get_superstar_contact_size():
+    """Superstar boosts contact size as well as power, so it shows in contact quality."""
+    game = pyrio.read_game(
+        FIXTURES / "stat_files/2.0.2/decoded.20240127T163640_Clutch1908-Vs-Baltor33_1908774040.json"
+    )
+    pairs = [(e, i) for e, i in simulatable(game) if i.batter_is_superstar]
+    assert len(pairs) > 10
+    for event, inputs in pairs:
+        assert event.contact is not None
+        assert event.contact.quality is not None
+        assert math.isclose(
+            event.contact.quality, simulate_hit(inputs).contact_quality, abs_tol=1e-3
+        )
 
 
 def test_encoded_and_decoded_files_give_the_same_inputs():

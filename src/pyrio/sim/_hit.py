@@ -450,12 +450,14 @@ class _Simulation:
         self.charge_pitch = 0 if inputs.charge is None else inputs.charge.id
         self.cursed_ball = pitcher.cursed_ball
 
-        # The superstar boost the calculator applies is to power alone.
+        # Superstar boosts contact size as well as power. RioVisualizer's
+        # calculator boosted power alone, which misses nearly every superstar
+        # contact's quality in Superstars-On games.
         self.slap_power = boosted.slap_hit_power
         self.charge_power = boosted.charge_hit_power
-        self.slap_contact_size = batter.slap_contact_size_multiplier
-        self.charge_contact_size = batter.charge_contact_size_multiplier
-        self.bunting = batter.bunting
+        self.slap_contact_size = boosted.slap_contact_size_multiplier
+        self.charge_contact_size = boosted.charge_contact_size_multiplier
+        self.bunting = boosted.bunting
         self.horizontal_trajectory = batter.horizontal_hit_trajectory.id
         self.vertical_trajectory = batter.vertical_hit_trajectory.id
         self.has_super_curve = batter.has_super_curve
