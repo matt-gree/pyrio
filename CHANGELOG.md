@@ -119,6 +119,10 @@ the end maps the old names to the new.
 - The hit simulation gave a superstar batter superstar power but not superstar contact
   size (a bug carried over from RioVisualizer's calculator), so it missed the contact
   quality, power and launch of nearly every superstar contact in Superstars-On games.
+- The hit simulation always used the pitcher's own cursed ball. As in the game, a tired
+  pitcher (stamina below 4) has none unless they threw a non-captain star pitch, and a
+  captain star pitch is fully cursed. `HitInputs` gains `pitcher_stamina` and
+  `is_star_pitch`, which `HitInputs.from_event` fills from the stat file.
 - Bowser Castle's Thwomps (carried over from RioVisualizer's physics) slammed on any
   ball that came near and only once a play. As in the game, a Thwomp is now disarmed
   for the play the first frame the ball heads back toward home or aims more than 25

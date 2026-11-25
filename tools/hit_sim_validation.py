@@ -7,6 +7,13 @@ reports how often each one matches, over a file or a folder of files, with a
 few mismatches to look at.
 
     python tools/hit_sim_validation.py STAT_FILE_OR_FOLDER [--examples N]
+        [--since VERSION] [--skip-untagged] [--mod TAG ...]
+
+A stat file doesn't record the gecko mods a game was played with, only its tag
+set, and some mods change the contact: the non-red Toads' bat reach is one.
+``--mod`` plays every game with a mod (by its Rio web tag), and
+``--skip-untagged`` leaves out games with no tag set, which may have had
+custom mods.
 
 The test suite holds the fixtures to this (``tests/sim/test_from_event.py``);
 this is for running it over a large collection.
@@ -21,8 +28,8 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 import pyrio
-from pyrio import Contact, StatFileError
-from pyrio.sim import simulate_contacts
+from pyrio import Contact, StatFileError, Version
+from pyrio.sim import TAG_TO_MOD, Mod, simulate_contacts
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -73,7 +80,13 @@ def agrees(check: Check, recorded: Any, simulated: Any) -> bool:
     return math.isclose(recorded, simulated, abs_tol=check.tolerance)
 
 
-def validate(paths: list[pathlib.Path]) -> tuple[dict[str, Tally], int, list[str]]:
+def validate(
+    paths: list[pathlib.Path],
+    *,
+    since: Version | None = None,
+    skip_untagged: bool = False,
+    mods: frozenset[Mod] = frozenset(),
+) -> tuple[dict[str, Tally], int, list[str]]:
     tallies = {check.name: Tally() for check in CHECKS}
     contacts = 0
     skipped: list[str] = []
@@ -83,7 +96,11 @@ def validate(paths: list[pathlib.Path]) -> tuple[dict[str, Tally], int, list[str
         except StatFileError as e:
             skipped.append(f"{path.name}: {e}")
             continue
-        for record in simulate_contacts(game):
+        if since is not None and game.version < since:
+            continue
+        if skip_untagged and game.tag_set_id is None:
+            continue
+        for record in simulate_contacts(game, mods=mods):
             contact = record.contact
             contacts += 1
             for check in CHECKS:
@@ -107,11 +124,27 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("path", type=pathlib.Path, help="a stat file or a folder of them")
     parser.add_argument("--examples", type=int, default=3, help="mismatches to show per field")
+    parser.add_argument(
+        "--since", type=Version.parse, help="only games from this client version on, e.g. 2.1.0"
+    )
+    parser.add_argument(
+        "--skip-untagged", action="store_true", help="leave out games with no tag set"
+    )
+    parser.add_argument(
+        "--mod",
+        action="append",
+        default=[],
+        choices=sorted(TAG_TO_MOD),
+        help="a gecko mod, by its Rio web tag, to play every game with (repeatable)",
+    )
     args = parser.parse_args(argv)
 
     root: pathlib.Path = args.path
     paths = sorted(root.rglob("*.json")) if root.is_dir() else [root]
-    tallies, contacts, skipped = validate(paths)
+    mods = frozenset(TAG_TO_MOD[tag] for tag in args.mod)
+    tallies, contacts, skipped = validate(
+        paths, since=args.since, skip_untagged=args.skip_untagged, mods=mods
+    )
     print(f"{len(paths)} files, {contacts} simulated contacts, {len(skipped)} files skipped")
     for name, tally in tallies.items():
         rate = tally.matched / tally.checked if tally.checked else math.nan

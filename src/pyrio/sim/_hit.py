@@ -182,6 +182,12 @@ class HitInputs:
     pitcher_is_superstar: bool = False
     is_easy_batting: bool = False
 
+    is_star_pitch: bool = False
+    """Whether the pitch was a star pitch. A captain star pitch is fully cursed."""
+
+    pitcher_stamina: int = 10
+    """The pitcher's stamina, 0 to 10. A tired pitcher's pitch has no cursed ball."""
+
     stadium: Stadium = Stadium.MARIO_STADIUM
     """Where the hit is played: it decides the ground height and whether the ground bounces."""
 
@@ -249,6 +255,8 @@ class HitInputs:
             is_captain=batter.is_captain,
             batter_is_superstar=batter.is_superstar,
             pitcher_is_superstar=pitcher.is_superstar,
+            is_star_pitch=pitch.is_star,
+            pitcher_stamina=state.pitcher_stamina,
             stadium=stadium,
             mods=mods,
             seeds=contact.rng,
@@ -431,6 +439,23 @@ def _interpolate(
     return (to_high - to_low) * fraction + to_low
 
 
+def _pitched_cursed_ball(
+    cursed_ball: int, *, captain_star_pitch: bool, star_pitch: bool, stamina: int
+) -> int:
+    """The cursed ball the pitch carries: ``adjustPitchCurveSpeedCursedBall``.
+
+    A captain star pitch is fully cursed. A tired pitcher's other pitches lose
+    their cursed ball, unless it was a non-captain star pitch. The game keeps
+    the result in a byte, so it's whole.
+    """
+    if captain_star_pitch:
+        return tables.STAR_PITCH_CURSED_BALL
+    if not star_pitch and stamina < tables.TIRED_PITCHER_STAMINA:
+        kept = 1.0 - 0.01 * tables.TIRED_CURSED_BALL_LOSS_PERCENT
+        return _truncate(cursed_ball * kept)
+    return cursed_ball
+
+
 class _Simulation:
     """One hit, worked through the game's steps in order."""
 
@@ -448,7 +473,12 @@ class _Simulation:
 
         self.pitch = inputs.pitch.id
         self.charge_pitch = 0 if inputs.charge is None else inputs.charge.id
-        self.cursed_ball = pitcher.cursed_ball
+        self.cursed_ball = _pitched_cursed_ball(
+            pitcher.cursed_ball,
+            captain_star_pitch=inputs.is_star_pitch and pitcher.captain_star is not None,
+            star_pitch=inputs.is_star_pitch,
+            stamina=inputs.pitcher_stamina,
+        )
 
         # Superstar boosts contact size as well as power. RioVisualizer's
         # calculator boosted power alone, which misses nearly every superstar

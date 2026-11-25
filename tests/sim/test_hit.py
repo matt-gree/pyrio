@@ -207,6 +207,25 @@ def test_the_toad_reach_fix_applies_only_to_non_red_toads():
     assert same_hit(simulate_hit(red), simulate_hit(replace(red, mods=mod)))
 
 
+def test_a_tired_pitcher_loses_the_cursed_ball():
+    nice = replace(BASE, ball_x=0.1)
+    fresh = simulate_hit(replace(nice, pitcher_stamina=4))
+    assert fresh.contact_type is ContactType.NICE_RIGHT
+    assert simulate_hit(nice).power == fresh.power
+    assert simulate_hit(replace(nice, pitcher_stamina=3)).power > fresh.power
+
+
+def test_a_captain_star_pitch_is_fully_cursed():
+    nice = replace(BASE, ball_x=0.1)
+    assert Character.MARIO.attributes.cursed_ball < 100
+    star = replace(nice, is_star_pitch=True)
+    assert simulate_hit(star).power < simulate_hit(nice).power
+    assert simulate_hit(replace(star, pitcher_stamina=3)).power == simulate_hit(star).power
+    # A non-captain star pitch keeps the pitcher's cursed ball, tired or not.
+    boo = replace(star, pitcher=Character.BOO, pitcher_stamina=3)
+    assert simulate_hit(boo).power == simulate_hit(replace(nice, pitcher=Character.BOO)).power
+
+
 def test_the_stick_and_hand_move_the_hit():
     late = replace(BASE, contact_frame=8)
     push = simulate_hit(replace(late, stick=InputDirection.RIGHT))

@@ -432,6 +432,15 @@ CAPTAIN_STAR_EXIT_VELOCITIES: Final[tuple[tuple[tuple[int, ...], ...], ...]] = (
 # (at 0 cursed ball, at 100). FLOAT_ARRAY_ARRAY_807b7480
 CURSED_BALL_POWER_SCALE: Final[tuple[tuple[float, ...], ...]] = ((1.0, 1.0), (1.0, 0.8), (1.0, 0.5))
 
+# The pitcher's cursed ball as the pitch uses it (adjustPitchCurveSpeedCursedBall,
+# lbl_3_data_5EDC[3] and [8] read as s16): a pitcher below this stamina is
+# tired, and a tired pitcher's cursed ball loses this percentage, all of it.
+# A captain star pitch's cursed ball is 100. A charge pitch or change-up
+# scales it by lbl_3_data_5F08[8], which is 1.0, so not at all.
+TIRED_PITCHER_STAMINA: Final = 4
+TIRED_CURSED_BALL_LOSS_PERCENT: Final = 100
+STAR_PITCH_CURSED_BALL: Final = 100
+
 # Power bonus across the field, [HorizontalHitTrajectory id][segment], five
 # points interpolated across four segments. FieldTrajectories
 FIELD_POWER_BONUS: Final[tuple[tuple[float, ...], ...]] = (
