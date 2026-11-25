@@ -209,7 +209,9 @@ class HitInputs:
         bunt, or a file too old to record the swing's RNG.
 
         A star swing is rebuilt from what the player did: five-star moonshots
-        are fully charged. One without the stars to spend it ("Walu tech") was a
+        are fully charged, and any other star swing held no charge (the full
+        charge a file records for a pop fly or grounder star swing is the
+        swing's own). One without the stars to spend it ("Walu tech") was a
         charge swing with no charge held, which is what the game played. Where
         the file didn't record the team's stars, the swing had the stars it
         cost. A curve or change-up is simulated as one even if the file gives
@@ -234,8 +236,13 @@ class HitInputs:
                 stars = _MOONSHOT_COST if moonshot else 2 if off_captain else 1
             if stars == 0 or (stars == 1 and off_captain):
                 swing, charge_down = SwingType.CHARGE, 0.0
-            elif contact.moonshot is MoonshotStatus.MOONSHOT:
+            elif contact.moonshot in (MoonshotStatus.MOONSHOT, MoonshotStatus.FAILED):
                 charge_up = 1.0
+            else:
+                # Pressing for a star swing zeroes the charge, so any charge the
+                # file records is the swing's own: a pop fly or grounder star
+                # swing sets it full (calculateHitVariables). It isn't held.
+                charge_up = charge_down = 0.0
         return cls(
             batter=batter.character,
             pitcher=pitcher.character,

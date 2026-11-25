@@ -93,6 +93,27 @@ def test_a_five_star_swing_is_rebuilt_fully_charged():
             assert inputs.swing is SwingType.STAR
 
 
+def test_a_pop_fly_star_swing_records_its_own_charge_not_a_held_one():
+    """The game fills a pop fly or grounder star swing's charge, so with five
+    stars a recorded full charge still isn't a moonshot attempt."""
+    path = next((FIXTURES / "stat_files" / "2.1.1").glob("20260219T212721_*.json"))
+    data = json.loads(path.read_text())
+    event_data = next(e for e in data["Events"] if e["Event Num"] == 40)
+    event_data["Away Stars" if event_data["Half Inning"] == 0 else "Home Stars"] = 5
+    game = pyrio.read_game(data)
+    event = next(e for e in game.events if e.number == 40)
+    assert event.contact is not None
+    assert event.contact.charge_power_up == 1.0
+    inputs = HitInputs.from_event(event, stadium=game.stadium)
+    assert (inputs.stars, inputs.charge_up, inputs.charge_down) == (5, 0.0, 0.0)
+    result = simulate_hit(inputs)
+    assert result.moonshot is MoonshotStatus.NONE
+    assert (result.power, result.vertical_angle_raw) == (
+        event.contact.power,
+        event.contact.vertical_angle,
+    )
+
+
 def test_events_without_contact_are_refused():
     game = pyrio.read_game(GAME_FILE)
     no_contact = next(e for e in game.events if e.contact is None)

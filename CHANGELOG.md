@@ -123,6 +123,9 @@ the end maps the old names to the new.
   pitcher (stamina below 4) has none unless they threw a non-captain star pitch, and a
   captain star pitch is fully cursed. `HitInputs` gains `pitcher_stamina` and
   `is_star_pitch`, which `HitInputs.from_event` fills from the stat file.
+- `HitInputs.from_event` passed on the full charge a stat file records for a pop fly or
+  grounder star swing, which the game sets itself, so with five stars it replayed the
+  swing as a moonshot attempt. A star swing that isn't a moonshot now held no charge.
 - Bowser Castle's Thwomps (carried over from RioVisualizer's physics) slammed on any
   ball that came near and only once a play. As in the game, a Thwomp is now disarmed
   for the play the first frame the ball heads back toward home or aims more than 25
