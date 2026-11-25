@@ -165,3 +165,10 @@ def test_lead_changes(game: Game):
         side = event.state.batting_side
         assert event.state.score(side) <= event.state.score(side.other)
         assert event.state.score(side) + event.runs > event.state.score(side.other)
+
+
+def test_inning_runs_is_the_line_score(game: Game):
+    away, home = game.inning_runs(Side.AWAY), game.inning_runs(Side.HOME)
+    assert len(away) == len(home) == game.innings_played
+    assert sum(r or 0 for r in away) == game.away.score
+    assert sum(r or 0 for r in home) == game.home.score

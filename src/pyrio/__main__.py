@@ -83,16 +83,12 @@ def _describe(game: Game, *, events: bool) -> str:
 
 
 def _line_score(game: Game) -> list[str]:
-    innings = max(game.innings_played, max((e.state.inning for e in game.events), default=0))
-    runs = {(half.inning, half.batting_side): half.runs for half in game.half_innings}
+    innings = len(game.inning_runs(game.away.side))
     header = "".join(f"{i:>3}" for i in range(1, innings + 1))
     width = max(len(game.away.player), len(game.home.player))
     rows = [f"{'':<{width}} {header}    R"]
     for team in (game.away, game.home):
-        cells = "".join(
-            f"{runs[(i, team.side)]:>3}" if (i, team.side) in runs else "  -"
-            for i in range(1, innings + 1)
-        )
+        cells = "".join("  -" if r is None else f"{r:>3}" for r in game.inning_runs(team.side))
         rows.append(f"{team.player:<{width}} {cells}  {team.score:>3}")
     return rows
 

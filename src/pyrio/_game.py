@@ -453,6 +453,16 @@ class Game:
                 groups.append(HalfInning(inning=key[0], batting_side=key[1], events=(event,)))
         return tuple(groups)
 
+    def inning_runs(self, side: Side) -> tuple[int | None, ...]:
+        """One side's runs in each inning, for a line score.
+
+        One entry per inning played; ``None`` for a half the side never batted
+        (a home team ahead after the top of the last inning).
+        """
+        last = max(self.innings_played, max((e.state.inning for e in self.events), default=0))
+        runs = {h.inning: h.runs for h in self.half_innings if h.batting_side is side}
+        return tuple(runs.get(inning) for inning in range(1, last + 1))
+
     @property
     def lead_changes(self) -> tuple[Event, ...]:
         """The events that put the batting side ahead when it wasn't before."""

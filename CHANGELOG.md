@@ -27,6 +27,7 @@ the end maps the old names to the new.
 - **`BattingLine` and `PitchingLine`**: counts that add with `+` and `sum()`, derived
   stats as properties (`avg`, `obp`, `slg`, `ops`, `era`, `whip`, ...), and
   `format_batting_line` / `format_pitching_line`.
+- **`Game.inning_runs(side)`**: a line score, `None` for a half never batted.
 - **`pyrio.team_name(roster, captain)`** and the `CAPTAIN_TEAMS` table.
 - **`pyrio decode FILE`** (also `python -m pyrio`), printing a box score, the events
   (`--events`) or the whole model as JSON (`--json`); `pyrio.to_jsonable()` underneath.
