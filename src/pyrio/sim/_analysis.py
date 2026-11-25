@@ -206,7 +206,9 @@ def simulate_contacts(
     Each contact is rebuilt with :meth:`HitInputs.from_event` from the RNG
     values the stat file records, at the game's stadium, in event order.
     Bunts aren't simulated, and a file from a client too old to record the
-    RNG gives an empty tuple. ``mods`` are the gecko codes the game was
+    RNG gives an empty tuple. A contact whose recorded inputs the simulation
+    rejects (the ball outside the bat's reach, a charge pitch with no charge
+    type) is left out rather than failing the game. ``mods`` are the gecko codes the game was
     played with.
     """
     records: list[ContactRecord] = []
@@ -216,13 +218,12 @@ def simulate_contacts(
             continue
         if pitch.swing not in _SIMULATED_SWINGS:
             continue
-        inputs = HitInputs.from_event(event, stadium=game.stadium, mods=mods)
+        try:
+            hit = simulate_hit(HitInputs.from_event(event, stadium=game.stadium, mods=mods))
+        except ValueError:
+            continue  # the recorded inputs miss the bat or contradict each other
         records.append(
-            ContactRecord(
-                event=event,
-                player=game.team(event.state.batting_side).player,
-                hit=simulate_hit(inputs),
-            )
+            ContactRecord(event=event, player=game.team(event.state.batting_side).player, hit=hit)
         )
     return tuple(records)
 

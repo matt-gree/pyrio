@@ -179,8 +179,9 @@ class GameState:
     outs: int
     away_score: int
     home_score: int
-    away_stars: int
-    home_stars: int
+    away_stars: int | None
+    """``None`` when the client didn't record the count."""
+    home_stars: int | None
     is_star_chance: bool
     pitcher_stamina: int
     chemistry_links_on_base: int
@@ -191,8 +192,8 @@ class GameState:
         """One side's runs so far."""
         return self.away_score if side is Side.AWAY else self.home_score
 
-    def stars(self, side: Side) -> int:
-        """One side's star count."""
+    def stars(self, side: Side) -> int | None:
+        """One side's star count, or ``None`` if the client didn't record it."""
         return self.away_stars if side is Side.AWAY else self.home_stars
 
     @property

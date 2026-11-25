@@ -28,7 +28,6 @@ from .._codes import (
     InputDirection,
     MoonshotStatus,
     PitchType,
-    Side,
     Stadium,
     SwingType,
 )
@@ -202,7 +201,10 @@ class HitInputs:
 
         A star swing is rebuilt from what the player did: five-star moonshots
         are fully charged. One without the stars to spend it ("Walu tech") was a
-        charge swing with no charge held, which is what the game played.
+        charge swing with no charge held, which is what the game played. Where
+        the file didn't record the team's stars, the swing had the stars it
+        cost. A curve or change-up is simulated as one even if the file gives
+        it a charge type.
         """
         pitch, contact = event.pitch, event.contact
         if pitch is None or contact is None:
@@ -211,13 +213,16 @@ class HitInputs:
             raise ValueError(f"event {event.number} is from a client too old to simulate")
         batter, pitcher = event.batter_spot, event.pitcher_spot
         state = event.state
-        stars = state.away_stars if state.batting_side is Side.AWAY else state.home_stars
+        stars = state.stars(state.batting_side)
         swing = pitch.swing
         charge_up, charge_down = contact.charge_power_up, contact.charge_power_down
         if swing is SwingType.STAR:
             off_captain = batter.character.attributes.captain_star is not None and not (
                 batter.is_captain
             )
+            if stars is None:  # not recorded: the swing had what it cost
+                moonshot = contact.moonshot is MoonshotStatus.MOONSHOT
+                stars = _MOONSHOT_COST if moonshot else 2 if off_captain else 1
             if stars == 0 or (stars == 1 and off_captain):
                 swing, charge_down = SwingType.CHARGE, 0.0
             elif contact.moonshot is MoonshotStatus.MOONSHOT:
@@ -226,7 +231,7 @@ class HitInputs:
             batter=batter.character,
             pitcher=pitcher.character,
             pitch=pitch.type,
-            charge=None if pitch.charge_type is ChargeType.NONE else pitch.charge_type,
+            charge=pitch.charge_type if pitch.type is PitchType.CHARGE else None,
             swing=swing,
             hand=batter.batting_hand,
             stick=contact.input_direction,
@@ -237,7 +242,7 @@ class HitInputs:
             charge_down=charge_down,
             contact_frame=contact.swing_frame,
             chem_links_on_base=state.chemistry_links_on_base,
-            stars=stars,
+            stars=stars or 0,
             is_captain=batter.is_captain,
             batter_is_superstar=batter.is_superstar,
             pitcher_is_superstar=pitcher.is_superstar,

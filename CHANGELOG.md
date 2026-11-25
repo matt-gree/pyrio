@@ -28,6 +28,8 @@ the end maps the old names to the new.
   stats as properties (`avg`, `obp`, `slg`, `ops`, `era`, `whip`, ...), and
   `format_batting_line` / `format_pitching_line`.
 - **`Game.inning_runs(side)`**: a line score, `None` for a half never batted.
+- `GameState.away_stars` / `home_stars` are `None` where a client wrote 255 for the
+  whole game (seen 2.0.1–2.1.1, games with no tag set): the count wasn't recorded.
 - **`pyrio.team_name(roster, captain)`** and the `CAPTAIN_TEAMS` table.
 - **`pyrio decode FILE`** (also `python -m pyrio`), printing a box score, the events
   (`--events`) or the whole model as JSON (`--json`); `pyrio.to_jsonable()` underneath.

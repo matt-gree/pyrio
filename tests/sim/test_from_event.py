@@ -2,13 +2,18 @@
 
 from __future__ import annotations
 
+import json
 import pathlib
+from typing import TYPE_CHECKING, Any
 
 import pytest
 
 import pyrio
-from pyrio import Game, MoonshotStatus, Stadium, SwingType
-from pyrio.sim import HitInputs, simulate_hit
+from pyrio import ChargeType, Game, MoonshotStatus, PitchType, Stadium, SwingType
+from pyrio.sim import HitInputs, simulate_contacts, simulate_hit
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 FIXTURES = pathlib.Path(__file__).parent.parent / "fixtures"
 GAME_FILE = FIXTURES / "20260618T191655_SpiceOrange-Vs-MattGree_3896251267.json"
@@ -84,3 +89,61 @@ def test_files_without_rng_are_refused():
     contact = next(e for e in game.events if e.contact is not None)
     with pytest.raises(ValueError, match="too old"):
         HitInputs.from_event(contact, stadium=game.stadium)
+
+
+def _edited(edit: Callable[[dict[str, Any]], None]) -> Game:
+    data = json.loads(GAME_FILE.read_text())
+    for event in data["Events"]:
+        edit(event)
+    return pyrio.read_game(data)
+
+
+def test_unrecorded_stars_are_none_and_star_swings_still_simulate():
+    def no_stars(event: dict[str, Any]) -> None:
+        event["Away Stars"] = event["Home Stars"] = 255
+
+    game = _edited(no_stars)
+    assert all(e.state.away_stars is None and e.state.home_stars is None for e in game.events)
+    stars = [
+        e
+        for e in game.events
+        if e.pitch is not None and e.pitch.swing is SwingType.STAR and e.contact is not None
+    ]
+    assert stars
+    for event in stars:
+        inputs = HitInputs.from_event(event, stadium=game.stadium)
+        assert inputs.swing is SwingType.STAR
+        assert inputs.stars >= 1
+    assert len(simulate_contacts(game)) == len(simulate_contacts(pyrio.read_game(GAME_FILE)))
+
+
+def test_a_curve_with_a_stray_charge_type_simulates_as_a_curve():
+    def stray(event: dict[str, Any]) -> None:
+        pitch = event.get("Pitch")
+        if pitch and pitch["Pitch Type"] == 0:
+            pitch["Charge Type"] = 2
+
+    game = _edited(stray)
+    swings = (SwingType.SLAP, SwingType.CHARGE, SwingType.STAR)
+    curves = [
+        e
+        for e in game.events
+        if e.pitch and e.pitch.type is PitchType.CURVE and e.contact and e.pitch.swing in swings
+    ]
+    assert curves
+    assert all(e.pitch is not None and e.pitch.charge_type is ChargeType.SLIDER for e in curves)
+    assert {HitInputs.from_event(e, stadium=game.stadium).charge for e in curves} == {None}
+
+
+def test_simulate_contacts_leaves_out_a_contact_it_cannot_reproduce():
+    full = simulate_contacts(pyrio.read_game(GAME_FILE))
+    first = full[0].event_number
+
+    def contradict(event: dict[str, Any]) -> None:
+        if event["Event Num"] == first:
+            event["Pitch"]["Pitch Type"] = 1  # a charge pitch with no charge type
+            event["Pitch"]["Charge Type"] = 0
+
+    assert [c.event_number for c in simulate_contacts(_edited(contradict))] == [
+        c.event_number for c in full[1:]
+    ]

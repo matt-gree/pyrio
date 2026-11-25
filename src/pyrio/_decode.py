@@ -118,6 +118,10 @@ _UNFINISHED_PLAY = 255  # "Num Outs During Play" when the game ended mid-play
 _NO_BASE = 255  # "Runner Result Base" for a runner put out
 _HOME_PLATE = 4
 _NO_POSITION = 0xFF  # "Inv" in cPosition
+# Some games (seen from 2.0.1 to 2.1.1, all with no tag set) write 255 for both
+# teams' stars at every event while star swings and pitches still happen: the
+# count wasn't recorded.
+_UNRECORDED_STARS = 255
 
 
 @dataclass(frozen=True, slots=True)
@@ -580,13 +584,18 @@ def _state(node: _Node) -> GameState:
         outs=node.integer("Outs"),
         away_score=node.integer("Away Score"),
         home_score=node.integer("Home Score"),
-        away_stars=node.integer("Away Stars"),
-        home_stars=node.integer("Home Stars"),
+        away_stars=_stars(node, "Away Stars"),
+        home_stars=_stars(node, "Home Stars"),
         is_star_chance=node.flag("Star Chance"),
         pitcher_stamina=node.integer("Pitcher Stamina"),
         chemistry_links_on_base=node.integer("Chemistry Links on Base"),
         bases=bases,
     )
+
+
+def _stars(node: _Node, key: str) -> int | None:
+    stars = node.integer(key)
+    return None if stars == _UNRECORDED_STARS else stars
 
 
 def _event(
