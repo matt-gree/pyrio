@@ -18,7 +18,10 @@ the end maps the old names to the new.
   live HUD files into a `HUDSnapshot`. Every per-version rule lives in the decoder: the
   1.9.2 home/away flip (as `Side`, never a team number), the 1.9.2–1.9.4 crossed
   captain flags, hex and decimal game ids, the pre-2.3.0 swapped result labels and
-  contact results, renamed keys and comma-grouped numbers.
+  contact results, renamed keys and comma-grouped numbers. Pre-0.1.9 files read
+  too: a bobbling fielder's uninitialised position is `None`, a pitch with no
+  recorded swing is `SwingType.NONE`, 0.1.7's raw star-pitch byte is read as a
+  flag, and the trailing commas in 0.1.7–0.1.8 crash files are repaired.
 - **Enums for every coded value** (`Character`, `Stadium`, `PitchType`, `AtBatResult`,
   `Position` and about twenty more), each with the game's id and label, checked
   against ProjectRio's own tables by a parity test. `Character.parse()`,

@@ -92,8 +92,16 @@ _CAPTAINS_FIXED = Version(1, 9, 5)
 _DECIMAL_GAME_ID = Version(0, 1, 9)
 _HEX_GAME_ID = Version(2, 3, 0)
 # (c) Before 0.1.9 the fielder's action and jump weren't initialised, so a
-# fielder who didn't collect the ball got whatever was in memory.
+# fielder who didn't collect the ball got whatever was in memory. The same fix
+# (ProjectRio 339c6c5797) set the position of a fielder logged from a bobble,
+# which until then was also whatever was in memory (values up to 255).
 _FIELDER_ACTION = Version(0, 1, 9)
+# (c) Before 0.1.9 a pitch that hit the batter, or was still in the air when a
+# crash file was written, has no "Type of Swing": no swing was logged.
+_SWING_ALWAYS_WRITTEN = Version(0, 1, 9)
+# (b) Before 0.1.8 "Star Pitch" was the game's raw star-pitch byte, which can be
+# 2 or 3, not a 0/1 flag (ProjectRio 75ff1381ac). Any nonzero is a star pitch.
+_STAR_PITCH_FLAG = Version(0, 1, 8)
 # (c) Before 1.9.2 "Fielder Manual Selected" held the manual-select lock, a
 # different value from today's selection, under the same key.
 _MANUAL_SELECT = Version(1, 9, 2)
@@ -133,6 +141,8 @@ class _Rules:
     captains_crossed: bool
     decimal_game_id: bool
     fielder_action: bool
+    swing_always_written: bool
+    star_pitch_flag: bool
     manual_select: bool
     caught_labels_swapped: bool
     legacy_contact_results: bool
@@ -145,6 +155,8 @@ def _rules(version: Version) -> _Rules:
         captains_crossed=_TEAM_0_IS_AWAY <= version < _CAPTAINS_FIXED,
         decimal_game_id=_DECIMAL_GAME_ID <= version < _HEX_GAME_ID,
         fielder_action=version >= _FIELDER_ACTION,
+        swing_always_written=version >= _SWING_ALWAYS_WRITTEN,
+        star_pitch_flag=version >= _STAR_PITCH_FLAG,
         manual_select=version >= _MANUAL_SELECT,
         caught_labels_swapped=version < _CAUGHT_LABELS_FIXED,
         legacy_contact_results=version < _CONTACT_RESULTS_FIXED,
@@ -316,8 +328,11 @@ def _parse_json(text: str) -> object:
         return json.loads(text, strict=False)
     except json.JSONDecodeError:
         # (b) 1.9.5 wrote a game without a tag set as `"TagSetID": ,`.
-        repaired, count = re.subn(r'("TagSetID":\s*),', r"\1null,", text)
-        if not count:
+        repaired = re.sub(r'("TagSetID":\s*),', r"\1null,", text)
+        # (b) 0.1.7-0.1.8 left a comma before a closing bracket: crash and quit
+        # files after the last event, and 0.1.8 after a pitch with no swing.
+        repaired = re.sub(r",(\s*[}\]])", r"\1", repaired)
+        if repaired == text:
             raise
         return json.loads(repaired, strict=False)
 
@@ -615,7 +630,7 @@ def _event(
     pitch_node = node.maybe_node("Pitch")
     pitch = contact = fielder = None
     if pitch_node is not None:
-        pitch = _pitch(pitch_node)
+        pitch = _pitch(pitch_node, rules)
         contact_node = pitch_node.maybe_node("Contact")
         if contact_node is not None:
             contact = _contact(contact_node)
@@ -686,17 +701,22 @@ def _runners(node: _Node, batting: Team, result: AtBatResult) -> tuple[Runner, .
     return tuple(runners)
 
 
-def _pitch(node: _Node) -> Pitch:
+def _pitch(node: _Node, rules: _Rules) -> Pitch:
     bat_location = None
     if node.has("Bat Contact Pos - X"):
         bat_location = (node.number("Bat Contact Pos - X"), node.number("Bat Contact Pos - Z"))
+    swing = SwingType.NONE
+    if rules.swing_always_written or node.has("Type of Swing"):
+        swing = node.coded("Type of Swing", SwingType)
     return Pitch(
         type=node.coded("Pitch Type", PitchType),
         charge_type=node.coded("Charge Type", ChargeType),
-        is_star=node.flag("Star Pitch"),
+        is_star=node.flag("Star Pitch")
+        if rules.star_pitch_flag
+        else node.integer("Star Pitch") != 0,
         is_dickball=node.flag("DB"),
         speed=node.integer("Pitch Speed"),
-        swing=node.coded("Type of Swing", SwingType),
+        swing=swing,
         strike_zone_location=node.maybe_number("Ball Position - Strikezone"),
         is_in_strike_zone=node.maybe_flag("In Strikezone"),
         bat_location=bat_location,
@@ -807,9 +827,13 @@ def _continues_at_bat(node: _Node, following: _Node | None) -> bool:
 
 
 def _fielding(node: _Node, team: Team, rules: _Rules) -> Fielding:
+    bobble = node.coded("Fielder Bobble", FielderBobble)
+    position = None
+    if rules.fielder_action or bobble is FielderBobble.NONE:
+        position = node.position("Fielder Position")
     return Fielding(
         spot=node.spot("Fielder Roster Location", team),
-        position=node.position("Fielder Position"),
+        position=position,
         action=node.coded("Fielder Action", FielderAction) if rules.fielder_action else None,
         jumped=node.flag("Fielder Jump") if rules.fielder_action else None,
         manual_select=(
@@ -820,7 +844,7 @@ def _fielding(node: _Node, team: Team, rules: _Rules) -> Fielding:
             node.number("Fielder Position - Y"),
             node.number("Fielder Position - Z"),
         ),
-        bobble=node.coded("Fielder Bobble", FielderBobble),
+        bobble=bobble,
     )
 
 

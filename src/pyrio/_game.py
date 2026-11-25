@@ -265,7 +265,8 @@ class Fielding:
 
     spot: RosterSpot
     position: Position | None
-    """The position the fielder was playing, or ``None`` if Rio recorded none."""
+    """The position the fielder was playing, or ``None`` if Rio recorded none
+    (as for a fielder who bobbled the ball, before Rio 0.1.9)."""
     action: FielderAction | None
     """``None`` before Rio 0.1.9, which could write uninitialised memory here."""
     jumped: bool | None

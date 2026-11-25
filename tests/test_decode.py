@@ -10,6 +10,7 @@ from __future__ import annotations
 import copy
 import io
 import json
+import re
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -20,15 +21,18 @@ from pyrio import (
     AtBatResult,
     Character,
     ChargeType,
+    Fielding,
     ManualSelect,
     MoonshotStatus,
     OutType,
+    Pitch,
     Position,
     PrimaryContactResult,
     SecondaryContactResult,
     Side,
     Stadium,
     StatFileError,
+    SwingType,
     Version,
     read_game,
     read_hud,
@@ -247,6 +251,78 @@ def test_fielder_action_and_jump_are_unknown_before_0_1_9():
     assert later is not None
     assert later.action is not None
     assert later.jumped is False
+
+
+def fielding_at(data: dict[str, Any], index: int) -> Fielding:
+    fielding = read_game(copy.deepcopy(data)).events[index].fielding
+    assert fielding is not None
+    return fielding
+
+
+def pitch_at(data: dict[str, Any], index: int) -> Pitch:
+    pitch = read_game(copy.deepcopy(data)).events[index].pitch
+    assert pitch is not None
+    return pitch
+
+
+def first_fielder(data: dict[str, Any]) -> tuple[int, dict[str, Any]]:
+    for index, event in enumerate(data["Events"]):
+        fielder = event.get("Pitch", {}).get("Contact", {}).get("First Fielder")
+        if fielder is not None:
+            return index, fielder
+    raise AssertionError("no fielded ball")
+
+
+def test_a_bobbling_fielders_position_is_unknown_before_0_1_9():
+    # 0.1.7 and 0.1.8 never set it: real files have positions like 137.
+    data = load(V0_1_7A)
+    index, fielder = first_fielder(data)
+    fielder.update({"Fielder Bobble": 3, "Fielder Position": 137})
+    assert fielding_at(data, index).position is None
+    fielder["Fielder Bobble"] = 0
+    with pytest.raises(StatFileError, match="not a valid Position"):
+        read_game(copy.deepcopy(data))
+    fielder["Fielder Position"] = 3
+    assert fielding_at(data, index).position is Position.SECOND_BASE
+
+
+def test_a_bobbling_fielders_position_from_0_1_9():
+    data = load(V2_2_0)
+    index, fielder = first_fielder(data)
+    fielder["Fielder Bobble"] = 3
+    assert fielding_at(data, index).position is not None
+
+
+def test_a_pitch_with_no_swing_before_0_1_9():
+    # 0.1.7.a and 0.1.8 wrote no "Type of Swing" for a pitch that hit the batter.
+    data = load(V0_1_7A)
+    del data["Events"][0]["Pitch"]["Type of Swing"]
+    assert pitch_at(data, 0).swing is SwingType.NONE
+    data = load(V2_2_0)
+    del data["Events"][0]["Pitch"]["Type of Swing"]
+    with pytest.raises(StatFileError, match="Type of Swing: missing"):
+        read_game(data)
+
+
+def test_star_pitch_is_a_raw_byte_before_0_1_8():
+    data = load(V0_1_7A)
+    data["Events"][0]["Pitch"]["Star Pitch"] = 3
+    assert pitch_at(data, 0).is_star
+    data["Version"] = "0.1.8"
+    with pytest.raises(StatFileError, match="expected 0 or 1, got 3"):
+        read_game(data)
+
+
+def test_trailing_commas_are_repaired(tmp_path: Path):
+    # 0.1.7-0.1.8 crash and quit files end their events with "},\n  ]".
+    data = load(V0_1_7A)
+    text, count = re.subn(r"\}(\s*\])", r"},\1", json.dumps(data, indent=2), count=1)
+    assert count == 1
+    broken = tmp_path / "crash.json"
+    broken.write_text(text)
+    with pytest.raises(json.JSONDecodeError):
+        json.loads(text)
+    assert read_game(broken) == read_game(data)
 
 
 # --- (b) At-bat result labels 5 and 6 before 2.3.0 ------------------------------------
