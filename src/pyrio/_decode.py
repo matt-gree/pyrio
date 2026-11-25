@@ -60,7 +60,7 @@ from ._game import (
     Team,
     Version,
 )
-from ._stats import BattingLine, PitchingLine
+from ._stats import rio_batting_line, rio_pitching_line
 from ._team_names import TeamName
 
 __all__ = ["read_game", "read_hud"]
@@ -512,35 +512,8 @@ def _build_rosters(
 def _spot(node: _Node, side: Side, index: int, is_captain: bool, rules: _Rules) -> RosterSpot:
     defense = node.node("Defensive Stats")
     offense = node.node("Offensive Stats")
-    batting = BattingLine(
-        at_bats=offense.integer("At Bats"),
-        hits=offense.integer("Hits"),
-        singles=offense.integer("Singles"),
-        doubles=offense.integer("Doubles"),
-        triples=offense.integer("Triples"),
-        home_runs=offense.integer("Homeruns"),
-        walks=offense.integer("Walks (4 Balls)"),
-        hit_by_pitch=offense.integer("Walks (Hit)"),
-        strikeouts=offense.integer("Strikeouts"),
-        sac_flies=offense.integer("Sac Flys"),
-        bunts=offense.integer("Successful Bunts"),
-        rbi=offense.integer("RBI"),
-        stolen_bases=offense.integer("Bases Stolen"),
-        star_hits=offense.integer("Star Hits"),
-    )
-    pitching = PitchingLine(
-        batters_faced=defense.integer("Batters Faced"),
-        outs_pitched=defense.integer("Outs Pitched"),
-        hits_allowed=defense.integer("Hits Allowed"),
-        home_runs_allowed=defense.integer("HRs Allowed"),
-        runs_allowed=defense.integer("Runs Allowed"),
-        earned_runs=defense.integer("Earned Runs"),
-        walks=defense.integer("Batters Walked"),
-        hit_by_pitch=defense.integer("Batters Hit"),
-        strikeouts=defense.integer("Strikeouts"),
-        pitches_thrown=defense.integer("Pitches Thrown"),
-        star_pitches_thrown=defense.integer("Star Pitches Thrown"),
-    )
+    batting = rio_batting_line(offense.integer)
+    pitching = rio_pitching_line(defense.integer)
     if defense.has("Batters Per Position") or not defense.has("Pitches Per Position"):
         batters, pitches = defense.per_position("Batters Per Position"), None
     else:

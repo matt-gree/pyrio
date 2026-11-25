@@ -13,7 +13,10 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, fields
-from typing import Self
+from typing import TYPE_CHECKING, Self
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 __all__ = ["BattingLine", "PitchingLine", "format_batting_line", "format_pitching_line"]
 
@@ -196,4 +199,46 @@ def format_pitching_line(line: PitchingLine) -> str:
         f"{innings} IP, {line.hits_allowed} H, {line.runs_allowed} R, "
         f"{line.earned_runs} ER, {line.walks} BB, {line.hit_by_pitch} HBP, "
         f"{line.strikeouts} K, {line.home_runs_allowed} HR, {line.pitches_thrown} P"
+    )
+
+
+# Rio writes a character's game so far under the same keys everywhere: the stat
+# file's and HUD file's rosters, and the live feed's batter and pitcher. Each
+# reader takes a function that reads one key as an integer.
+
+
+def rio_batting_line(count: Callable[[str], int]) -> BattingLine:
+    """A batting line from Rio's ``"Offensive Stats"`` keys."""
+    return BattingLine(
+        at_bats=count("At Bats"),
+        hits=count("Hits"),
+        singles=count("Singles"),
+        doubles=count("Doubles"),
+        triples=count("Triples"),
+        home_runs=count("Homeruns"),
+        walks=count("Walks (4 Balls)"),
+        hit_by_pitch=count("Walks (Hit)"),
+        strikeouts=count("Strikeouts"),
+        sac_flies=count("Sac Flys"),
+        bunts=count("Successful Bunts"),
+        rbi=count("RBI"),
+        stolen_bases=count("Bases Stolen"),
+        star_hits=count("Star Hits"),
+    )
+
+
+def rio_pitching_line(count: Callable[[str], int]) -> PitchingLine:
+    """A pitching line from Rio's ``"Defensive Stats"`` keys."""
+    return PitchingLine(
+        batters_faced=count("Batters Faced"),
+        outs_pitched=count("Outs Pitched"),
+        hits_allowed=count("Hits Allowed"),
+        home_runs_allowed=count("HRs Allowed"),
+        runs_allowed=count("Runs Allowed"),
+        earned_runs=count("Earned Runs"),
+        walks=count("Batters Walked"),
+        hit_by_pitch=count("Batters Hit"),
+        strikeouts=count("Strikeouts"),
+        pitches_thrown=count("Pitches Thrown"),
+        star_pitches_thrown=count("Star Pitches Thrown"),
     )

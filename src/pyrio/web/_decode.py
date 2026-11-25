@@ -32,7 +32,8 @@ from .._codes import (
 )
 from .._enum import CodeEnum
 from .._errors import UnknownCodeError
-from .._stats import BattingLine, PitchingLine
+from .._stats import BattingLine, PitchingLine, rio_batting_line, rio_pitching_line
+from .._team_names import TeamName
 from ._errors import APIResponseError
 from ._models import (
     Community,
@@ -68,6 +69,7 @@ if TYPE_CHECKING:
 
 E = TypeVar("E", bound=CodeEnum)
 L = TypeVar("L", TagKind, TagSetKind, CommunityKind)
+_Line = TypeVar("_Line", BattingLine, PitchingLine)
 
 
 # --- a typed view over one JSON object ---------------------------------------
@@ -410,13 +412,14 @@ def live_games(data: object) -> list[LiveGame]:
 
 def _live_game(game: _Obj) -> LiveGame:
     bases = Bases(0)
-    for key, base in (
-        ("runner_on_first", Bases.FIRST),
-        ("runner_on_second", Bases.SECOND),
-        ("runner_on_third", Bases.THIRD),
-    ):
-        if game.flag(key):
+    spots: list[int | None] = []
+    for word, base in (("first", Bases.FIRST), ("second", Bases.SECOND), ("third", Bases.THIRD)):
+        if game.flag(f"runner_on_{word}"):
             bases |= base
+        key = f"runner_on_{word}_roster"
+        spot = game.opt_int(key) if key in game else None
+        spots.append(spot if spot is not None and 0 <= spot < _ROSTER_SIZE else None)
+    batter_hand = game.opt_int("batter_hand") if "batter_hand" in game else None
     return LiveGame(
         away=_live_team(game, "away"),
         home=_live_team(game, "home"),
@@ -428,10 +431,31 @@ def _live_game(game: _Obj) -> LiveGame:
         batting_side=_half_inning(game, "half_inning"),
         outs=game.int("outs"),
         bases=bases,
+        runner_spots=(spots[0], spots[1], spots[2]),
         is_star_chance=game.flag("star_chance"),
+        chemistry_links_on_base=(
+            game.opt_int("chemistry_links_on_base") if "chemistry_links_on_base" in game else None
+        ),
         batter_spot=game.int("batter"),
+        batter_hand=None if batter_hand is None else Hand(batter_hand),
         pitcher_spot=game.int("pitcher"),
+        batter_line=_live_line(game, "batter_stats", rio_batting_line),
+        pitcher_line=_live_line(game, "pitcher_stats", rio_pitching_line),
+        loaded_from_hud="loaded_from_hud" in game and game.flag("loaded_from_hud"),
     )
+
+
+_ROSTER_SIZE = 9
+
+
+def _live_line(game: _Obj, key: str, read: Callable[[Callable[[str], int]], _Line]) -> _Line | None:
+    # The client posts the character's stats, or {} before it has any.
+    if key not in game or game.raw(key) is None:
+        return None
+    stats = game.obj(key)
+    if not any(True for _ in stats.items()):
+        return None
+    return read(stats.count_or_zero)
 
 
 def _live_team(game: _Obj, side: str) -> LiveTeam:
@@ -445,13 +469,33 @@ def _live_team(game: _Obj, side: str) -> LiveTeam:
             for r in _list(game.endpoint, runs, f"{side}_inning_scores")
         )
     )
+    captain = game.opt_int(f"{side}_captain") if f"{side}_captain" in game else None
+    positions: tuple[Position | None, ...] = ()
+    key = f"{side}_fielding_positions"
+    if key in game and game.raw(key) is not None:
+        positions = tuple(
+            None if (value := _int_value(game, key, item)) == _NO_POSITION else Position(value)
+            for item in game.list(key)
+        )
+    superstars: tuple[bool, ...] = ()
+    key = f"{side}_superstars"
+    if key in game and game.raw(key) is not None:
+        superstars = tuple(bool(_int_value(game, key, item)) for item in game.list(key))
+    logo = game.opt_code(f"{side}_logo", TeamName) if f"{side}_logo" in game else None
     return LiveTeam(
         player=game.str(f"{side}_player"),
         roster=roster,
+        captain_spot=captain if captain is not None and 0 <= captain < _ROSTER_SIZE else None,
+        is_superstar=superstars,
+        positions=positions,
+        logo=logo,
         score=game.int(f"{side}_score"),
         stars=game.int(f"{side}_stars"),
         inning_runs=inning_runs,
     )
+
+
+_NO_POSITION = 0xFF
 
 
 def _int_value(row: _Obj, key: str, value: object) -> int:

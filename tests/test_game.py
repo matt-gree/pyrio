@@ -213,6 +213,37 @@ def test_star_chance_at_bats(game: Game):
     assert star_chances[0].pitches == 4
 
 
+def test_star_chance_winner_gets_the_star(game: Game):
+    # The star shows in the stars at the next event, unless the winner held five
+    # already or the final pitch spent stars.
+    checked = 0
+    for at_bat in game.at_bats:
+        winner = at_bat.star_chance_winner
+        if winner is None:
+            assert not (at_bat.is_star_chance and at_bat.is_complete)
+            continue
+        final = at_bat.final
+        index = game.events.index(final)
+        if index + 1 == len(game.events) or final.is_star_swing or final.is_star_pitch:
+            continue
+        before, after = final.state, game.events[index + 1].state
+        if before.stars(winner) == 5:
+            continue
+        assert after.stars(winner) == (before.stars(winner) or 0) + 1
+        assert after.stars(winner.other) == before.stars(winner.other)
+        checked += 1
+    assert checked > 3
+
+
+def test_star_swing_cost(game: Game):
+    for team in (game.away, game.home):
+        assert team.captain.star_swing_cost == 1
+        for spot in team.roster:
+            could_captain = spot.character.attributes.captain_star is not None
+            assert spot.star_swing_cost == (2 if could_captain and not spot.is_captain else 1)
+    assert any(spot.star_swing_cost == 2 for spot in game.away.roster + game.home.roster)
+
+
 def test_half_inning_at_bats_make_up_the_game(game: Game):
     assert [ab for h in game.half_innings for ab in h.at_bats] == list(game.at_bats)
 

@@ -38,6 +38,13 @@ the end maps the old names to the new.
   ended the game (walk-off, a decided last half, the mercy rule), which nothing else
   can, since Rio writes no file after the last play. Also `is_play_over`, the players'
   controller ports (`away_port`, `home_port`, `port(side)`) and `fielder(position)`.
+- **`AtBat.star_chance_winner`**: the side that won a star chance, by the game's own rule
+  (a strikeout or a ball in play that made an out goes to the fielders), and
+  **`RosterSpot.star_swing_cost`** (2 stars for a character who could captain but isn't).
+- **Fuller live games.** `LiveGame` adds the runners' roster spots, the batter's hand, the
+  batter's and pitcher's lines so far, chemistry links and `batter` / `pitcher`;
+  `LiveTeam` adds the captain, superstars, fielding positions (`fielder(position)`) and
+  the team logo.
 - **`Game.inning_runs(side)`**: a line score, `None` for a half never batted.
 - **`AtBat`, `Game.at_bats` and `HalfInning.at_bats`**: events grouped by plate
   appearance, every event in exactly one. An at-bat ends on a result, or with none when

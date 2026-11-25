@@ -30,6 +30,7 @@ from .._codes import (
     SwingType,
 )
 from .._stats import BattingLine, PitchingLine  # noqa: TC001
+from .._team_names import TeamName  # noqa: TC001
 
 __all__ = [
     "Community",
@@ -398,14 +399,35 @@ class LiveTeam:
 
     player: str
     roster: tuple[Character, ...]
+    captain_spot: int | None
+    """The captain's roster spot (index into ``roster``)."""
+    is_superstar: tuple[bool, ...]
+    """Per roster spot; empty when the client didn't report it."""
+    positions: tuple[Position | None, ...]
+    """Where each roster spot is fielding; empty when the client didn't report it."""
+    logo: TeamName | None
     score: int
     stars: int
     inning_runs: tuple[int, ...]
 
+    @property
+    def captain(self) -> Character | None:
+        return None if self.captain_spot is None else self.roster[self.captain_spot]
+
+    def fielder(self, position: Position) -> int | None:
+        """The roster spot fielding ``position``, or ``None`` if none is reported."""
+        for spot, at in enumerate(self.positions):
+            if at is position:
+                return spot
+        return None
+
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class LiveGame:
-    """A game in progress, from :meth:`RioClient.live_games`."""
+    """A game in progress, from :meth:`RioClient.live_games`.
+
+    Rio web gives a live game no id; the players and ``start_time`` identify it.
+    """
 
     away: LiveTeam
     home: LiveTeam
@@ -418,9 +440,29 @@ class LiveGame:
     outs: int
     bases: Bases
     """Occupied bases."""
+    runner_spots: tuple[int | None, int | None, int | None]
+    """The batting side's roster spot on first, second and third."""
     is_star_chance: bool
+    chemistry_links_on_base: int | None
     batter_spot: int
+    batter_hand: Hand | None
     pitcher_spot: int
+    batter_line: BattingLine | None
+    """The batter's game so far, when the client reported it."""
+    pitcher_line: PitchingLine | None
+    """The pitcher's game so far, when the client reported it."""
+    loaded_from_hud: bool
+
+    def team(self, side: Side) -> LiveTeam:
+        return self.away if side is Side.AWAY else self.home
+
+    @property
+    def batter(self) -> Character:
+        return self.team(self.batting_side).roster[self.batter_spot]
+
+    @property
+    def pitcher(self) -> Character:
+        return self.team(self.batting_side.other).roster[self.pitcher_spot]
 
 
 # --- events -----------------------------------------------------------------

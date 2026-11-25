@@ -140,6 +140,12 @@ class RosterSpot:
     )
     """Outs this character recorded at each position."""
 
+    @property
+    def star_swing_cost(self) -> int:
+        """Stars a star swing costs: 2 for a character who could captain but isn't, else 1."""
+        has_captain_star = self.character.attributes.captain_star is not None
+        return 2 if has_captain_star and not self.is_captain else 1
+
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class Team:
@@ -453,6 +459,30 @@ class AtBat:
         """The at-bat was a star chance. The game sets this as an at-bat begins
         and holds it to the end."""
         return self.events[0].state.is_star_chance
+
+    @property
+    def star_chance_winner(self) -> Side | None:
+        """Who won the star on a star chance at-bat, or ``None`` if it wasn't one or never finished.
+
+        The game (``match_flow.c``) gives it to the fielding side on a strikeout
+        or a ball in play that made an out (a fielder's choice included), and
+        to the batting side otherwise. A side already holding five stars wins
+        no star.
+        """
+        if not self.is_star_chance or not self.is_complete:
+            return None
+        final = self.final
+        result = final.result
+        if result is AtBatResult.STRIKEOUT:
+            made_out = True
+        elif result.is_walk:
+            made_out = False
+        elif final.outs_during_play is not None:
+            made_out = final.outs_during_play > 0
+        else:  # files before 1.9.2 don't count the play's outs
+            made_out = result.is_out
+        side = self.batting_side
+        return side.other if made_out else side
 
     @property
     def pitches(self) -> int:

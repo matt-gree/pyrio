@@ -25,6 +25,7 @@ from pyrio import (
     Stadium,
     StealType,
     SwingType,
+    TeamName,
 )
 from pyrio.web import (
     APIResponseError,
@@ -384,6 +385,32 @@ def test_live_games(mock, rio, contract):
     assert game.home.roster[0] is Character.MARIO
     assert game.away.inning_runs == (0, 2, 0, 1)
     assert game.is_star_chance is False
+    assert game.away.captain_spot == 0
+    assert game.home.captain is Character.MARIO
+    assert game.away.logo is TeamName.BOWSER_BLUE_SHELLS
+    assert game.home.positions[2] is Position.FIRST_BASE
+    assert game.home.fielder(Position.PITCHER) == 0
+    assert game.away.is_superstar == (False,) * 9
+    assert game.runner_spots == (1, None, 0)
+    assert game.batter_hand is Hand.RIGHT
+    assert game.batter is game.home.roster[2]
+    assert game.pitcher is game.away.roster[0]
+    assert game.chemistry_links_on_base == 1
+    assert game.batter_line is None
+    assert game.pitcher_line is None
+
+
+def test_live_game_stat_lines(mock, rio, contract):
+    body = contract("ongoing_games.json")
+    (raw,) = body["ongoing_games"]
+    raw["batter_stats"] = {"At Bats": 3, "Hits": 2, "Homeruns": 1, "RBI": 2}
+    raw["pitcher_stats"] = {"Batters Faced": 12, "Outs Pitched": 9, "Strikeouts": 3}
+    raw["away_fielding_positions"][4] = 255
+    mock.get("/populate_db/ongoing_game/").respond(json=body)
+    (game,) = rio.live_games()
+    assert game.batter_line == BattingLine(at_bats=3, hits=2, home_runs=1, rbi=2)
+    assert game.pitcher_line == PitchingLine(batters_faced=12, outs_pitched=9, strikeouts=3)
+    assert game.away.positions[4] is None
 
 
 def test_tag_sets(mock, rio, contract):
