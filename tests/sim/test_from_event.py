@@ -184,3 +184,17 @@ def test_simulate_contacts_leaves_out_a_contact_it_cannot_reproduce():
     assert [c.event_number for c in simulate_contacts(_edited(contradict))] == [
         c.event_number for c in full[1:]
     ]
+
+
+def test_overrides_from_contact_fly_the_recorded_hit():
+    from dataclasses import replace
+
+    from pyrio.sim import HitOverrides
+
+    game = pyrio.read_game(GAME_FILE)
+    for event, inputs in simulatable(game):
+        assert event.contact is not None
+        hit = simulate_hit(replace(inputs, overrides=HitOverrides.from_contact(event.contact)))
+        assert hit.power == event.contact.power
+        assert event.contact.hang_time_frames is not None
+        assert abs(hit.hang_frames - event.contact.hang_time_frames) <= 3

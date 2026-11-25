@@ -45,6 +45,8 @@ the end maps the old names to the new.
   batter's and pitcher's lines so far, chemistry links and `batter` / `pitcher`;
   `LiveTeam` adds the captain, superstars, fielding positions (`fielder(position)`) and
   the team logo.
+- **`HitOverrides.from_contact(contact)`** pins a recorded contact's angles and power,
+  to fly exactly the recorded hit.
 - **`Game.inning_runs(side)`**: a line score, `None` for a half never batted.
 - **`AtBat`, `Game.at_bats` and `HalfInning.at_bats`**: events grouped by plate
   appearance, every event in exactly one. An at-bat ends on a result, or with none when

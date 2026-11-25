@@ -38,7 +38,7 @@ from ._physics import GRAVITY_PER_FRAME_SQUARED, VELOCITY_KEPT_PER_FRAME
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from .._game import Event
+    from .._game import Contact, Event
     from ..geometry import Point
 
 __all__ = [
@@ -116,6 +116,21 @@ class HitOverrides:
 
     garlic_real_ball_to_left: bool | None = None
     """Whether the real garlic ball is the one turned toward left field (the game rolls it)."""
+
+    @classmethod
+    def from_contact(cls, contact: Contact) -> HitOverrides:
+        """The angles and power a contact recorded, to fly exactly the recorded hit.
+
+        The contact stage is simulated from the recorded RNG and normally
+        agrees with the record; pinning these makes the flight agree even
+        where it doesn't. Fields the contact lacks (files before Rio 1.9.2)
+        stay the game's.
+        """
+        return cls(
+            vertical_angle_raw=contact.vertical_angle,
+            horizontal_angle_raw=contact.horizontal_angle,
+            power=contact.power,
+        )
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
