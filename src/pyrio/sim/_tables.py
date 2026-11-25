@@ -440,10 +440,6 @@ FIELD_POWER_BONUS: Final[tuple[tuple[float, ...], ...]] = (
     (1.02, 1.05, 1.0, 0.95, 0.85),
 )
 
-# How far from the batter the ball can be met, [bat] -> (near, far).
-# BattingExtensions
-BAT_REACH: Final[tuple[tuple[float, ...], ...]] = ((-0.85, 0.15), (-0.35, 0.35))
-
 # Sideways curve on a hit, [has super curve] -> (base, x acceleration,
 # z acceleration). FLOAT_ARRAY_ARRAY_807b72bc
 CURVE_FACTORS: Final[tuple[tuple[float, ...], ...]] = ((0.5, 0.001, 0.003), (0.25, 0.006, 0.008))

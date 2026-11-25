@@ -40,7 +40,9 @@ from ._live_ball import (
     LiveBallEventKind,
     LiveBallOutcome,
     LiveBallResult,
+    hazard_seed,
     play_out,
+    play_out_flight,
 )
 
 __all__ = [
@@ -58,7 +60,9 @@ __all__ = [
     "best",
     "find_highlights",
     "format_highlights",
+    "hazard_seed",
     "play_out",
+    "play_out_flight",
     "simulate_all_zones",
     "simulate_contacts",
     "simulate_hit",

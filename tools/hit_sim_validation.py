@@ -83,14 +83,12 @@ def validate(paths: list[pathlib.Path]) -> tuple[dict[str, Tally], int, list[str
         except StatFileError as e:
             skipped.append(f"{path.name}: {e}")
             continue
-        events = {e.number: e for e in game.events}
         for record in simulate_contacts(game):
-            contact = events[record.event_number].contact
-            assert contact is not None
+            contact = record.contact
             contacts += 1
             for check in CHECKS:
                 recorded = check.recorded(contact)
-                simulated = check.simulated(record.simulation)
+                simulated = check.simulated(record.hit)
                 tally = tallies[check.name]
                 tally.checked += 1
                 if agrees(check, recorded, simulated):

@@ -35,7 +35,7 @@ import tempfile
 from typing import TYPE_CHECKING, Any
 
 from pyrio import Stadium
-from pyrio.sim import LiveBallEvent, LiveBallResult, play_out
+from pyrio.sim import LiveBallEvent, LiveBallResult, play_out_flight
 
 if TYPE_CHECKING:
     from types import ModuleType
@@ -203,7 +203,7 @@ def main(argv: list[str]) -> int:
     events: collections.Counter[str] = collections.Counter()
     for stadium, label, path, seed, hazards in runs:
         a = normalised(reference.continue_ball(theirs[stadium], path, seed=seed, hazards=hazards))
-        b = as_reference(play_out(stadium, path, seed=seed, hazards=hazards))
+        b = as_reference(play_out_flight(stadium, path, seed=seed, hazards=hazards))
         if a == b:
             matched += 1
         else:

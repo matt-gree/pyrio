@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import functools
+import math
 import pathlib
 from dataclasses import replace
 
@@ -21,6 +23,7 @@ from pyrio.sim import (
     ContactRecord,
     HitInputs,
     HitOverrides,
+    LiveBallOutcome,
     best,
     find_highlights,
     format_highlights,
@@ -41,32 +44,47 @@ INPUTS = HitInputs(
 )
 
 
-def record(power: int, **fields: object) -> ContactRecord:
-    hit = simulate_hit(replace(INPUTS, overrides=HitOverrides(power=power)))
-    base = ContactRecord(
-        event_number=power,
-        inning=1,
-        batting_side=Side.AWAY,
-        player="Player",
-        batter=Character.MARIO,
-        swing=SwingType.CHARGE,
-        result=AtBatResult.SINGLE,
-        primary_result=PrimaryContactResult.FAIR,
-        secondary_result=SecondaryContactResult.SINGLE,
-        rbi=0,
-        simulation=hit,
+FIXTURES = pathlib.Path(__file__).parent.parent / "fixtures"
+GAME_FILE = FIXTURES / "20260618T191655_SpiceOrange-Vs-MattGree_3896251267.json"
+
+
+@functools.cache
+def game() -> pyrio.Game:
+    return pyrio.read_game(GAME_FILE)
+
+
+def record(
+    power: int,
+    *,
+    result: AtBatResult = AtBatResult.SINGLE,
+    primary_result: PrimaryContactResult = PrimaryContactResult.FAIR,
+    secondary_result: SecondaryContactResult = SecondaryContactResult.SINGLE,
+) -> ContactRecord:
+    """A contact with a chosen power and outcome, on a real event's bones."""
+    event = simulate_contacts(game())[0].event
+    assert event.contact is not None
+    event = replace(
+        event,
+        number=power,
+        result=result,
+        batter_spot=replace(event.batter_spot, character=Character.MARIO),
+        contact=replace(
+            event.contact, primary_result=primary_result, secondary_result=secondary_result
+        ),
     )
-    return replace(base, **fields)
+    hit = simulate_hit(replace(INPUTS, overrides=HitOverrides(power=power)))
+    return ContactRecord(event=event, player="Player", hit=hit)
 
 
 def test_record_properties():
     r = record(150)
     assert r.power == 150
-    assert r.distance == r.simulation.distance
+    assert r.distance == r.hit.distance
     assert r.landing == r.trajectory[-1]
     assert r.is_fair
     assert not r.caught
     assert r.is_hit
+    assert r.batter is Character.MARIO
     foul = record(150, primary_result=PrimaryContactResult.FOUL)
     assert foul.is_foul
     assert not foul.is_fair
@@ -112,10 +130,6 @@ def test_format_highlights():
     assert format_highlights(find_highlights([])) == []
 
 
-FIXTURES = pathlib.Path(__file__).parent.parent / "fixtures"
-GAME_FILE = FIXTURES / "20260618T191655_SpiceOrange-Vs-MattGree_3896251267.json"
-
-
 def test_simulate_contacts_covers_every_swing_that_connected():
     game = pyrio.read_game(GAME_FILE)
     records = simulate_contacts(game)
@@ -131,7 +145,8 @@ def test_simulate_contacts_covers_every_swing_that_connected():
         assert record.batter is event.batter_spot.character
         assert record.batting_side is event.state.batting_side
         assert record.result is event.result
-        assert record.secondary_result is event.contact.secondary_result
+        assert record.contact is event.contact
+        assert record.event is event
         side = game.away if record.batting_side is Side.AWAY else game.home
         assert record.player == side.player
 
@@ -144,10 +159,32 @@ def test_simulate_contacts_reproduces_the_recorded_contact():
     for r in records:
         contact = by_number[r.event_number].contact
         assert contact is not None
-        exact += r.simulation.contact_type is contact.type
+        exact += r.hit.contact_type is contact.type
     assert exact / len(records) >= 0.9
 
 
 def test_simulate_contacts_is_empty_for_files_without_rng():
     old = pyrio.read_game(next((FIXTURES / "stat_files" / "0.1.7a").glob("*.json")))
     assert simulate_contacts(old) == ()
+
+
+def test_a_caught_ball_plays_out_to_the_glove():
+    caught = next(r for r in simulate_contacts(game()) if r.caught)
+    played = caught.play_out()
+    assert played.outcome is LiveBallOutcome.CAUGHT
+    assert played.land_frame is None
+    glove = caught.contact.landing_location
+    end = played.trajectory[-1]
+    assert math.dist(end, glove) == min(math.dist(p, glove) for p in caught.trajectory)
+    assert played.events[-1].outcome is LiveBallOutcome.CAUGHT
+
+
+def test_a_ball_in_play_stops_with_the_first_fielder():
+    grounders = [
+        r
+        for r in simulate_contacts(game())
+        if not r.caught and r.is_fair and not r.result.is_hit and r.event.fielding is not None
+    ]
+    assert grounders
+    outcomes = {r.play_out().outcome for r in grounders}
+    assert LiveBallOutcome.FIELDED in outcomes

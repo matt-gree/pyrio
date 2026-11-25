@@ -48,8 +48,17 @@ if TYPE_CHECKING:
     from collections.abc import Iterable, Sequence
 
     from ..geometry import Point
+    from ._hit import HitResult
 
-__all__ = ["LiveBallEvent", "LiveBallEventKind", "LiveBallOutcome", "LiveBallResult", "play_out"]
+__all__ = [
+    "LiveBallEvent",
+    "LiveBallEventKind",
+    "LiveBallOutcome",
+    "LiveBallResult",
+    "hazard_seed",
+    "play_out",
+    "play_out_flight",
+]
 
 
 class LiveBallOutcome(Enum):
@@ -60,6 +69,9 @@ class LiveBallOutcome(Enum):
     GROUND_RULE_DOUBLE = "ground_rule_double"
     FIELDED = "fielded"
     """It reached the ``stop_at`` point after landing."""
+
+    CAUGHT = "caught"
+    """A fielder caught it in the air, at ``caught_at``."""
 
     STOPPED = "stopped"
     """It came to rest."""
@@ -149,6 +161,58 @@ class LiveBallResult:
 
 
 def play_out(
+    hit: HitResult,
+    *,
+    seed: int | None = None,
+    hazards: bool = True,
+    mystery_blocks: Literal["brick", "used", "note"] | None = None,
+    star_plants: bool | None = None,
+    max_frames: int = 1500,
+    roll_frames: int = 420,
+    stop_at: tuple[float, float] | None = None,
+    caught_at: Sequence[float] | None = None,
+) -> LiveBallResult:
+    """Carry a simulated hit on from contact until the play is settled, at its stadium.
+
+    The ball follows the hit's flight until it first touches anything, then
+    the game's physics takes over: bounces, the roll, walls and hazards. The
+    hit's stadium (``hit.inputs.stadium``) is the park it plays out in.
+
+    ``seed`` rolls the dice the game rolls for hazards, which no stat file
+    records; it defaults to :func:`hazard_seed` of the hit's RNG values, so a
+    hit always plays out the same way. ``hazards=False`` plays the bare park.
+    ``mystery_blocks`` forces what Peach Garden's "?" blocks are, and
+    ``star_plants`` whether Yoshi Park's plants are star plants.
+
+    The play ends after ``max_frames``; or ``roll_frames`` after the ball
+    lands; or when the landed ball reaches ``stop_at``, an ``(x, z)`` point
+    such as where a fielder picked it up (``FIELDED``); or, with ``caught_at``,
+    in a fielder's glove: the flight stops at its point nearest ``caught_at``
+    (``CAUGHT``).
+
+    The ball leaves the park as the game decides it: off a foul pole, over
+    the out-of-play structure, or past the wall at whatever height the mesh
+    says, and a hazard may stop it first (a ball a Thwomp swats down is not a
+    home run).
+    """
+    # After a garlic ball splits, both halves fly under drag and gravity alone.
+    acceleration = (0.0, 0.0, 0.0) if hit.garlic_trajectory else hit.acceleration_per_frame
+    return play_out_flight(
+        hit.inputs.stadium,
+        hit.trajectory,
+        acceleration=acceleration,
+        seed=hazard_seed(hit.inputs.seeds) if seed is None else seed,
+        hazards=hazards,
+        mystery_blocks=mystery_blocks,
+        star_plants=star_plants,
+        max_frames=max_frames,
+        roll_frames=roll_frames,
+        stop_at=stop_at,
+        caught_at=caught_at,
+    )
+
+
+def play_out_flight(
     stadium: Stadium,
     trajectory: Iterable[Sequence[float]],
     *,
@@ -160,25 +224,20 @@ def play_out(
     max_frames: int = 1500,
     roll_frames: int = 420,
     stop_at: tuple[float, float] | None = None,
+    caught_at: Sequence[float] | None = None,
 ) -> LiveBallResult:
-    """Carry a flight on from contact until the play is settled.
+    """:func:`play_out` for any flight, not just a simulated hit.
 
-    The ball follows ``trajectory`` (one point per frame, from the contact
-    point) until it first touches anything, then the game's physics takes
-    over. Pass a hit's ``trajectory`` and ``acceleration_per_frame``.
-
-    ``seed`` rolls the hazards' dice. ``hazards=False`` plays the bare park.
-    ``mystery_blocks`` forces what Peach Garden's "?" blocks are, and
-    ``star_plants`` whether Yoshi Park's plants are star plants. The play ends
-    after ``max_frames``, or ``roll_frames`` after the ball lands, or when the
-    landed ball reaches ``stop_at`` (an ``(x, z)`` point, such as where a
-    fielder picked it up).
-
-    The ball leaves the park as the game decides it: off a foul pole, over
-    the out-of-play structure, or past the wall at whatever height the mesh
-    says, and a hazard may stop it first (a ball a Thwomp swats down is not a
-    home run).
+    ``trajectory`` is one point per frame from the contact point, and
+    ``acceleration`` the steady push per frame the ball keeps once it leaves
+    that path (a hit's ``acceleration_per_frame``). For a flight from
+    somewhere else: a recorded landing, or one made up to test a park.
     """
+    flight = [(p[0], p[1], p[2]) for p in trajectory]
+    if not flight:
+        raise ValueError("trajectory is empty; need at least the contact point")
+    if caught_at is not None:
+        return _caught(flight, caught_at)
     options = _Options(
         seed=seed,
         hazards=hazards,
@@ -188,7 +247,38 @@ def play_out(
         roll_frames=roll_frames,
         stop_at=stop_at,
     )
-    return _LiveBall(stadium, options).run(trajectory, acceleration)
+    return _LiveBall(stadium, options).run(flight, acceleration)
+
+
+def hazard_seed(seeds: Sequence[int]) -> int:
+    """The default hazard dice for a hit, from its three RNG values.
+
+    ``(rng1 * 31 + rng2) * 31 + rng3``: any fixed mixing would do; this is
+    the one RioVisualizer has always used, so its replays match.
+    """
+    r1, r2, r3 = seeds
+    return (r1 * 31 + r2) * 31 + r3
+
+
+def _caught(flight: list[Point], glove: Sequence[float]) -> LiveBallResult:
+    def miss(point: Point) -> float:
+        return sum((point[i] - glove[i]) ** 2 for i in range(3))
+
+    frame = min(range(len(flight)), key=lambda i: miss(flight[i]))
+    x, y, z = flight[frame]
+    at = (round(x, 4), round(y, 4), round(z, 4))
+    caught = LiveBallEvent(
+        frame=frame,
+        kind=LiveBallEventKind.OUTCOME,
+        location=at,
+        outcome=LiveBallOutcome.CAUGHT,
+    )
+    return LiveBallResult(
+        trajectory=tuple(flight[: frame + 1]),
+        events=(caught,),
+        outcome=LiveBallOutcome.CAUGHT,
+        land_frame=None,
+    )
 
 
 @dataclass(frozen=True, slots=True)
@@ -1035,13 +1125,9 @@ class _LiveBall:
 
     # -- the frame loop
 
-    def run(
-        self, trajectory: Iterable[Sequence[float]], acceleration: Sequence[float]
-    ) -> LiveBallResult:
+    def run(self, trajectory: Sequence[Point], acceleration: Sequence[float]) -> LiveBallResult:
         """Follow ``trajectory`` until the ball first touches anything, then integrate freely."""
-        flight = [(p[0], p[1], p[2]) for p in trajectory]
-        if not flight:
-            raise ValueError("trajectory is empty; need at least the contact point")
+        flight = list(trajectory)
         self.ball = b = _Ball(flight[0])
         self.land_frame = None
         self.events = []

@@ -13,23 +13,23 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from .._codes import (
-    AtBatResult,
     PrimaryContactResult,
     SecondaryContactResult,
-    Side,
     SwingType,
 )
 from ..geometry import clears_wall
 from ._hit import HitInputs, simulate_hit
+from ._live_ball import play_out
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable
 
     from .._characters import Character
-    from .._codes import Stadium
-    from .._game import Game
+    from .._codes import AtBatResult, Side, Stadium
+    from .._game import Contact, Event, Game
     from ..geometry import Point
     from ._hit import HitResult, Mod
+    from ._live_ball import LiveBallResult
 
 __all__ = [
     "ContactRecord",
@@ -45,50 +45,77 @@ _SIMULATED_SWINGS = (SwingType.SLAP, SwingType.CHARGE, SwingType.STAR)
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class ContactRecord:
-    """One ball in play: its place in the game and its simulated flight."""
+    """One ball in play: the event that recorded it and its simulated hit."""
 
-    event_number: int
-    inning: int
-    batting_side: Side
+    event: Event
     player: str
     """The person controlling the batting team."""
 
-    batter: Character
-    swing: SwingType
-    result: AtBatResult
-    primary_result: PrimaryContactResult
-    secondary_result: SecondaryContactResult
-    rbi: int
-    simulation: HitResult
+    hit: HitResult
+    """The contact simulated again from the event's recorded RNG values."""
+
+    @property
+    def event_number(self) -> int:
+        return self.event.number
+
+    @property
+    def inning(self) -> int:
+        return self.event.state.inning
+
+    @property
+    def batting_side(self) -> Side:
+        return self.event.state.batting_side
+
+    @property
+    def batter(self) -> Character:
+        return self.event.batter
+
+    @property
+    def swing(self) -> SwingType:
+        assert self.event.pitch is not None  # simulate_contacts keeps only swings
+        return self.event.pitch.swing
+
+    @property
+    def result(self) -> AtBatResult:
+        return self.event.result
+
+    @property
+    def contact(self) -> Contact:
+        assert self.event.contact is not None  # simulate_contacts keeps only contacts
+        return self.event.contact
+
+    @property
+    def rbi(self) -> int:
+        return self.event.rbi
 
     @property
     def power(self) -> int:
-        return self.simulation.power
+        return self.hit.power
 
     @property
     def distance(self) -> float:
         """How far from home plate the simulated flight comes down."""
-        return self.simulation.distance
+        return self.hit.distance
 
     @property
     def hang_frames(self) -> int:
-        return self.simulation.hang_frames
+        return self.hit.hang_frames
 
     @property
     def landing(self) -> Point:
-        return self.simulation.landing
+        return self.hit.landing
 
     @property
     def trajectory(self) -> tuple[Point, ...]:
-        return self.simulation.trajectory
+        return self.hit.trajectory
 
     @property
     def apex_height(self) -> float:
-        return self.simulation.apex_height
+        return self.hit.apex_height
 
     @property
     def is_foul(self) -> bool:
-        return self.primary_result is PrimaryContactResult.FOUL
+        return self.contact.primary_result is PrimaryContactResult.FOUL
 
     @property
     def is_fair(self) -> bool:
@@ -97,11 +124,40 @@ class ContactRecord:
     @property
     def caught(self) -> bool:
         """Whether a fielder caught it on the fly."""
-        return self.secondary_result is SecondaryContactResult.OUT_CAUGHT
+        return self.contact.secondary_result is SecondaryContactResult.OUT_CAUGHT
 
     @property
     def is_hit(self) -> bool:
         return self.result.is_hit
+
+    def play_out(
+        self,
+        *,
+        hazards: bool = True,
+        seed: int | None = None,
+        max_frames: int = 1500,
+        roll_frames: int = 420,
+    ) -> LiveBallResult:
+        """The ball played out in the park, ending where the stat file says the play did.
+
+        A ball caught on the fly stops in the glove, at the recorded catch. Any
+        other ball plays out (:func:`pyrio.sim.play_out`) until it comes down
+        and reaches the first fielder who touched it, or stops, or leaves the
+        park. The hazards' dice are the game's own and unrecorded, so a ball
+        that meets a hazard plays out one way the game could have.
+        """
+        contact, fielding = self.contact, self.event.fielding
+        if self.caught:
+            return play_out(self.hit, caught_at=contact.landing_location)
+        stop_at = None if fielding is None else (fielding.location[0], fielding.location[2])
+        return play_out(
+            self.hit,
+            seed=seed,
+            hazards=hazards,
+            max_frames=max_frames,
+            roll_frames=roll_frames,
+            stop_at=stop_at,
+        )
 
 
 def simulate_contacts(
@@ -110,9 +166,10 @@ def simulate_contacts(
     """Every slap, charge and star swing the batter connected on, simulated again.
 
     Each contact is rebuilt with :meth:`HitInputs.from_event` from the RNG
-    values the stat file records, at the game's stadium. Bunts aren't
-    simulated, and a file from a client too old to record the RNG gives an
-    empty tuple. ``mods`` are the gecko codes the game was played with.
+    values the stat file records, at the game's stadium, in event order.
+    Bunts aren't simulated, and a file from a client too old to record the
+    RNG gives an empty tuple. ``mods`` are the gecko codes the game was
+    played with.
     """
     records: list[ContactRecord] = []
     for event in game.events:
@@ -122,20 +179,11 @@ def simulate_contacts(
         if pitch.swing not in _SIMULATED_SWINGS:
             continue
         inputs = HitInputs.from_event(event, stadium=game.stadium, mods=mods)
-        side = event.state.batting_side
         records.append(
             ContactRecord(
-                event_number=event.number,
-                inning=event.state.inning,
-                batting_side=side,
-                player=(game.away if side is Side.AWAY else game.home).player,
-                batter=event.batter_spot.character,
-                swing=pitch.swing,
-                result=event.result,
-                primary_result=contact.primary_result,
-                secondary_result=contact.secondary_result,
-                rbi=event.rbi,
-                simulation=simulate_hit(inputs),
+                event=event,
+                player=game.team(event.state.batting_side).player,
+                hit=simulate_hit(inputs),
             )
         )
     return tuple(records)

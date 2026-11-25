@@ -41,7 +41,7 @@ from pyrio.sim import (
     HitResult,
     LiveBallResult,
     Mod,
-    play_out,
+    play_out_flight,
     simulate_all_zones,
     simulate_hit,
     simulate_trajectory,
@@ -214,10 +214,11 @@ def compute() -> dict[str, Any]:
         for seed in range(40):
             path = flight(rng)
             for hazards in (True, False):
-                live.append(live_ball_record(play_out(stadium, path, seed=seed, hazards=hazards)))
+                played = play_out_flight(stadium, path, seed=seed, hazards=hazards)
+                live.append(live_ball_record(played))
         for speed in (0.6, 1.0, 1.4):
             for azimuth in (-30.0, 0.0, 25.0):
-                live.append(live_ball_record(play_out(stadium, aimed(speed, 25.0, azimuth))))
+                live.append(live_ball_record(play_out_flight(stadium, aimed(speed, 25.0, azimuth))))
     return {
         "hits": hits,
         "stars": [hit_record(simulate_hit(i)) for i in star_inputs()],

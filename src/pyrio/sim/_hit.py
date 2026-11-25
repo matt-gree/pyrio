@@ -302,6 +302,9 @@ class HitResult:
     garlic_trajectory: tuple[Point, ...] | None = field(repr=False)
     """The second garlic ball's flight from the split, or None for any other hit."""
 
+    inputs: HitInputs = field(repr=False)
+    """What was simulated: the players, the swing, the stadium and the seeds."""
+
     @property
     def landing(self) -> Point:
         """Where the flight ends, one frame after it first comes down."""
@@ -450,6 +453,7 @@ class _Simulation:
         self.has_super_curve = batter.has_super_curve
         self.pitching_height = batter.pitching_height
         self.trimmed_bat = 1 if batter.has_trimmed_bat else 0
+        self.bat_reach = batter.bat_reach
         self.reach_near = batter.horizontal_range_near
         self.reach_far = batter.horizontal_range_far
         if Mod.FIX_NON_RED_TOAD_REACH in inputs.mods and inputs.batter in _NON_RED_TOADS:
@@ -579,7 +583,7 @@ class _Simulation:
 
     def contact(self) -> None:
         """Everything up to the flight. Raises ValueError if the bat can't reach."""
-        near, far = tables.BAT_REACH[self.trimmed_bat]
+        near, far = self.bat_reach
         if not near <= self.ball_x - self.batter_x <= far:
             raise ValueError("these inputs don't make contact: the ball is out of the bat's reach")
         self._contact_type()
@@ -1128,4 +1132,5 @@ class _Simulation:
             moonshot=moonshot,
             trajectory=trajectory,
             garlic_trajectory=self.garlic_trajectory,
+            inputs=self.inputs,
         )

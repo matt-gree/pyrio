@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import Any
 
 import pytest
@@ -10,9 +11,12 @@ from pyrio import Character, Hand, PitchType, Stadium, SwingType
 from pyrio.geometry import clears_wall, wall_at
 from pyrio.sim import (
     HitInputs,
+    HitResult,
     LiveBallEventKind,
     LiveBallOutcome,
+    hazard_seed,
     play_out,
+    play_out_flight,
     simulate_hit,
 )
 
@@ -34,7 +38,7 @@ def flight_over(x_at_wall: float, z_at_wall: float, height_at_wall: float, frame
 
 
 def test_every_frame_is_reported_once():
-    result = play_out(Stadium.MARIO_STADIUM, flight_over(0.0, 100.0, 30.0))
+    result = play_out_flight(Stadium.MARIO_STADIUM, flight_over(0.0, 100.0, 30.0))
     assert result.outcome is LiveBallOutcome.HOME_RUN
     assert len(result.trajectory) == result.events[-1].frame + 1
     assert result.events[-1].kind is LiveBallEventKind.OUTCOME
@@ -43,32 +47,32 @@ def test_every_frame_is_reported_once():
 
 def test_a_dribbler_stops():
     dribble = [(0.0, 0.15, 0.0), (0.0, 0.15, 0.05), (0.0, 0.15, 0.1)]
-    result = play_out(Stadium.MARIO_STADIUM, dribble)
+    result = play_out_flight(Stadium.MARIO_STADIUM, dribble)
     assert result.outcome is LiveBallOutcome.STOPPED
 
 
 def test_the_same_seed_plays_the_same_way():
     path = flight_over(-20.0, 60.0, 9.0)
-    assert play_out(Stadium.YOSHI_PARK, path, seed=11) == play_out(
+    assert play_out_flight(Stadium.YOSHI_PARK, path, seed=11) == play_out_flight(
         Stadium.YOSHI_PARK, path, seed=11
     )
 
 
 def test_an_empty_trajectory_is_refused():
     with pytest.raises(ValueError, match="trajectory is empty"):
-        play_out(Stadium.MARIO_STADIUM, [])
+        play_out_flight(Stadium.MARIO_STADIUM, [])
 
 
 def test_a_misspelt_option_is_refused():
     # The old continue_ball(..., hazard=False) quietly played with hazards on.
     options: dict[str, Any] = {"hazard": False}
     with pytest.raises(TypeError):
-        play_out(Stadium.BOWSER_CASTLE, flight_over(0.0, 88.0, 14.0), **options)
+        play_out_flight(Stadium.BOWSER_CASTLE, flight_over(0.0, 88.0, 14.0), **options)
 
 
 def test_hazards_can_be_switched_off():
     path = flight_over(0.0, 88.0, 14.0)
-    without = play_out(Stadium.BOWSER_CASTLE, path, seed=1, hazards=False)
+    without = play_out_flight(Stadium.BOWSER_CASTLE, path, seed=1, hazards=False)
     assert not [e for e in without.events if e.hazard is not None]
 
 
@@ -86,7 +90,7 @@ def test_a_simulated_hit_plays_out():
             charge_down=1.0,
         )
     )
-    result = play_out(
+    result = play_out_flight(
         Stadium.MARIO_STADIUM, hit.trajectory, acceleration=hit.acceleration_per_frame
     )
     assert result.land_frame is not None
@@ -99,7 +103,7 @@ def test_a_simulated_hit_plays_out():
 def test_a_ball_off_the_foul_pole_is_a_home_run():
     # Yoshi Park's poles (x +/-57.4..58.9, z 58.3..59.9) are FOUL_POLE surfaces.
     for x in (57.9, -57.9):
-        result = play_out(Stadium.YOSHI_PARK, flight_over(x, 59.1, 8.0), hazards=False)
+        result = play_out_flight(Stadium.YOSHI_PARK, flight_over(x, 59.1, 8.0), hazards=False)
         assert result.outcome is LiveBallOutcome.HOME_RUN, x
 
 
@@ -114,9 +118,9 @@ def test_yoshi_parks_fence_posts_stop_a_ball_the_table_clears():
     assert clears_wall(Stadium.YOSHI_PARK, clear_gap)
     assert clears_wall(Stadium.YOSHI_PARK, into_post)
 
-    gap = play_out(Stadium.YOSHI_PARK, clear_gap, hazards=False)
+    gap = play_out_flight(Stadium.YOSHI_PARK, clear_gap, hazards=False)
     assert gap.outcome is LiveBallOutcome.HOME_RUN
-    post = play_out(Stadium.YOSHI_PARK, into_post, hazards=False)
+    post = play_out_flight(Stadium.YOSHI_PARK, into_post, hazards=False)
     assert post.outcome is not LiveBallOutcome.HOME_RUN
     assert post.events[0].surface == "back wall"
 
@@ -124,5 +128,64 @@ def test_yoshi_parks_fence_posts_stop_a_ball_the_table_clears():
 def test_the_table_and_the_mesh_agree_on_clear_cases():
     obvious = flight_over(0.0, 120.0, 40.0)
     for stadium in Stadium:
-        assert play_out(stadium, obvious, hazards=False).outcome is LiveBallOutcome.HOME_RUN
+        assert play_out_flight(stadium, obvious, hazards=False).outcome is LiveBallOutcome.HOME_RUN
         assert clears_wall(stadium, obvious), stadium
+
+
+def _hit(**changes: object) -> HitResult:
+    inputs = HitInputs(
+        batter=Character.MARIO,
+        pitcher=Character.LUIGI,
+        pitch=PitchType.CURVE,
+        swing=SwingType.CHARGE,
+        hand=Hand.RIGHT,
+        batter_x=0.0,
+        ball_x=0.0,
+        charge_up=1.0,
+        charge_down=1.0,
+        seeds=(1565, 20008, 1628),
+    )
+    return simulate_hit(replace(inputs, **changes))
+
+
+def test_play_out_takes_a_hit_and_plays_it_at_its_stadium():
+    hit = _hit(stadium=Stadium.BOWSER_CASTLE)
+    played = play_out(hit)
+    assert played == play_out_flight(
+        Stadium.BOWSER_CASTLE,
+        hit.trajectory,
+        acceleration=hit.acceleration_per_frame,
+        seed=hazard_seed(hit.inputs.seeds),
+    )
+    assert play_out(hit, seed=5, hazards=False) == play_out_flight(
+        Stadium.BOWSER_CASTLE,
+        hit.trajectory,
+        acceleration=hit.acceleration_per_frame,
+        seed=5,
+        hazards=False,
+    )
+
+
+def test_hazard_seed_mixes_the_three_rng_values():
+    assert hazard_seed((1, 2, 3)) == (1 * 31 + 2) * 31 + 3
+
+
+def test_garlic_halves_play_out_without_the_hits_push():
+    hit = _hit(
+        batter=Character.WARIO, swing=SwingType.STAR, stars=5, is_captain=True, charge_up=0.0
+    )
+    if hit.garlic_trajectory is None:
+        pytest.skip("this swing didn't split")
+    assert play_out(hit) == play_out_flight(
+        hit.inputs.stadium, hit.trajectory, seed=hazard_seed(hit.inputs.seeds)
+    )
+
+
+def test_a_catch_cuts_the_flight_at_the_glove():
+    hit = _hit()
+    glove = hit.trajectory[40]
+    played = play_out(hit, caught_at=glove)
+    assert played.outcome is LiveBallOutcome.CAUGHT
+    assert played.trajectory == hit.trajectory[:41]
+    assert played.land_frame is None
+    assert [e.kind for e in played.events] == [LiveBallEventKind.OUTCOME]
