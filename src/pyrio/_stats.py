@@ -166,10 +166,12 @@ class PitchingLine(_Line):
 
 
 def format_batting_line(line: BattingLine) -> str:
-    """One game's batting line: ``"2-for-4, HR, 2B, RBI"``.
+    """One game's batting line: ``"1-for-4, HR, 2 K, RBI"``.
 
     Hits for at bats, then each nonzero stat in the order HR, 3B, 2B, BB, HBP,
-    RBI, SB, with a count when it's more than one (``"2 2B"``). Singles are implied.
+    K, RBI, SB, with a count when it's more than one (``"2 2B"``). Singles are
+    implied. The plate-appearance outcomes come before what the batter
+    produced, so the line says where every at bat went.
     """
     parts = [f"{line.hits}-for-{line.at_bats}"]
     for count, label in (
@@ -178,6 +180,7 @@ def format_batting_line(line: BattingLine) -> str:
         (line.doubles, "2B"),
         (line.walks, "BB"),
         (line.hit_by_pitch, "HBP"),
+        (line.strikeouts, "K"),
         (line.rbi, "RBI"),
         (line.stolen_bases, "SB"),
     ):
