@@ -56,6 +56,9 @@ _PITCHES = [
     (PitchType.CHANGE_UP, None),
     (PitchType.CHARGE, ChargeType.CAPTAIN_STAR),
 ]
+# The mods that change a hit, in the order the recorded draws used. A new mod
+# goes here only if it changes simulate_hit, and then the goldens move.
+_HIT_MODS = (Mod.FIX_NON_RED_TOAD_REACH, Mod.REMOVE_SLICE)
 
 
 # --- the inputs -----------------------------------------------------------------
@@ -98,7 +101,7 @@ def random_inputs(rng: random.Random) -> HitInputs:
         pitcher_is_superstar=rng.random() < 0.3,
         is_easy_batting=rng.random() < 0.2,
         stadium=rng.choice(list(Stadium)),
-        mods=frozenset(m for m in Mod if rng.random() < 0.3),
+        mods=frozenset(m for m in _HIT_MODS if rng.random() < 0.3),
         seeds=(rng.randrange(32768), rng.randrange(32768), rng.randrange(32768)),
         overrides=overrides,
     )

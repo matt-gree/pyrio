@@ -57,13 +57,16 @@ _NO_STICK: Final = InputDirection(0)
 
 
 class Mod(Enum):
-    """A gecko code that changes how hits behave. The value is Rio's tag for it."""
+    """A gecko code that changes how a hit or its play behaves. The value is Rio's tag for it."""
 
     FIX_NON_RED_TOAD_REACH = "Fix Non-red Toad Hitboxes and Bat Reach"
     """The blue, yellow, green and purple Toads get the red Toad's bat reach."""
 
     REMOVE_SLICE = "Remove slice"
     """An earliest- or latest-frame contact goes foul instead of dead up the middle."""
+
+    HAZARDS_OFF = "Hazards Off"
+    """The stadiums have no hazards: :func:`play_out` plays the bare park."""
 
 
 TAG_TO_MOD: Mapping[str, Mod] = MappingProxyType({mod.value: mod for mod in Mod})

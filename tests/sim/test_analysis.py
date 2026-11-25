@@ -20,10 +20,12 @@ from pyrio import (
     SwingType,
 )
 from pyrio.sim import (
+    TAG_TO_MOD,
     ContactRecord,
     HitInputs,
     HitOverrides,
     LiveBallOutcome,
+    Mod,
     best,
     find_highlights,
     format_highlights,
@@ -190,6 +192,23 @@ def test_a_ball_in_play_stops_with_the_first_fielder():
     assert grounders
     outcomes = {r.play_out().outcome for r in grounders}
     assert LiveBallOutcome.FIELDED in outcomes
+
+
+def test_hazards_off_games_play_the_bare_park():
+    # Tag set 198 ("S13 Superstars Off") was played with the "Hazards Off" code. A
+    # stat file can't say so; with hazards on, a Thwomp stands in both balls' way.
+    mods = frozenset({TAG_TO_MOD["Hazards Off"]})
+    assert mods == {Mod.HAZARDS_OFF}
+    on = {r.event_number: r for r in simulate_contacts(game())}
+    off = {r.event_number: r for r in simulate_contacts(game(), mods=mods)}
+    for number in (153, 190):
+        assert on[number].result is AtBatResult.HOME_RUN
+        assert on[number].play_out().outcome is not LiveBallOutcome.HOME_RUN
+        assert off[number].play_out().outcome is LiveBallOutcome.HOME_RUN
+        assert play_out(off[number].hit).outcome is LiveBallOutcome.HOME_RUN
+        # An explicit choice wins over the mods.
+        assert off[number].play_out(hazards=True) == on[number].play_out()
+        assert on[number].play_out(hazards=False) == off[number].play_out()
 
 
 def test_play_out_picks_hazard_dice_that_agree_with_the_record():

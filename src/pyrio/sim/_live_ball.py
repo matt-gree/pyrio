@@ -42,6 +42,7 @@ from .._codes import Stadium
 from ..geometry import HazardKind, physics
 from ..geometry._files import park_sheet
 from ..geometry._mesh import FOUL_BIT, MeshTriangle, mesh_triangles
+from ._hit import Mod
 from ._physics import GRAVITY_PER_FRAME_SQUARED, VELOCITY_KEPT_PER_FRAME
 
 if TYPE_CHECKING:
@@ -164,7 +165,7 @@ def play_out(
     hit: HitResult,
     *,
     seed: int | None = None,
-    hazards: bool = True,
+    hazards: bool | None = None,
     mystery_blocks: Literal["brick", "used", "note"] | None = None,
     star_plants: bool | None = None,
     max_frames: int = 1500,
@@ -180,7 +181,10 @@ def play_out(
 
     ``seed`` rolls the dice the game rolls for hazards, which no stat file
     records; it defaults to :func:`hazard_seed` of the hit's RNG values, so a
-    hit always plays out the same way. ``hazards=False`` plays the bare park.
+    hit always plays out the same way. ``hazards`` says whether the park's
+    hazards are there; left out, they are unless the hit's mods include
+    ``Mod.HAZARDS_OFF`` (a stat file doesn't say, so pass the game's mods to
+    ``HitInputs`` or :func:`simulate_contacts`).
     ``mystery_blocks`` forces what Peach Garden's "?" blocks are, and
     ``star_plants`` whether Yoshi Park's plants are star plants.
 
@@ -202,7 +206,7 @@ def play_out(
         hit.trajectory,
         acceleration=acceleration,
         seed=hazard_seed(hit.inputs.seeds) if seed is None else seed,
-        hazards=hazards,
+        hazards=hazards if hazards is not None else Mod.HAZARDS_OFF not in hit.inputs.mods,
         mystery_blocks=mystery_blocks,
         star_plants=star_plants,
         max_frames=max_frames,

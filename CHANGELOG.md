@@ -45,7 +45,11 @@ the end maps the old names to the new.
   in a glove (`caught_at`). `HitInputs.from_event()` rebuilds a recorded contact;
   `simulate_contacts(game)` does a whole game, as `ContactRecord`s holding the event
   and the hit, and `ContactRecord.play_out()` replays one to how the stat file says it
-  ended, picking hazard dice that agree with the record. Star swings resolve from
+  ended, picking hazard dice that agree with the record. Gecko codes a game was played
+  with are `Mod`s, built from its Rio web tags with `TAG_TO_MOD` and passed as
+  `simulate_contacts(game, mods=...)`: `REMOVE_SLICE` and `FIX_NON_RED_TOAD_REACH`
+  change the hit, and `HAZARDS_OFF` plays the bare park (a stat file can't say a game
+  had no hazards; `play_out(hazards=...)` still decides outright). Star swings resolve from
   `stars` and `is_captain`, as in the game. `find_highlights` and `best` for game
   summaries.
 - **Per-character batting-box and fielding data** on `CharacterAttributes`, read from

@@ -20,7 +20,7 @@ from .._codes import (
     SwingType,
 )
 from ..geometry import clears_wall
-from ._hit import HitInputs, simulate_hit
+from ._hit import HitInputs, Mod, simulate_hit
 from ._live_ball import LiveBallOutcome, hazard_seed, play_out
 
 if TYPE_CHECKING:
@@ -30,7 +30,7 @@ if TYPE_CHECKING:
     from .._codes import Side, Stadium
     from .._game import Contact, Event, Game
     from ..geometry import Point
-    from ._hit import HitResult, Mod
+    from ._hit import HitResult
     from ._live_ball import LiveBallResult
 
 __all__ = [
@@ -135,7 +135,7 @@ class ContactRecord:
     def play_out(
         self,
         *,
-        hazards: bool = True,
+        hazards: bool | None = None,
         seed: int | None = None,
         max_frames: int = 1500,
         roll_frames: int = 420,
@@ -154,10 +154,15 @@ class ContactRecord:
         double, or a ball that stayed in play. If none does (the flight is the
         simulation's, so a ball that barely cleared the wall may not), it
         returns the default dice's play.
+
+        ``hazards`` is as for :func:`pyrio.sim.play_out`: left out, the park's
+        hazards are there unless the game was played with ``Mod.HAZARDS_OFF``.
         """
+        if hazards is None:
+            hazards = Mod.HAZARDS_OFF not in self.hit.inputs.mods
         contact, fielding = self.contact, self.event.fielding
         if self.caught:
-            return play_out(self.hit, caught_at=contact.landing_location)
+            return play_out(self.hit, hazards=hazards, caught_at=contact.landing_location)
         stop_at = None if fielding is None else (fielding.location[0], fielding.location[2])
 
         def attempt(dice: int | None) -> LiveBallResult:
@@ -208,8 +213,12 @@ def simulate_contacts(
     Bunts aren't simulated, and a file from a client too old to record the
     RNG gives an empty tuple. A contact whose recorded inputs the simulation
     rejects (the ball outside the bat's reach, a charge pitch with no charge
-    type) is left out rather than failing the game. ``mods`` are the gecko codes the game was
-    played with.
+    type) is left out rather than failing the game.
+
+    ``mods`` are the gecko codes the game was played with, which a stat file
+    doesn't record: build them from the game's Rio web tags with ``TAG_TO_MOD``.
+    They reach each hit's inputs, so ``Mod.HAZARDS_OFF`` here plays every
+    contact without the park's hazards.
     """
     records: list[ContactRecord] = []
     for event in game.events:
