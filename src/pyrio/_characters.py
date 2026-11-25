@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import csv
 import io
+import struct
 from dataclasses import dataclass, replace
 from enum import Enum
 from functools import cache
 from importlib.resources import files
-from typing import Self, cast
+from typing import Final, Self, cast
 
 from ._codes import Hand
 from ._enum import CodeEnum
@@ -427,6 +428,29 @@ class CharacterAttributes:
     horizontal_range_far: float
     has_trimmed_bat: bool
     has_wall_splat: bool
+    # the batter's box (the game's BatterHitbox row)
+    vertical_range_front: float
+    vertical_range_back: float
+    bat_offset: tuple[float, float]
+    """The game's offset between the batter and the bat, ``(x, z)``, for a right-handed batter."""
+
+    box_move_speed: float
+    """How far the batter moves in the box per frame of stick input."""
+
+    hit_by_pitch_depth: float
+    """How far the hit-by-pitch box reaches toward the pitcher from the batter's position."""
+
+    hit_by_pitch_plate_side: float
+    """How far the hit-by-pitch box reaches from the batter toward the plate (``+x`` for a
+    right-handed batter; mirrored for a left-handed one)."""
+
+    hit_by_pitch_far_side: float
+    """How far the hit-by-pitch box reaches from the batter away from the plate."""
+
+    # fielding (the game's FielderHitboxConsts, scaled by the character's size)
+    dive_range: float
+    """How far a diving catch reaches, in field units."""
+
     # star moves
     captain_star: CaptainStar | None
     star_pitch: StarPitch
@@ -434,6 +458,29 @@ class CharacterAttributes:
     # where the character sits on the character select screen, from 1
     select_screen_order: int
     is_superstar: bool = False
+
+    @property
+    def bat_reach(self) -> tuple[float, float]:
+        """How far the bat reaches across the plate, ``(near, far)`` from the batter's ``x``.
+
+        A ball whose ``x`` is outside this range of the batter's misses the bat.
+        For a right-handed batter; mirror it for a left-handed one. A trimmed bat
+        reaches less far in and further out.
+        """
+        return _TRIMMED_BAT_REACH if self.has_trimmed_bat else _BAT_REACH
+
+    @property
+    def jogging_speed(self) -> float:
+        """How far the character covers per frame running in the field, from ``speed``.
+
+        The game's exhibition table (``ModifiedSpeedArray``), interpolated
+        between its steps of ten as the game does. Superstar raises it through
+        ``speed``.
+        """
+        speed = min(self.speed, 200)
+        lower = speed // 10 * 10
+        low, high = _JOGGING_SPEEDS[lower // 10], _JOGGING_SPEEDS[lower // 10 + 1]
+        return _f32(_f32(high - low) * _f32((speed - lower) / 10) + low)
 
     def with_superstar(self) -> CharacterAttributes:
         """The record with superstar on: each boosted stat goes up, to its ceiling if it has one."""
@@ -461,6 +508,24 @@ _SUPERSTAR_BOOSTS: dict[str, tuple[int, int | None]] = {
     "charge_contact_size_multiplier": (50, 100),
 }
 # What superstar adds to each boosted stat, and the ceiling it can't pass (None: none).
+
+
+# BattingExtensions: how far from the batter the bat meets the ball, (near, far).
+_BAT_REACH: Final = (-0.85, 0.15)
+_TRIMMED_BAT_REACH: Final = (-0.35, 0.35)
+
+# ModifiedSpeedArray[0]: jogging speed at speed 0, 10, ..., 210.
+_JOGGING_SPEEDS: Final = (
+    0.109999999, 0.111000001, 0.112000003, 0.118000001, 0.119000003, 0.119999997,
+    0.123999998, 0.125, 0.126000002, 0.130999997, 0.133000001, 0.135000005,
+    0.137999997, 0.140000001, 0.143000007, 0.144999996, 0.147, 0.149000004,
+    0.150999993, 0.152999997, 0.155000001, 0.155000001,
+)  # fmt: skip
+
+
+def _f32(x: float) -> float:
+    value: float = struct.unpack("f", struct.pack("f", x))[0]
+    return value
 
 
 def _boost(value: int, increase: int, ceiling: int | None) -> int:
@@ -512,6 +577,14 @@ def _from_row(row: dict[str, str]) -> CharacterAttributes:
         horizontal_range_far=float(row["Horizontal Range Far"]),
         has_trimmed_bat=flag("Trimmed Bat"),
         has_wall_splat=flag("Wall Splat"),
+        vertical_range_front=float(row["Vertical Range Front"]),
+        vertical_range_back=float(row["Vertical Range Back"]),
+        bat_offset=(float(row["Bat Offset X"]), float(row["Bat Offset Z"])),
+        box_move_speed=float(row["Box Move Speed"]),
+        hit_by_pitch_depth=number("Hit By Pitch Depth") / 100,
+        hit_by_pitch_plate_side=number("Hit By Pitch Plate Side") / 100,
+        hit_by_pitch_far_side=number("Hit By Pitch Far Side") / 100,
+        dive_range=float(row["Dive Range"]),
         captain_star=CaptainStar(captain_star) if captain_star else None,
         star_pitch=StarPitch(number("Non-Captain Star Pitch")),
         star_swing=StarSwing(number("Non-Captain Star Hit")),

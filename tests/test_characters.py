@@ -2,6 +2,7 @@
 
 import csv
 import io
+from dataclasses import replace
 from importlib.resources import files
 
 import pytest
@@ -262,3 +263,33 @@ def test_captains_are_the_logo_captains():
     captains = {c for c in Character if c.is_captain}
     assert captains == {team.captain for team in TeamName}
     assert len(captains) == 12
+
+
+def test_batting_box_and_fielding_attributes_come_from_the_game():
+    mario = Character.MARIO.attributes
+    assert mario.vertical_range_front == -0.2
+    assert mario.vertical_range_back == 1.5
+    assert mario.bat_offset == (-2.1, -1.0)
+    assert mario.box_move_speed == 0.05
+    assert (mario.hit_by_pitch_depth, mario.hit_by_pitch_plate_side) == (0.8, 0.7)
+    assert mario.hit_by_pitch_far_side == 0.1
+    assert mario.dive_range == 1.652  # 140 * 1.18 (Mario's size) / 100
+    assert Character.DK.attributes.dive_range == 3.33
+
+
+def test_bat_reach_depends_on_a_trimmed_bat():
+    assert Character.MARIO.attributes.bat_reach == (-0.85, 0.15)
+    assert Character.DK.attributes.has_trimmed_bat
+    assert Character.DK.attributes.bat_reach == (-0.35, 0.35)
+
+
+def test_jogging_speed_follows_speed_and_superstar():
+    mario = Character.MARIO.attributes
+    assert mario.speed == 50
+    assert mario.jogging_speed == pytest.approx(0.12)
+    assert mario.with_superstar().jogging_speed == pytest.approx(0.133)  # speed 100
+    paragoomba = Character.PARAGOOMBA.attributes
+    assert paragoomba.speed == 70
+    assert paragoomba.jogging_speed == pytest.approx(0.125)
+    slow = replace(mario, speed=55)
+    assert slow.jogging_speed == pytest.approx((0.12 + 0.124) / 2)
