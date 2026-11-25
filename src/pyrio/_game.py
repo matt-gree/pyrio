@@ -375,6 +375,20 @@ class Event:
         return self.result.is_hit
 
     @property
+    def is_fielders_choice(self) -> bool:
+        """The batter reached base on a play that put another runner out.
+
+        Rio 2.3.0 records it as ``BATTER_SAFE_THROW_ELSEWHERE``; earlier
+        clients call it an ``OUT``, which this tells apart by the runners.
+        """
+        if self.result is AtBatResult.BATTER_SAFE_THROW_ELSEWHERE:
+            return True
+        if self.result is not AtBatResult.OUT:
+            return False
+        batter_safe = any(r.start_base == 0 and not r.is_out for r in self.runners)
+        return batter_safe and any(r.start_base > 0 and r.is_out for r in self.runners)
+
+    @property
     def is_lead_change(self) -> bool:
         """The event put the batting side ahead when it wasn't before (behind or level)."""
         side = self.state.batting_side

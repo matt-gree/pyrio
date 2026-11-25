@@ -158,6 +158,22 @@ def test_half_innings(game: Game):
     assert [e for h in halves for e in h.events] == list(game.events)
 
 
+def test_fielders_choice():
+    # Before 2.3.0 Rio filed a fielder's choice under OUT; the runners tell it apart.
+    game = read_game(
+        FIXTURES / "stat_files/2.1.1/20260219T212721_MattGree-Vs-Baltor33_1189820580.json"
+    )
+    (choice,) = [e for e in game.events if e.is_fielders_choice]
+    assert choice.result is AtBatResult.OUT
+    batter = next(r for r in choice.runners if r.start_base == 0)
+    assert not batter.is_out
+    assert any(r.is_out for r in choice.runners if r.start_base > 0)
+    plain_outs = [
+        e for e in game.events if e.result is AtBatResult.OUT and not e.is_fielders_choice
+    ]
+    assert plain_outs
+
+
 def test_lead_changes(game: Game):
     changes = game.lead_changes
     assert [e.state.batting_side for e in changes] == [Side.AWAY, Side.HOME]

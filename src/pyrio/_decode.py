@@ -111,6 +111,11 @@ _CAUGHT_LABELS_FIXED = Version(2, 3, 0)
 # (b) Before 2.3.0 the contact results were logged wrongly in three ways that
 # can be put right (see _correct_legacy_contact).
 _CONTACT_RESULTS_FIXED = Version(2, 3, 0)
+# (b) Before 2.3.0 every bunt was logged with no swing type: the game's swing
+# flag only covers slaps, charges and star swings (ProjectRio db01a9438e). A
+# pitch with no swing that was hit can only have been bunted. A missed bunt
+# still can't be told from a take.
+_BUNT_SWING_RECORDED = Version(2, 3, 0)
 
 _SWAPPED_CAUGHT_LABELS = {
     "caught": AtBatResult.CAUGHT_LINE_DRIVE,
@@ -146,6 +151,7 @@ class _Rules:
     manual_select: bool
     caught_labels_swapped: bool
     legacy_contact_results: bool
+    bunts_unrecorded: bool
 
 
 def _rules(version: Version) -> _Rules:
@@ -160,6 +166,7 @@ def _rules(version: Version) -> _Rules:
         manual_select=version >= _MANUAL_SELECT,
         caught_labels_swapped=version < _CAUGHT_LABELS_FIXED,
         legacy_contact_results=version < _CONTACT_RESULTS_FIXED,
+        bunts_unrecorded=version < _BUNT_SWING_RECORDED,
     )
 
 
@@ -607,6 +614,8 @@ def _event(
         contact_node = pitch_node.maybe_node("Contact")
         if contact_node is not None:
             contact = _contact(contact_node)
+            if rules.bunts_unrecorded and pitch.swing is SwingType.NONE:
+                pitch = replace(pitch, swing=SwingType.BUNT)
             if rules.legacy_contact_results:
                 contact = _correct_legacy_contact(
                     contact,
@@ -965,6 +974,8 @@ def _hud_play(
         contact_node = pitch_node.maybe_node("Contact")
         if contact_node is not None:
             contact = _contact(contact_node)
+            if rules.bunts_unrecorded and pitch.swing is SwingType.NONE:
+                pitch = replace(pitch, swing=SwingType.BUNT)
             if rules.legacy_contact_results:
                 contact = _correct_legacy_contact(
                     contact, result, runners, outs_during_play, lambda: False

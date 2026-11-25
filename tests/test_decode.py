@@ -719,3 +719,20 @@ def test_hud_version_must_parse():
 def test_dickballs():
     game = read_game(V2_1_1)
     assert [e.number for e in game.events if e.pitch and e.pitch.is_dickball] == [79, 85]
+
+
+def test_bunts_before_2_3_0_are_read_from_the_contact():
+    # The fixture game's one contacted pitch with no swing logged was a bunt.
+    game = read_game(FIXTURES / "20260618T191655_SpiceOrange-Vs-MattGree_3896251267.json")
+    bunts = [e for e in game.events if e.pitch and e.pitch.swing is SwingType.BUNT]
+    assert len(bunts) == 1
+    assert bunts[0].contact is not None
+    assert not any(e.pitch and e.pitch.swing is SwingType.NONE and e.contact for e in game.events)
+
+
+def test_a_2_3_0_file_keeps_its_swing_none():
+    data = load(STAT_FILES / "2.3.0/synthetic.SpiceOrange-Vs-MattGree.json")
+    event = next(e for e in data["Events"] if "Contact" in e.get("Pitch", {}))
+    event["Pitch"]["Type of Swing"] = 0
+    game = read_game(data)
+    assert any(e.pitch and e.pitch.swing is SwingType.NONE and e.contact for e in game.events)

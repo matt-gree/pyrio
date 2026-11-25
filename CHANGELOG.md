@@ -18,7 +18,8 @@ the end maps the old names to the new.
   live HUD files into a `HUDSnapshot`. Every per-version rule lives in the decoder: the
   1.9.2 home/away flip (as `Side`, never a team number), the 1.9.2–1.9.4 crossed
   captain flags, hex and decimal game ids, the pre-2.3.0 swapped result labels and
-  contact results, renamed keys and comma-grouped numbers. Pre-0.1.9 files read
+  contact results, bunts logged with no swing before 2.3.0 (read as `SwingType.BUNT`
+  when the ball was hit), renamed keys and comma-grouped numbers. Pre-0.1.9 files read
   too: a bobbling fielder's uninitialised position is `None`, a pitch with no
   recorded swing is `SwingType.NONE`, 0.1.7's raw star-pitch byte is read as a
   flag, and the trailing commas in 0.1.7–0.1.8 crash files are repaired.
@@ -47,6 +48,8 @@ the end maps the old names to the new.
   the team logo.
 - **`HitOverrides.from_contact(contact)`** pins a recorded contact's angles and power,
   to fly exactly the recorded hit.
+- **`Event.is_fielders_choice`**: the batter safe on a play that put another runner out,
+  which Rio called an `OUT` before 2.3.0.
 - **`Game.inning_runs(side)`**: a line score, `None` for a half never batted.
 - **`AtBat`, `Game.at_bats` and `HalfInning.at_bats`**: events grouped by plate
   appearance, every event in exactly one. An at-bat ends on a result, or with none when
