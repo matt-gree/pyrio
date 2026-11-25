@@ -14,7 +14,9 @@ triangles. Meshes are stored Y-down, as the game stores them, and the ball is
 Y-up, so Y flips at the mesh boundary.
 
 Ported from RioVisualizer's ``physics.py``, the original work, and held to it
-exactly by ``tools/check_live_ball_parity.py``. The constants and the order of
+exactly by ``tools/check_live_ball_parity.py``, except where the decomp showed
+the original was off: the Thwomp follows thwomp_slamControl's disarm and
+re-slam, which the tool lists as departures. The constants and the order of
 operations are the decomp's; rewriting them to taste is how a port drifts.
 
 Exact: gravity, drag, ground bounce and roll, wall rebounds, the surface
@@ -33,6 +35,7 @@ from __future__ import annotations
 
 import math
 import random
+import struct
 from dataclasses import dataclass
 from enum import Enum
 from functools import cache
@@ -352,6 +355,12 @@ def _name(kind: int) -> str:
     return _SURFACE_NAMES.get(kind, hex(kind))
 
 
+def _f32(x: float) -> float:
+    """``x`` rounded to a single-precision float, as the game stores it."""
+    value: float = struct.unpack("f", struct.pack("f", x))[0]
+    return value
+
+
 # --- vectors -------------------------------------------------------------------
 
 
@@ -551,44 +560,45 @@ class _Block(_Hazard):
 
 class _Thwomp(_Hazard):
     """thwomp_slamControl (sta_c1.c:1984). Perched over the wall until a batted
-    ball comes its way, then: rise, drop, sit, climb back."""
+    ball comes its way, then: rise, drop, sit, climb back, and perch again.
+
+    Each frame a perched Thwomp tests the ball, and any test the ball fails
+    except the last disarms it for the rest of the play: a ball moving back
+    toward home, or one whose heading, carried to the Thwomp's depth, passes
+    more than ``triggerHalfWidth`` to either side. Only the last test, the ball
+    within ``triggerDist`` and below ``triggerHeight``, waits for a later frame.
+    A slam doesn't disarm it, so one back on its perch can slam again, at the
+    fall speed the game rolled before the play. (The game also disarms it for
+    a held or dead ball; here the play has ended by then.)
+    """
 
     def __init__(self, spec: dict[str, Any], sheet: dict[str, Any], play: _LiveBall) -> None:
         super().__init__(spec, sheet, play)
         self.home_y = self.location[1]
         self.state = "perched"
+        self.armed = True
         self.timer = 0
-        self.fall = 0.0
+        self.fall: float | None = None
 
     def update(self, ball: _Ball) -> None:
         s = self.spec["slam"]
+        y = self.location[1]
         if self.state == "perched":
-            v = ball.velocity
-            if v[2] <= 0 or ball.location[1] >= s["triggerHeight"]:
-                return
-            reach = ball.location[0] + v[0] * (self.location[2] - ball.location[2]) / v[2]
-            if abs(reach - self.location[0]) > s["triggerHalfWidth"]:
-                return
-            if math.dist(ball.location, self.location) >= s["triggerDist"]:
-                return
-            self.state, self.timer = "rise", s["riseFrames"]
-            self.fall = self.play.rng.choice(s["fallSpeeds"])
-            self.play.record(
-                LiveBallEventKind.HAZARD,
-                hazard=self.id,
-                hazard_kind=HazardKind.THWOMP,
-                result="slam",
-                fall_speed=self.fall,
-                is_assumed=True,
-            )
+            if self.armed:
+                self._test(ball, s)
         elif self.state == "rise":
-            self.location[1] += s["rise"] / s["riseFrames"]
-            self.timer -= 1
-            if self.timer <= 0:
-                self.state = "fall"
+            # Each check comes before the move, so the frame that finds the
+            # Thwomp at the top (or home) holds it still.
+            top = self.home_y + s["rise"]
+            if y >= top:
+                self.location[1], self.state = top, "fall"
+            else:
+                self.location[1] = y + s["rise"] / s["riseFrames"]
         elif self.state == "fall":
-            self.location[1] = max(s["floorY"], self.location[1] - self.fall)
+            assert self.fall is not None
+            self.location[1] = y - self.fall
             if self.location[1] <= s["floorY"]:
+                self.location[1] = s["floorY"]
                 self.state, self.timer = "hold", s["holdFrames"]
                 self.play.record(
                     LiveBallEventKind.HAZARD,
@@ -601,11 +611,48 @@ class _Thwomp(_Hazard):
             if self.timer <= 0:
                 self.state = "return"
         elif self.state == "return":
-            self.location[1] = min(self.home_y, self.location[1] + s["returnSpeed"])
-            if self.location[1] >= self.home_y:
-                self.state = "done"
-        if self.state in ("rise", "fall", "return"):
+            if y >= self.home_y:
+                self.location[1], self.state = self.home_y, "perched"
+            else:
+                # pos.y is an f32 (Y down) less a double 0.2, stored back as an f32
+                self.location[1] = _f32(y + s["returnSpeed"])
+        if self.location[1] != y:
             self.rebuild()
+
+    def _test(self, ball: _Ball, s: dict[str, Any]) -> None:
+        vx, _, vz = ball.velocity
+        if vz < 0:
+            self.armed = False
+            return
+        # The heading carried to the Thwomp's depth, as IEEE division gives it:
+        # a ball with no depth speed lands at infinity (disarmed) or, with no
+        # speed at all, nowhere (NaN fails both bounds and stays armed).
+        depth = self.location[2] - ball.location[2]
+        if vz != 0:
+            ratio = vx / vz
+        else:
+            ratio = math.nan if vx == 0 else math.copysign(math.inf, vx) * math.copysign(1.0, vz)
+        cross = ratio * depth + ball.location[0]
+        half = s["triggerHalfWidth"]
+        if cross < self.location[0] - half or cross > self.location[0] + half:
+            self.armed = False
+            return
+        if (
+            math.dist(ball.location, self.location) >= s["triggerDist"]
+            or ball.location[1] >= s["triggerHeight"]
+        ):
+            return
+        if self.fall is None:
+            self.fall = self.play.rng.choice(s["fallSpeeds"])
+        self.state = "rise"
+        self.play.record(
+            LiveBallEventKind.HAZARD,
+            hazard=self.id,
+            hazard_kind=HazardKind.THWOMP,
+            result="slam",
+            fall_speed=self.fall,
+            is_assumed=True,
+        )
 
 
 class _Tornado(_Hazard):

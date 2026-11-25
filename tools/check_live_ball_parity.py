@@ -14,6 +14,12 @@ It lives in tools/ rather than tests/ because it needs a RioVisualizer
 checkout, which pyrio does not depend on. Run it after touching the live
 ball, and after pulling RioVisualizer.
 
+Where the port deliberately leaves the reference to follow the decomp, the
+runs that touch it are counted as departures, listed, and not failed:
+
+  thwomp   thwomp_slamControl's disarm, re-slam and still frame at the top
+           (pyrio.sim._live_ball._Thwomp)
+
 Usage:
     python tools/check_live_ball_parity.py [path/to/RioVisualizer] [--seeds=N] [--ref=REV]
 
@@ -155,6 +161,15 @@ def normalised(result: dict[str, Any]) -> dict[str, Any]:
     return {**{k: result[k] for k in keys}, "events": events}
 
 
+# Hazard kinds whose behaviour the port changed on purpose (see the docstring).
+_DEPARTURES = frozenset({"thwomp"})
+
+
+def departs(*results: dict[str, Any]) -> bool:
+    """Whether a run involves a hazard the port deliberately departs on."""
+    return any(e.get("what") in _DEPARTURES for r in results for e in r["events"])
+
+
 def main(argv: list[str]) -> int:
     args = [a for a in argv[1:] if not a.startswith("--")]
     # 40 is the smallest round number that reaches every event type the
@@ -199,6 +214,7 @@ def main(argv: list[str]) -> int:
     theirs = {stadium: reference_stadium(stadium.label) for stadium in Stadium}
     matched = 0
     failures: list[tuple[Stadium, str, bool, str, str]] = []
+    departed: list[tuple[Stadium, str, bool, str, str]] = []
     outcomes: collections.Counter[str] = collections.Counter()
     events: collections.Counter[str] = collections.Counter()
     for stadium, label, path, seed, hazards in runs:
@@ -206,6 +222,8 @@ def main(argv: list[str]) -> int:
         b = as_reference(play_out_flight(stadium, path, seed=seed, hazards=hazards))
         if a == b:
             matched += 1
+        elif departs(a, b):
+            departed.append((stadium, label, hazards, a["outcome"], b["outcome"]))
         else:
             failures.append((stadium, label, hazards, a["outcome"], b["outcome"]))
         outcomes[b["outcome"]] += 1
@@ -217,6 +235,13 @@ def main(argv: list[str]) -> int:
     )
     print(f"  outcomes reached: {dict(outcomes)}")
     print(f"  events reached:   {dict(events)}")
+    if departed:
+        print(f"\nDEPARTED on purpose ({', '.join(sorted(_DEPARTURES))}): {len(departed)} runs")
+        for stadium, label, hazards, theirs_out, ours_out in departed[:20]:
+            print(
+                f"  {stadium.label:15} {label:14} hazards={hazards!s:<5} "
+                f"reference {theirs_out!r} vs port {ours_out!r}"
+            )
     if failures:
         print("\nDIVERGED:")
         for stadium, label, hazards, theirs_out, ours_out in failures[:20]:

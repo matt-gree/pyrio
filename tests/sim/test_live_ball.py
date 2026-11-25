@@ -76,6 +76,45 @@ def test_hazards_can_be_switched_off():
     assert not [e for e in without.events if e.hazard is not None]
 
 
+def _hover(lead_in: list[tuple[float, float, float]], frames: int = 300):
+    """A ball held low in left field near thwomp-0, creeping away from home,
+    after ``lead_in``: in reach of thwomp-0 (and thwomp-1) the whole time."""
+    x, y, z = -40.0, 15.0, 58.0
+    return [*lead_in, *((x, y, z + 1e-4 * f) for f in range(frames))]
+
+
+def _slams(path: list[tuple[float, float, float]]) -> dict[str, list[int]]:
+    played = play_out_flight(Stadium.BOWSER_CASTLE, path, seed=1)
+    slams: dict[str, list[int]] = {}
+    for e in played.events:
+        if e.result == "slam" and e.hazard is not None:
+            slams.setdefault(e.hazard, []).append(e.frame)
+    return slams
+
+
+def test_a_thwomp_back_on_its_perch_slams_again():
+    # thwomp_slamControl: a slam doesn't disarm it; climbing back, it perches again.
+    slams = _slams(_hover([]))
+    first, second = slams["thwomp-0"][:2]
+    # rise 11 frames, fall, sit 42, climb 13 units at 0.2 a frame
+    assert 11 + 42 + 65 <= second - first <= 11 + 16 + 42 + 66 + 2
+
+
+@pytest.mark.parametrize(
+    "lead_in",
+    [
+        # moving back toward home (velocity.z < 0)
+        [(-40.0, 15.0, 58.0 + 0.2 * (5 - f)) for f in range(5)],
+        # heading far wide of every Thwomp, carried to its depth
+        [(-40.0 - 3.0 * (5 - f), 15.0, 58.0 - 0.01 * (5 - f)) for f in range(5)],
+    ],
+    ids=["toward-home", "wide"],
+)
+def test_a_thwomp_the_ball_fails_once_stays_disarmed(lead_in: list[tuple[float, float, float]]):
+    assert _slams(_hover([]))  # the same ball, without the lead-in, sets them off
+    assert _slams(_hover(lead_in)) == {}
+
+
 def test_a_simulated_hit_plays_out():
     hit = simulate_hit(
         HitInputs(
