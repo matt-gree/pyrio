@@ -31,6 +31,15 @@ the end maps the old names to the new.
   stats as properties (`avg`, `obp`, `slg`, `ops`, `era`, `whip`, ...), and
   `format_batting_line` / `format_pitching_line`.
 - **`Game.inning_runs(side)`**: a line score, `None` for a half never batted.
+- **`AtBat`, `Game.at_bats` and `HalfInning.at_bats`**: events grouped by plate
+  appearance, every event in exactly one. An at-bat ends on a result, or with none when
+  the next event has a new batter or half inning (a third out made on the bases), so
+  unfinished at-bats are kept with `is_complete` False. `AtBat` gives the `final`
+  event, `result`, `state` at the start, `pitches`, `runs`, `rbi` and
+  `is_star_chance` (the game sets it as the at-bat begins and holds it to the end).
+- **Event predicates** for searches: `Event.is_star_pitch`, `is_star_swing`,
+  `is_moonshot`, `has_bobble` and `has_wall_jump`, each `False` where the event has no
+  pitch, contact or fielder.
 - `GameState.away_stars` / `home_stars` are `None` where a client wrote 255 for the
   whole game (seen 2.0.1–2.1.1, games with no tag set): the count wasn't recorded.
 - **`pyrio.team_name(roster, captain)`** and the `CAPTAIN_TEAMS` table.

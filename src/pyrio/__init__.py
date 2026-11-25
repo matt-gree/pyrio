@@ -46,6 +46,7 @@ from ._decode import read_game, read_hud
 from ._enum import CodeEnum
 from ._errors import RioError, StatFileError, UnknownCodeError, UnknownNameError
 from ._game import (
+    AtBat,
     Contact,
     Event,
     Fielding,
@@ -72,6 +73,7 @@ except _PackageNotFoundError:  # imported from a source tree on the path, e.g. a
 __all__ = [
     "CAPTAIN_TEAMS",
     "Ability",
+    "AtBat",
     "AtBatResult",
     "Bases",
     "BattingLine",

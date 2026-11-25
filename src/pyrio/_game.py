@@ -48,6 +48,7 @@ if TYPE_CHECKING:
     from ._team_names import TeamName
 
 __all__ = [
+    "AtBat",
     "Contact",
     "Event",
     "Fielding",
@@ -373,6 +374,118 @@ class Event:
         other = self.state.score(side.other)
         return before <= other < before + self.runs
 
+    @property
+    def is_star_pitch(self) -> bool:
+        """The pitcher threw a star pitch."""
+        return self.pitch is not None and self.pitch.is_star
+
+    @property
+    def is_star_swing(self) -> bool:
+        """The batter took a star swing, whether or not it made contact."""
+        return self.pitch is not None and self.pitch.swing is SwingType.STAR
+
+    @property
+    def is_moonshot(self) -> bool:
+        """A star swing hit as a moonshot (the community's "five-star dinger")."""
+        return self.contact is not None and self.contact.moonshot is MoonshotStatus.MOONSHOT
+
+    @property
+    def has_bobble(self) -> bool:
+        """The first fielder to touch the ball failed to hold it, in any way."""
+        return self.fielding is not None and self.fielding.bobble is not FielderBobble.NONE
+
+    @property
+    def has_wall_jump(self) -> bool:
+        """The first fielder to touch the ball wall-jumped for it."""
+        return self.fielding is not None and self.fielding.action is FielderAction.WALL_JUMP
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class AtBat:
+    """One batter's turn at the plate: the events from the first pitch to the result.
+
+    An at-bat that never finished (the third out made on the bases, or a game
+    that ended mid-count) has ``result`` ``AtBatResult.NONE``.
+    """
+
+    events: tuple[Event, ...]
+    """Never empty."""
+
+    @property
+    def final(self) -> Event:
+        """The last event: the one with the result, if the at-bat finished."""
+        return self.events[-1]
+
+    @property
+    def batter_spot(self) -> RosterSpot:
+        return self.events[0].batter_spot
+
+    @property
+    def batter(self) -> Character:
+        return self.events[0].batter_spot.character
+
+    @property
+    def inning(self) -> int:
+        return self.events[0].state.inning
+
+    @property
+    def batting_side(self) -> Side:
+        return self.events[0].state.batting_side
+
+    @property
+    def state(self) -> GameState:
+        """The situation when the at-bat began."""
+        return self.events[0].state
+
+    @property
+    def result(self) -> AtBatResult:
+        """How the at-bat ended, or ``AtBatResult.NONE`` if it never finished."""
+        return self.final.result
+
+    @property
+    def is_complete(self) -> bool:
+        return self.final.result is not AtBatResult.NONE
+
+    @property
+    def is_star_chance(self) -> bool:
+        """The at-bat was a star chance. The game sets this as an at-bat begins
+        and holds it to the end."""
+        return self.events[0].state.is_star_chance
+
+    @property
+    def pitches(self) -> int:
+        """Pitches thrown to the batter (events with no pitch, like pickoffs, aren't counted)."""
+        return sum(1 for event in self.events if event.pitch is not None)
+
+    @property
+    def runs(self) -> int:
+        """Runs scored during the at-bat, on the result or before it."""
+        return sum(event.runs for event in self.events)
+
+    @property
+    def rbi(self) -> int:
+        return sum(event.rbi for event in self.events)
+
+
+def _at_bats(events: tuple[Event, ...]) -> tuple[AtBat, ...]:
+    # An at-bat ends on a result, and also, with none, when the next event has
+    # a new batter or half inning: a third out made on the bases ends the half
+    # without finishing the at-bat.
+    groups: list[list[Event]] = []
+    for event in events:
+        if groups:
+            last = groups[-1][-1]
+            if (
+                last.result is AtBatResult.NONE
+                and last.batter_spot == event.batter_spot
+                and last.state.inning == event.state.inning
+                and last.state.batting_side is event.state.batting_side
+            ):
+                groups[-1].append(event)
+                continue
+        groups.append([event])
+    return tuple(AtBat(events=tuple(group)) for group in groups)
+
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class HalfInning:
@@ -389,6 +502,11 @@ class HalfInning:
     @property
     def runs(self) -> int:
         return sum(event.runs for event in self.events)
+
+    @property
+    def at_bats(self) -> tuple[AtBat, ...]:
+        """The half's events grouped into at-bats, in order."""
+        return _at_bats(self.events)
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -454,6 +572,15 @@ class Game:
             else:
                 groups.append(HalfInning(inning=key[0], batting_side=key[1], events=(event,)))
         return tuple(groups)
+
+    @property
+    def at_bats(self) -> tuple[AtBat, ...]:
+        """The events grouped into at-bats, in order; every event is in exactly one.
+
+        Unfinished at-bats are kept (see :class:`AtBat`), so filter on
+        ``is_complete`` to count plate appearances.
+        """
+        return _at_bats(self.events)
 
     def inning_runs(self, side: Side) -> tuple[int | None, ...]:
         """One side's runs in each inning, for a line score.

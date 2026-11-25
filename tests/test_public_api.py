@@ -13,6 +13,7 @@ import pyrio
 
 CORE = [
     "Ability",
+    "AtBat",
     "AtBatResult",
     "Bases",
     "BattingLine",

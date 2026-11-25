@@ -41,6 +41,20 @@ for event in game.events:
         print(event.batter.label, event.result.label, event.contact.power)
 ```
 
+Events group into at-bats and half innings, and searching them is a comprehension
+over the enums and a few predicates:
+
+```python
+from pyrio import AtBatResult, Bases
+
+star_chances = [ab for ab in game.at_bats if ab.is_star_chance]
+long_at_bats = [ab for ab in game.at_bats if ab.pitches >= 6]
+two_out_rbi = [e for e in game.events if e.state.outs == 2 and e.rbi]
+sac_flies = [e for e in game.events if e.result is AtBatResult.SACRIFICE_FLY]
+wall_jumps = [e for e in game.events if e.has_wall_jump]
+runner_on_third = [e for e in game.events if Bases.THIRD in e.state.bases]
+```
+
 `read_game` takes a path, an open file or an already-parsed dict, and reads any
 client from 0.1.7 on, encoded or decoded. Every per-version difference (the 1.9.2
 home/away flip, hex and decimal game ids, the pre-2.3.0 result labels, renamed keys)
