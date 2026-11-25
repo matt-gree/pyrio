@@ -40,6 +40,13 @@ the end maps the old names to the new.
 - **Event predicates** for searches: `Event.is_star_pitch`, `is_star_swing`,
   `is_moonshot`, `has_bobble` and `has_wall_jump`, each `False` where the event has no
   pitch, contact or fielder.
+- **Run values**: `pyrio.run_expectancy(games)` builds the RE24 table
+  (`RunExpectancy`), and `pyrio.linear_weights(games)` gives each `AtBatResult`'s
+  average run value (`LinearWeights`). `LinearWeights.woba()`, `wraa()` and `wrc()`
+  score at-bats or a `BattingLine`. Only half innings that ran to three outs count, and
+  bottom halves where a walk-off was possible are left out. wOBA is unscaled, over Rio's
+  box-score plate appearances. This replaces the two versions in MSB League Tools, which
+  differed from each other and from this. The comparison is in the commit message.
 - `GameState.away_stars` / `home_stars` are `None` where a client wrote 255 for the
   whole game (seen 2.0.1–2.1.1, games with no tag set): the count wasn't recorded.
 - **`pyrio.team_name(roster, captain)`** and the `CAPTAIN_TEAMS` table.

@@ -61,6 +61,7 @@ from ._game import (
     Team,
     Version,
 )
+from ._run_values import LinearWeights, RunExpectancy, linear_weights, run_expectancy
 from ._serialize import to_jsonable
 from ._stats import BattingLine, PitchingLine, format_batting_line, format_pitching_line
 from ._team_names import CAPTAIN_TEAMS, CaptainTeams, SignatureTeam, TeamName, team_name
@@ -100,6 +101,7 @@ __all__ = [
     "Hand",
     "HorizontalHitTrajectory",
     "InputDirection",
+    "LinearWeights",
     "ManualSelect",
     "MoonshotStatus",
     "OutType",
@@ -112,6 +114,7 @@ __all__ = [
     "PushPull",
     "RioError",
     "RosterSpot",
+    "RunExpectancy",
     "Runner",
     "SecondaryContactResult",
     "Side",
@@ -130,8 +133,10 @@ __all__ = [
     "VerticalHitTrajectory",
     "format_batting_line",
     "format_pitching_line",
+    "linear_weights",
     "read_game",
     "read_hud",
+    "run_expectancy",
     "team_name",
     "to_jsonable",
 ]

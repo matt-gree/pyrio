@@ -102,6 +102,32 @@ season.avg, season.obp, season.slg, season.ops
 format_batting_line(game.home.roster[3].batting)   # '3-for-5, HR, 2B, RBI'
 ```
 
+## Run values
+
+Run expectancy (RE24), linear weights, and wOBA, wRAA and wRC, measured from the
+events of any set of games:
+
+```python
+import pyrio
+from pyrio import AtBatResult, Bases, Character
+
+expectancy = pyrio.run_expectancy(games)      # average runs to the end of the half
+expectancy[Bases.FIRST, 1]                    # from a runner on first, one out
+print(expectancy)                             # the 8-by-3 grid
+
+weights = pyrio.linear_weights(games)         # each result's average run value
+weights[AtBatResult.DOUBLE] - weights.out_value
+
+at_bats = [ab for game in games for ab in game.at_bats if ab.batter is Character.BOWSER]
+weights.woba(at_bats), weights.wrc(at_bats)   # or pass a BattingLine
+```
+
+Only half innings that ran to three outs are measured, and bottom halves where a
+walk-off was possible are left out, so truncated innings don't bias the table. wOBA is
+unscaled: each walk, hit by pitch or hit is worth its run value above an out, per plate
+appearance as Rio's box score counts them (errors count, bunts don't). Filter the
+at-bats you pass to split by anything: star swings, a player, walks left out.
+
 ## The web API
 
 ```python

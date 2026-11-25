@@ -137,7 +137,7 @@ include_external_packages = true
 name = "Core layers"
 type = "layers"
 layers = [
-    "pyrio._decode | pyrio._serialize",
+    "pyrio._decode | pyrio._serialize | pyrio._run_values",
     "pyrio._game",
     "pyrio._stats | pyrio._team_names",
     "pyrio._codes : pyrio._characters : pyrio._names",
@@ -152,7 +152,7 @@ layers = [
     "pyrio.web | pyrio.plot | pyrio.pandas | pyrio.ratings",
     "pyrio.svg | pyrio.sim",
     "pyrio.geometry",
-    "pyrio._errors : pyrio._enum : pyrio._codes : pyrio._characters : pyrio._names : pyrio._stats : pyrio._team_names : pyrio._game : pyrio._decode : pyrio._serialize",
+    "pyrio._errors : pyrio._enum : pyrio._codes : pyrio._characters : pyrio._names : pyrio._stats : pyrio._team_names : pyrio._game : pyrio._decode : pyrio._serialize : pyrio._run_values",
 ]
 
 [[tool.importlinter.contracts]]
@@ -167,6 +167,7 @@ source_modules = [
     "pyrio._errors",
     "pyrio._game",
     "pyrio._names",
+    "pyrio._run_values",
     "pyrio._serialize",
     "pyrio._stats",
     "pyrio._team_names",
