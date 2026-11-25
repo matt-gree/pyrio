@@ -67,6 +67,8 @@ __all__ = [
 _VERSION = re.compile(r"(\d+)\.(\d+)(?:\.(\d+))?(?:\.?([A-Za-z]+))?")
 
 _HOME_PLATE = 4  # Runner.end_base for a runner who scored
+_MERCY_LEAD = 10  # the mercy rule ends a game on a lead this size
+_OUTS_PER_HALF = 3
 
 
 @dataclass(frozen=True, slots=True, order=True)
@@ -621,7 +623,9 @@ class Game:
 class HUDSnapshot:
     """A HUD file: the live state of a game in progress, read by :func:`pyrio.read_hud`.
 
-    Rio rewrites its HUD file at every event. Clients before 2.2.0 wrote no
+    Rio rewrites its HUD file twice an event: once the pitch or pickoff is
+    thrown, and again when the play is over. The second (``is_play_over``)
+    carries the whole event as :attr:`play`. Clients before 2.2.0 wrote no
     header, so the fields marked as from 2.2.0 are ``None`` for them.
     """
 
@@ -638,24 +642,32 @@ class HUDSnapshot:
     """From Rio 2.2.0."""
     home_logo: TeamName | None
     """From Rio 2.2.0."""
+    away_port: int | None
+    """The away player's controller port, counted from 0: 0 is port 1 (from Rio 2.2.0)."""
+    home_port: int | None
     star_skills: bool | None
     """Superstar skills are on (from Rio 2.2.0)."""
     mercy_rule: bool | None
     """The mercy rule is on (from Rio 2.2.0)."""
     event_number: int
-    is_pitch_thrown: bool
-    """Rio writes the file twice an event: when the event opens (``False``) and
-    again once the pitch or pickoff is thrown (``True``)."""
+    is_play_over: bool
+    """Written when the play ended (Rio's ``"120b"``), not as the pitch was thrown (``"120"``)."""
     away: Team
     home: Team
-    """The teams; ``score`` is the score so far."""
+    """The teams. ``score`` and the stat lines count every play so far, the
+    one in :attr:`play` included."""
     away_inning_runs: tuple[int, ...] | None
-    """Runs per inning so far (from Rio 2.2.0)."""
+    """Runs per inning so far, :attr:`play` included (from Rio 2.2.0)."""
     home_inning_runs: tuple[int, ...] | None
     state: GameState
+    """The situation as the pitch was thrown: before :attr:`play`, on a play-over file."""
     batter_spot: RosterSpot
     pitcher_spot: RosterSpot
     runners: tuple[Runner, ...]
+    """The batter and the runners on base; on a play-over file, with where the play left them."""
+    play: Event | None
+    """The play that just ended, on a play-over file from Rio 2.2.0 on; ``None``
+    otherwise. Its ``state`` is :attr:`state`, the situation before it."""
     fielding_positions: dict[RosterSpot, Position] = field(
         default_factory=dict[RosterSpot, Position], compare=False
     )
@@ -664,3 +676,42 @@ class HUDSnapshot:
     def team(self, side: Side) -> Team:
         """The team on one side."""
         return self.away if side is Side.AWAY else self.home
+
+    def port(self, side: Side) -> int | None:
+        """The controller port one side's player is on, or ``None`` before Rio 2.2.0."""
+        return self.away_port if side is Side.AWAY else self.home_port
+
+    def fielder(self, position: Position, side: Side | None = None) -> RosterSpot | None:
+        """Who is fielding a position, on ``side`` or else the fielding side.
+
+        ``None`` if nobody is recorded there (files before Rio 2.2.0 record no positions).
+        """
+        side = self.state.batting_side.other if side is None else side
+        for spot, at in self.fielding_positions.items():
+            if at is position and spot.side is side:
+                return spot
+        return None
+
+    @property
+    def is_game_over(self) -> bool:
+        """The play in this file ended the game.
+
+        Rio writes no file after the last play, so this is the only sign a
+        game finished rather than paused. A game ends on a walk-off, when a
+        half inning ends with the game decided (in the last scheduled inning
+        or later, or on the mercy rule's 10-run lead), or after the top half
+        when the home side is already ahead. Quits and crashes don't show in
+        a HUD file. Needs the 2.2.0 header; ``False`` without it.
+        """
+        play, innings = self.play, self.innings_selected
+        if play is None or innings is None:
+            return False
+        lead = self.home.score - self.away.score
+        regulation = self.state.inning >= innings
+        mercy = self.mercy_rule is not False and abs(lead) >= _MERCY_LEAD
+        half_over = self.state.outs + (play.outs_during_play or 0) >= _OUTS_PER_HALF
+        if self.state.batting_side is Side.HOME:
+            if regulation and lead > 0:
+                return True
+            return half_over and ((regulation and lead != 0) or mercy)
+        return half_over and lead > 0 and (regulation or mercy)

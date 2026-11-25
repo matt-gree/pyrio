@@ -588,9 +588,10 @@ def test_hud_encoded_and_decoded_alike():
     assert encoded == decoded
     assert encoded.game_id == 3896251267
     assert encoded.event_number == 210
-    assert not encoded.is_pitch_thrown
+    assert encoded.is_play_over
     assert encoded.state.inning == 9
     assert encoded.away.score == 9
+    assert (encoded.away_port, encoded.port(Side.HOME)) == (0, 1)
     assert encoded.home_inning_runs == (0, 0, 0, 2, 5, 0, 3, 2, 0)
     assert encoded.batter_spot is encoded.away.roster[2]
     assert encoded.fielding_positions[encoded.away.roster[0]] is Position.SECOND_BASE
@@ -605,6 +606,109 @@ def test_hud_before_2_2_0_has_no_header():
     assert hud.game_id is None
     assert hud.stadium is None
     assert hud.away_logo is None
+
+
+def test_hud_play_is_the_stat_file_event():
+    # The fixture's HUD file is the last frame Rio wrote for the fixture game.
+    hud = read_hud(FIXTURES / "hud.json", version="2.2.0")
+    game = read_game(FIXTURES / "20260618T191655_SpiceOrange-Vs-MattGree_3896251267.json")
+    assert hud.play == game.events[-1]
+    assert hud.play is not None
+    assert hud.play.state is hud.state
+    assert hud.runners == hud.play.runners
+
+
+def test_hud_pitch_thrown_file_has_no_play():
+    data = load(FIXTURES / "hud.json")
+    data["Event Num"] = "211"
+    hud = read_hud(data, version="2.2.0")
+    assert not hud.is_play_over
+    assert hud.play is None
+    assert not hud.is_game_over
+
+
+def test_hud_before_2_2_0_has_no_play():
+    data = load(FIXTURES / "hud.json")
+    del data["GameID"]
+    assert read_hud(data, version="2.1.1").play is None
+
+
+def test_hud_fielder():
+    hud = read_hud(FIXTURES / "hud.json", version="2.2.0")
+    pitcher = hud.fielder(Position.PITCHER)
+    assert pitcher is not None
+    assert pitcher.side is Side.HOME
+    assert hud.fielder(Position.SECOND_BASE, Side.AWAY) is hud.away.roster[0]
+    assert hud.play is not None
+    assert hud.play.catcher_spot is hud.fielder(Position.CATCHER)
+
+
+def walk_off(data: dict[str, Any]) -> dict[str, Any]:
+    """The fixture's last frame as a bottom-of-the-9th solo home run at 12-12."""
+    data = copy.deepcopy(data)
+    data["Half Inning"] = 1
+    data["Away Score"] = data["Home Score"] = 12
+    data["Outs"], data["Num Outs During Play"] = 1, 0
+    for key in ("Runner 1B", "Runner 2B", "Runner 3B"):
+        data.pop(key, None)
+    batter = data["Runner Batter"]
+    batter.update(
+        {"Runner Roster Loc": 2, "Out Type": 0, "Out Location": 0, "Runner Result Base": 4}
+    )
+    data["Batter Roster Loc"] = 2
+    data["Previous Event"]["Result of AB"] = 10
+    data["Previous Event"]["RBI"] = 1
+    for spot in range(9):  # the away side allowed 12, the home run makes 13
+        stats = data[f"Away Roster {spot}"]["Defensive Stats"]
+        stats["Runs Allowed"] = 13 if spot == 0 else 0
+    return data
+
+
+def test_hud_walk_off():
+    hud = read_hud(walk_off(load(FIXTURES / "hud.json")), version="2.2.0")
+    assert hud.play is not None
+    assert hud.play.runs == 1
+    assert (hud.away.score, hud.home.score) == (12, 13)
+    assert hud.state.home_score == 12
+    assert hud.home_inning_runs is not None
+    assert hud.home_inning_runs[8] == 1
+    assert hud.is_game_over
+
+
+@pytest.mark.parametrize(
+    ("inning", "outs_during_play", "home_score_after", "over"),
+    [
+        (9, 0, 12, False),  # still level in the bottom of the 9th
+        (8, 0, 13, False),  # home ahead mid-half, before the last inning
+        (8, 2, 13, False),  # the 8th ends with home ahead: the 9th is still played
+        (5, 2, 22, True),  # the 5th ends with home 10 ahead: the mercy rule
+        (9, 2, 12, False),  # the 9th ends level: extra innings
+    ],
+)
+def test_hud_game_over(inning: int, outs_during_play: int, home_score_after: int, over: bool):
+    data = walk_off(load(FIXTURES / "hud.json"))
+    data["Inning"], data["Num Outs During Play"] = inning, outs_during_play
+    data["Home Score"] = home_score_after - 1  # a solo home run
+    data["Away Roster 0"]["Defensive Stats"]["Runs Allowed"] = home_score_after
+    hud = read_hud(data, version="2.2.0")
+    assert hud.home.score == home_score_after
+    assert hud.is_game_over is over
+
+
+def test_hud_mercy_rule_off():
+    data = walk_off(load(FIXTURES / "hud.json"))
+    data["Inning"], data["Num Outs During Play"], data["Mercy On"] = 5, 2, 0
+    data["Home Score"] = 21
+    data["Away Roster 0"]["Defensive Stats"]["Runs Allowed"] = 22
+    assert not read_hud(data, version="2.2.0").is_game_over
+
+
+def test_hud_runs_from_runners_when_stats_disagree():
+    data = walk_off(load(FIXTURES / "hud.json"))
+    data["Away Roster 0"]["Defensive Stats"]["Runs Allowed"] = 0  # a resumed game's stats
+    hud = read_hud(data, version="2.2.0")
+    assert hud.play is not None
+    assert hud.play.runs == 1
 
 
 def test_hud_version_must_parse():

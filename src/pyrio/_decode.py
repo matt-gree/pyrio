@@ -857,8 +857,10 @@ def read_hud(source: Source, *, version: Version | str) -> HUDSnapshot:
     """Decode a HUD file (``hud.json`` or ``decoded.hud.json``) into a :class:`~pyrio.HUDSnapshot`.
 
     HUD files don't say which client wrote them, and the same label means
-    different things in different versions, so the caller passes ``version``:
-    a :class:`~pyrio.Version` or a string such as ``"2.2.0"``.
+    different things in different versions (2.3.0 even writes the game id in
+    hex where 2.2.0 wrote decimal), so the caller passes ``version``: a
+    :class:`~pyrio.Version` or a string such as ``"2.3.0"``. The client that
+    writes a HUD file also writes the stat files beside it, and they say.
     """
     if isinstance(version, str):
         try:
@@ -870,23 +872,10 @@ def read_hud(source: Source, *, version: Version | str) -> HUDSnapshot:
     rules = _rules(version)
     nodes = _roster_nodes(root, rules)
     away_roster, home_roster = _build_rosters(nodes, rules)
-    away = Team(
-        side=Side.AWAY,
-        player=root.text("Away Player"),
-        score=root.integer("Away Score"),
-        roster=away_roster,
-    )
-    home = Team(
-        side=Side.HOME,
-        player=root.text("Home Player"),
-        score=root.integer("Home Score"),
-        roster=home_roster,
-    )
     state = _state(root)
-    batting, fielding = (away, home) if state.batting_side is Side.AWAY else (home, away)
     positions: dict[RosterSpot, Position] = {}
-    for team in (away, home):
-        for spot, node in zip(team.roster, nodes[team.side], strict=True):
+    for roster, side in ((away_roster, Side.AWAY), (home_roster, Side.HOME)):
+        for spot, node in zip(roster, nodes[side], strict=True):
             if node.has("Fielding Position"):
                 position = node.position("Fielding Position")
                 if position is not None:
@@ -895,34 +884,147 @@ def read_hud(source: Source, *, version: Version | str) -> HUDSnapshot:
     match = _HUD_EVENT.fullmatch(event_text)
     if match is None:
         raise root.error(f"{event_text!r} is not an event number", "Event Num")
+    event_number, is_play_over = int(match.group(1)), match.group(2) == "b"
+    game_id = _game_id(root, rules) if root.has("GameID") else None
+    # The roster stats are written after the play and the event's own fields
+    # before it, so on a play-over file the fielding side's runs allowed say
+    # how many runs the play scored.
+    runs = 0
+    if is_play_over:
+        fielding_roster = home_roster if state.batting_side is Side.AWAY else away_roster
+        runs = _play_runs(root, state, fielding_roster)
+    away_runs = runs if state.batting_side is Side.AWAY else 0
+    home_runs = runs - away_runs
+    away = Team(
+        side=Side.AWAY,
+        player=root.text("Away Player"),
+        score=root.integer("Away Score") + away_runs,
+        roster=away_roster,
+    )
+    home = Team(
+        side=Side.HOME,
+        player=root.text("Home Player"),
+        score=root.integer("Home Score") + home_runs,
+        roster=home_roster,
+    )
+    batting, fielding = (away, home) if state.batting_side is Side.AWAY else (home, away)
+    play = None
+    if is_play_over and game_id is not None and root.has("Previous Event"):
+        play = _hud_play(
+            root, rules, game_id, event_number, state, runs, batting, fielding, positions
+        )
     return HUDSnapshot(
         version=version,
-        game_id=_game_id(root, rules) if root.has("GameID") else None,
+        game_id=game_id,
         tag_set_id=_tag_set_id(root),
         stadium=root.maybe_coded("StadiumID", Stadium),
         innings_selected=root.maybe_integer("Innings Selected"),
         away_logo=root.maybe_coded("Away Logo", TeamName),
         home_logo=root.maybe_coded("Home Logo", TeamName),
+        away_port=root.maybe_integer("Away Port"),
+        home_port=root.maybe_integer("Home Port"),
         star_skills=root.maybe_flag("Star Skills On"),
         mercy_rule=root.maybe_flag("Mercy On"),
-        event_number=int(match.group(1)),
-        is_pitch_thrown=match.group(2) == "a",
+        event_number=event_number,
+        is_play_over=is_play_over,
         away=away,
         home=home,
-        away_inning_runs=_inning_runs(root, "Away Inning Scores"),
-        home_inning_runs=_inning_runs(root, "Home Inning Scores"),
+        away_inning_runs=_inning_runs(root, "Away Inning Scores", state.inning, away_runs),
+        home_inning_runs=_inning_runs(root, "Home Inning Scores", state.inning, home_runs),
         state=state,
         batter_spot=root.spot("Batter Roster Loc", batting),
         pitcher_spot=root.spot("Pitcher Roster Loc", fielding),
-        runners=_runners(root, batting, AtBatResult.NONE),
+        runners=_runners(root, batting, play.result if play is not None else AtBatResult.NONE),
+        play=play,
         fielding_positions=positions,
     )
 
 
-def _inning_runs(root: _Node, key: str) -> tuple[int, ...] | None:
+_MOST_RUNS_ON_A_PLAY = 4
+
+
+def _play_runs(root: _Node, state: GameState, fielding_roster: tuple[RosterSpot, ...]) -> int:
+    allowed = sum(spot.pitching.runs_allowed for spot in fielding_roster)
+    runs = allowed - state.score(state.batting_side)
+    if 0 <= runs <= _MOST_RUNS_ON_A_PLAY:
+        return runs
+    # Stats that don't add up to the score (as in a game resumed from a HUD
+    # file): count the runners home, unless the play ended the half, in which
+    # case the game counted none of them in every file seen.
+    if state.outs + (root.maybe_integer("Num Outs During Play") or 0) >= 3:
+        return 0
+    return sum(
+        1
+        for key in ("Runner Batter", "Runner 1B", "Runner 2B", "Runner 3B")
+        if (runner := root.maybe_node(key)) is not None
+        and runner.integer("Runner Result Base") == _HOME_PLATE
+    )
+
+
+def _hud_play(
+    root: _Node,
+    rules: _Rules,
+    game_id: int,
+    event_number: int,
+    state: GameState,
+    runs: int,
+    batting: Team,
+    fielding: Team,
+    positions: dict[RosterSpot, Position],
+) -> Event:
+    # A play-over file holds one whole event, split in two: the state, the
+    # batter, pitcher and runners at the top level, and what the play did
+    # under "Previous Event". The catcher comes from the fielding positions.
+    played = root.node("Previous Event")
+    catcher = next(
+        (s for s, at in positions.items() if at is Position.CATCHER and s.side is fielding.side),
+        None,
+    )
+    if catcher is None:
+        raise root.error("the fielding side has no catcher", "Fielding Position")
+    result = _at_bat_result(played, rules)
+    outs_during_play = root.maybe_integer("Num Outs During Play")
+    runners = _runners(root, batting, result)
+    pitch = contact = fielder = None
+    pitch_node = played.maybe_node("Pitch")
+    if pitch_node is not None:
+        pitch = _pitch(pitch_node, rules)
+        contact_node = pitch_node.maybe_node("Contact")
+        if contact_node is not None:
+            contact = _contact(contact_node)
+            if rules.legacy_contact_results:
+                contact = _correct_legacy_contact(
+                    contact, result, runners, outs_during_play, lambda: False
+                )
+            fielder_node = contact_node.maybe_node("First Fielder")
+            if fielder_node is not None:
+                fielder = _fielding(fielder_node, fielding, rules)
+    return Event(
+        game_id=game_id,
+        number=event_number,
+        state=state,
+        batter_spot=root.spot("Batter Roster Loc", batting),
+        pitcher_spot=root.spot("Pitcher Roster Loc", fielding),
+        catcher_spot=catcher,
+        result=result,
+        rbi=played.integer("RBI"),
+        runs=runs,
+        outs_during_play=None if outs_during_play == _UNFINISHED_PLAY else outs_during_play,
+        dead_ball_reason=played.maybe_coded("Dead Ball Reason", DeadBallReason),
+        runners=runners,
+        pitch=pitch,
+        contact=contact,
+        fielding=fielder,
+    )
+
+
+def _inning_runs(root: _Node, key: str, inning: int, runs: int) -> tuple[int, ...] | None:
     if not root.has(key):
         return None
     value = root.value(key)
     if not isinstance(value, list):
         raise root.error("expected a list", key)
-    return tuple(root.as_integer(item, key) for item in cast("list[object]", value))
+    innings = [root.as_integer(item, key) for item in cast("list[object]", value)]
+    if runs and 0 < inning <= len(innings):
+        innings[inning - 1] += runs
+    return tuple(innings)

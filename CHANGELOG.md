@@ -30,6 +30,14 @@ the end maps the old names to the new.
 - **`BattingLine` and `PitchingLine`**: counts that add with `+` and `sum()`, derived
   stats as properties (`avg`, `obp`, `slg`, `ops`, `era`, `whip`, ...), and
   `format_batting_line` / `format_pitching_line`.
+- **Live HUD files read as the game sees them.** On the file Rio writes when a play
+  ends, `HUDSnapshot.play` is that play as a full `Event` (pitch, contact, fielding,
+  runners with where they ended, result, RBI and runs), the same `Event` the stat file
+  records for it. `Team.score`, the stat lines and the inning runs count that play;
+  `state` stays the situation before it. `HUDSnapshot.is_game_over` says when the play
+  ended the game (walk-off, a decided last half, the mercy rule), which nothing else
+  can, since Rio writes no file after the last play. Also `is_play_over`, the players'
+  controller ports (`away_port`, `home_port`, `port(side)`) and `fielder(position)`.
 - **`Game.inning_runs(side)`**: a line score, `None` for a half never batted.
 - **`AtBat`, `Game.at_bats` and `HalfInning.at_bats`**: events grouped by plate
   appearance, every event in exactly one. An at-bat ends on a result, or with none when
