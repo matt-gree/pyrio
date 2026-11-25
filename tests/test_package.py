@@ -1,5 +1,7 @@
 """What the installed package promises, independent of any one module."""
 
+import pathlib
+import shutil
 import subprocess
 import sys
 from importlib.metadata import version
@@ -27,3 +29,16 @@ def test_import_loads_no_optional_dependency():
         [sys.executable, "-c", code], capture_output=True, text=True, check=True
     ).stdout.strip()
     assert out == "", f"`import pyrio` loaded {out}"
+
+
+def test_imports_from_a_source_tree_without_being_installed(tmp_path: pathlib.Path):
+    # How RioVisualizer bundles pyrio: a git submodule put on sys.path, no metadata.
+    # A copy of the package alone in a folder, and -S to keep site-packages out.
+    shutil.copytree(pathlib.Path(str(files("pyrio"))), tmp_path / "pyrio")
+    code = (
+        f"import sys; sys.path.insert(0, {str(tmp_path)!r}); import pyrio; print(pyrio.__version__)"
+    )
+    out = subprocess.run(
+        [sys.executable, "-I", "-S", "-c", code], capture_output=True, text=True, check=True
+    ).stdout.strip()
+    assert out == "0+unknown"

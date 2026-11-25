@@ -3,6 +3,7 @@
 Install with ``pip install projectrio``; import as ``pyrio``.
 """
 
+from importlib.metadata import PackageNotFoundError as _PackageNotFoundError
 from importlib.metadata import version as _version
 
 from ._characters import (
@@ -63,7 +64,10 @@ from ._serialize import to_jsonable
 from ._stats import BattingLine, PitchingLine, format_batting_line, format_pitching_line
 from ._team_names import CAPTAIN_TEAMS, CaptainTeams, SignatureTeam, TeamName, team_name
 
-__version__ = _version("projectrio")
+try:
+    __version__ = _version("projectrio")
+except _PackageNotFoundError:  # imported from a source tree on the path, e.g. a git submodule
+    __version__ = "0+unknown"
 
 __all__ = [
     "CAPTAIN_TEAMS",

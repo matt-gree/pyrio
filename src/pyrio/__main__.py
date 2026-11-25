@@ -8,9 +8,9 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from importlib.metadata import version
 from typing import TYPE_CHECKING
 
+from . import __version__
 from ._decode import read_game, read_hud
 from ._errors import StatFileError
 from ._serialize import to_jsonable
@@ -27,7 +27,7 @@ __all__ = ["main"]
 def main(argv: Sequence[str] | None = None) -> int:
     """Run the command line; returns the exit status."""
     parser = argparse.ArgumentParser(prog="pyrio", description="Project Rio stat-file tools.")
-    parser.add_argument("--version", action="version", version=f"pyrio {version('projectrio')}")
+    parser.add_argument("--version", action="version", version=f"pyrio {__version__}")
     commands = parser.add_subparsers(dest="command", required=True)
     decode = commands.add_parser(
         "decode", help="print a stat file (encoded or decoded) in readable form"
