@@ -360,6 +360,24 @@ class Event:
         return self.catcher_spot.character
 
     @property
+    def scorers(self) -> tuple[RosterSpot, ...]:
+        """Who scored on the event: as many runners as the score counted.
+
+        Rio writes where runners ended when the result is logged, which can be
+        before the play is over: a runner who crossed the plate on a third-out
+        catch reads home though the run didn't count, and on a walk the forced
+        runners haven't moved yet. So ``runs`` says how many scored; the
+        runners marked home, then the lead runners, say who.
+        """
+        if self.runs <= 0:
+            return ()
+        safe = sorted(
+            (r for r in self.runners if not r.is_out),
+            key=lambda r: (not r.scored, -r.start_base),
+        )
+        return tuple(r.spot for r in safe[: self.runs])
+
+    @property
     def is_first_pitch(self) -> bool:
         """The first pitch of an at-bat: a pitch on an 0-0 count."""
         return self.pitch is not None and self.state.balls == 0 and self.state.strikes == 0

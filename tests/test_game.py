@@ -338,3 +338,12 @@ def test_is_moonshot(game: Game):
     ):
         contact = dataclasses.replace(event.contact, moonshot=status)
         assert dataclasses.replace(event, contact=contact).is_moonshot is expected
+
+
+def test_scorers_match_the_runs_the_score_counted(game: Game):
+    for event in game.events:
+        assert len(event.scorers) == max(event.runs, 0)
+        assert all(spot.side is event.state.batting_side for spot in event.scorers)
+    for side in (Side.AWAY, Side.HOME):
+        scored = sum(len(e.scorers) for e in game.events if e.state.batting_side is side)
+        assert scored == game.team(side).score
