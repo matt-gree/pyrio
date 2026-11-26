@@ -728,9 +728,9 @@ def test_hud_version_must_parse():
         read_hud(FIXTURES / "hud.json", version="soon")
 
 
-def test_dickballs():
+def test_meatballs():
     game = read_game(V2_1_1)
-    assert [e.number for e in game.events if e.pitch and e.pitch.is_dickball] == [79, 85]
+    assert [e.number for e in game.events if e.pitch and e.pitch.is_meatball] == [79, 85]
 
 
 def test_bunts_before_2_3_0_are_read_from_the_contact():

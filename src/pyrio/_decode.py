@@ -726,7 +726,7 @@ def _pitch(node: _Node, rules: _Rules) -> Pitch:
         is_star=node.flag("Star Pitch")
         if rules.star_pitch_flag
         else node.integer("Star Pitch") != 0,
-        is_dickball=node.flag("DB"),
+        is_meatball=node.flag("DB"),
         speed=node.integer("Pitch Speed"),
         swing=swing,
         strike_zone_location=node.maybe_number("Ball Position - Strikezone"),

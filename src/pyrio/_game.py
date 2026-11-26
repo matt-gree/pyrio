@@ -247,7 +247,7 @@ class Pitch:
     type: PitchType
     charge_type: ChargeType
     is_star: bool
-    is_dickball: bool
+    is_meatball: bool
     """A straight pitch down the middle: thrown from the center of the mound with
     no curve input. The stat file's ``"DB"``."""
     speed: int
