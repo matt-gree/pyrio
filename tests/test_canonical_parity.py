@@ -182,14 +182,7 @@ needs_header = pytest.mark.skipif(
 # that is not merged upstream yet. (canonical map, id) -> pyrio's label.
 # Each entry must cite why; remove it once upstream agrees -- the test fails
 # with a "remove this entry" message when that happens, so these cannot rot.
-PENDING_UPSTREAM = {
-    # ProjectRio/ProjectRio#170 (open): 0xC is set when a throw could still
-    # have retired a runner but none was put out, so it is neither a chem
-    # error (2.2.0) nor a fielder's choice (2.3.0). Secondary result 0x4,
-    # "Batter safe, runner out", is the play that is a fielder's choice.
-    ("cAtBatResult", 12): "Batter safe, throw elsewhere",
-    ("cSecondaryContactResult", 12): "Batter safe, throw elsewhere",
-}
+PENDING_UPSTREAM: dict[tuple[str, int], str] = {}
 
 
 def _parse_canonical(path):
