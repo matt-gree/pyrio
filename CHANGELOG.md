@@ -30,7 +30,8 @@ the end maps the old names to the new.
   near misses. `CharacterFamily` groups colour variants.
 - **`BattingLine` and `PitchingLine`**: counts that add with `+` and `sum()`, derived
   stats as properties (`avg`, `obp`, `slg`, `ops`, `era`, `whip`, ...), and
-  `format_batting_line` / `format_pitching_line`.
+  `format_batting_line` / `format_pitching_line`. The pitching line's `BB` counts hit
+  batters too, since in MSSB they're as deliberate as walks.
 - **Live HUD files read as the game sees them.** On the file Rio writes when a play
   ends, `HUDSnapshot.play` is that play as a full `Event` (pitch, contact, fielding,
   runners with where they ended, result, RBI and runs), the same `Event` the stat file

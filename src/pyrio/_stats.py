@@ -192,15 +192,18 @@ def format_batting_line(line: BattingLine) -> str:
 
 
 def format_pitching_line(line: PitchingLine) -> str:
-    """One game's pitching line: ``"6.1 IP, 3 H, 1 R, 1 ER, 2 BB, 1 HBP, 4 K, 0 HR, 87 P"``.
+    """One game's pitching line: ``"6.1 IP, 3 H, 1 R, 1 ER, 3 BB, 4 K, 0 HR, 87 P"``.
 
     Every field is shown, zeros included, since leaving one out is ambiguous.
     Innings are in the box-score form, where ``.1`` and ``.2`` are thirds.
+    ``BB`` counts hit batters too: in MSSB a pitcher hits a batter on purpose
+    about as often as they walk one, so the two are one stat on the line. The
+    line's fields keep them apart.
     """
     innings = f"{line.outs_pitched // 3}.{line.outs_pitched % 3}"
     return (
         f"{innings} IP, {line.hits_allowed} H, {line.runs_allowed} R, "
-        f"{line.earned_runs} ER, {line.walks} BB, {line.hit_by_pitch} HBP, "
+        f"{line.earned_runs} ER, {line.walks + line.hit_by_pitch} BB, "
         f"{line.strikeouts} K, {line.home_runs_allowed} HR, {line.pitches_thrown} P"
     )
 

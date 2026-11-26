@@ -114,7 +114,12 @@ def test_format_pitching_line():
         strikeouts=4,
         pitches_thrown=87,
     )
-    assert format_pitching_line(line) == "6.1 IP, 3 H, 1 R, 1 ER, 2 BB, 0 HBP, 4 K, 0 HR, 87 P"
+    assert format_pitching_line(line) == "6.1 IP, 3 H, 1 R, 1 ER, 2 BB, 4 K, 0 HR, 87 P"
+
+
+def test_format_pitching_line_counts_hit_batters_as_walks():
+    line = PitchingLine(outs_pitched=9, walks=1, hit_by_pitch=2)
+    assert format_pitching_line(line) == "3.0 IP, 0 H, 0 R, 0 ER, 3 BB, 0 K, 0 HR, 0 P"
 
 
 def vars_of(line: BattingLine) -> dict[str, int]:
