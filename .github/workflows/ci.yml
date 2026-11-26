@@ -4,6 +4,7 @@ on:
   push:
     branches: [main, v1.0.0-prep]
   pull_request:
+  workflow_call:
 
 permissions:
   contents: read
@@ -64,6 +65,14 @@ jobs:
       - name: Check pyrio comes from the wheel, not src/
         run: /tmp/wheel-env/bin/python -c "import pyrio; assert 'site-packages' in pyrio.__file__, pyrio.__file__"
       - run: /tmp/wheel-env/bin/pytest
+      # Every public name fully typed, as a downstream type checker sees the
+      # installed package. Run outside the checkout so pyright reads the wheel,
+      # not src/.
+      - name: Check the public API's type completeness
+        working-directory: /tmp
+        run: |
+          . /tmp/wheel-env/bin/activate
+          pyright --verifytypes pyrio --ignoreexternal
 
   # The id/name tables against Project Rio's own C++ maps. Setting
   # PYRIO_PROJECTRIO_PATH makes the test fail, not skip, if the checkout is missing.
