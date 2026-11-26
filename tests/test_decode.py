@@ -466,6 +466,16 @@ def test_a_runner_put_out_has_no_end_base():
     assert batter.bases_advanced == 0
 
 
+def test_event_numbers_that_wrap_past_255_are_unwrapped():
+    data = load(V2_2_0)
+    events = data["Events"]
+    offset = 256 - 10  # renumber so the byte wraps ten events in, as a long game's does
+    for i, raw in enumerate(events):
+        raw["Event Num"] = (i + offset) % 256
+    numbers = [event.number for event in read_game(data).events]
+    assert numbers == list(range(offset, offset + len(events)))
+
+
 # --- Tag sets, quitters, times, results -------------------------------------------------
 
 

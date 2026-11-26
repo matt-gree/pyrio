@@ -135,6 +135,9 @@ _NO_POSITION = 0xFF  # "Inv" in cPosition
 # teams' stars at every event while star swings and pitches still happen: the
 # count wasn't recorded.
 _UNRECORDED_STARS = 255
+# (b), every version: "Event Num" is a byte, so a game past 255 events wraps to
+# 0. The decoder counts the wraps, so Event.number is unique within a game.
+_EVENT_NUMBER_WRAP = 256
 
 
 @dataclass(frozen=True, slots=True)
@@ -550,12 +553,19 @@ def _events(root: _Node, rules: _Rules, game_id: int, away: Team, home: Team) ->
     scores = [(node.integer("Away Score"), node.integer("Home Score")) for node in nodes]
     scores.append((away.score, home.score))
     events: list[Event] = []
+    wraps, previous = 0, -1
     for i, node in enumerate(nodes):
+        raw_number = node.integer("Event Num")
+        if raw_number < previous:
+            wraps += 1
+        previous = raw_number
+        number = raw_number + wraps * _EVENT_NUMBER_WRAP
         state = _state(node)
         batting_index = 0 if state.batting_side is Side.AWAY else 1
         runs = scores[i + 1][batting_index] - scores[i][batting_index]
         following = nodes[i + 1] if i + 1 < len(nodes) else None
-        events.append(_event(node, following, rules, game_id, state, runs, away, home))
+        event = _event(node, following, rules, game_id, state, runs, away, home)
+        events.append(replace(event, number=number) if wraps else event)
     return tuple(events)
 
 

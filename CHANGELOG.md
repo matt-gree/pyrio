@@ -130,6 +130,8 @@ the end maps the old names to the new.
 
 ### Fixed
 
+- Event numbers wrap past 255 in every client version (Rio writes a byte), so long
+  games repeated them; `Event.number` is now unwrapped and unique within a game.
 - Game ids from Rio 0.1.9 to 2.2.0 were parsed as hex, so every one was wrong.
 - Files from before 1.9.2 reported the wrong team for 0.1.7 and 0.1.7.a, which fell
   through both hard-coded version lists.

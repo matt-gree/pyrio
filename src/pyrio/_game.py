@@ -327,7 +327,12 @@ class Event:
     game_id: int
     """The game this event belongs to, so events from many games can be pooled."""
     number: int
-    """Rio's event number. Older clients wrapped it past 255; ``Game.events`` is in order."""
+    """The event's number in its game, from 0, unique within the game.
+
+    Rio writes it as a byte that wraps to 0 after 255; the decoder counts the
+    wraps, so a long game's 257th event is 256 here. A HUD file's play is one
+    event alone, so its number can't be unwrapped.
+    """
     state: GameState
     batter_spot: RosterSpot
     pitcher_spot: RosterSpot
