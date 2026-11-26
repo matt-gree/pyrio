@@ -98,10 +98,16 @@ def test_format_batting_line():
 
 def test_format_batting_line_names_strikeouts():
     # "1-for-4" has to say where the other at bats went.
-    line = BattingLine(at_bats=4, hits=1, home_runs=1, hit_by_pitch=1, strikeouts=2)
-    assert format_batting_line(line) == "1-for-4, HR, HBP, 2 K"
+    line = BattingLine(at_bats=4, hits=1, home_runs=1, strikeouts=2)
+    assert format_batting_line(line) == "1-for-4, HR, 2 K"
     line = BattingLine(at_bats=4, hits=1, walks=1, strikeouts=1, rbi=2, stolen_bases=1)
     assert format_batting_line(line) == "1-for-4, BB, K, 2 RBI, SB"
+
+
+def test_format_batting_line_counts_hit_by_pitches_as_walks():
+    line = BattingLine(at_bats=3, walks=1, hit_by_pitch=1)
+    assert format_batting_line(line) == "0-for-3, 2 BB"
+    assert format_batting_line(BattingLine(at_bats=3, hit_by_pitch=1)) == "0-for-3, BB"
 
 
 def test_format_pitching_line():
