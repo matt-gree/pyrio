@@ -31,7 +31,7 @@ class DiskCache:
         seconds = ttl.total_seconds() if isinstance(ttl, timedelta) else float(ttl)
         if seconds <= 0:
             raise ValueError(f"ttl must be positive, got {ttl!r}")
-        self.path = Path(path).expanduser()
+        self.path: Path = Path(path).expanduser()
         self.ttl = seconds
 
     def __repr__(self) -> str:

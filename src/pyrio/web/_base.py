@@ -76,8 +76,8 @@ class ClientBase:
     ) -> None:
         if max_retries < 0:
             raise ValueError(f"max_retries must be 0 or more, got {max_retries!r}")
-        self.api_key = api_key or None
-        self.base_url = base_url.rstrip("/")
+        self.api_key: str | None = api_key or None
+        self.base_url: str = base_url.rstrip("/")
         self.timeout = timeout
         self.max_retries = max_retries
         self.cache = cache

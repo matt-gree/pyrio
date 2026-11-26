@@ -86,11 +86,11 @@ class AsyncRioClient(_base.ClientBase):
         )
         self._owns_http = http_client is None
         self._http = http_client or httpx.AsyncClient(timeout=timeout, trust_env=False)
-        self.communities = AsyncCommunities(self._send)
-        self.tags = AsyncTags(self._send)
-        self.tag_sets = AsyncTagSets(self._send)
-        self.users = AsyncUsers(self._send)
-        self.keys = AsyncKeys(self._send)
+        self.communities: AsyncCommunities = AsyncCommunities(self._send)
+        self.tags: AsyncTags = AsyncTags(self._send)
+        self.tag_sets: AsyncTagSets = AsyncTagSets(self._send)
+        self.users: AsyncUsers = AsyncUsers(self._send)
+        self.keys: AsyncKeys = AsyncKeys(self._send)
 
     @classmethod
     def from_env(

@@ -19,8 +19,8 @@ core (``import pyrio``) is not affected.
 
 try:
     import httpx as _httpx
-except ImportError as error:  # pragma: no cover - exercised in a subprocess test
-    raise ImportError("pyrio.web needs httpx: pip install 'projectrio[web]'") from error
+except ImportError as _error:  # pragma: no cover - exercised in a subprocess test
+    raise ImportError("pyrio.web needs httpx: pip install 'projectrio[web]'") from _error
 
 del _httpx
 

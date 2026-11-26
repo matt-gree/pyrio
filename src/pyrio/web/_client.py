@@ -86,11 +86,11 @@ class RioClient(_base.ClientBase):
         )
         self._owns_http = http_client is None
         self._http = http_client or httpx.Client(timeout=timeout, trust_env=False)
-        self.communities = Communities(self._send)
-        self.tags = Tags(self._send)
-        self.tag_sets = TagSets(self._send)
-        self.users = Users(self._send)
-        self.keys = Keys(self._send)
+        self.communities: Communities = Communities(self._send)
+        self.tags: Tags = Tags(self._send)
+        self.tag_sets: TagSets = TagSets(self._send)
+        self.users: Users = Users(self._send)
+        self.keys: Keys = Keys(self._send)
 
     @classmethod
     def from_env(

@@ -22,19 +22,24 @@ class UnknownCodeError(RioError, ValueError):
     def __init__(self, kind: type, value: object) -> None:
         self.kind = kind
         self.value = value
-        super().__init__(f"{value!r} is not a valid {kind.__name__}")
+        super().__init__(self._message())
+
+    def _message(self) -> str:
+        return f"{self.value!r} is not a valid {self.kind.__name__}"
 
 
 class UnknownNameError(UnknownCodeError):
     """Human input that matches no known name. ``suggestions`` holds close matches."""
 
     def __init__(self, kind: type, value: str, suggestions: tuple[str, ...] = ()) -> None:
-        super().__init__(kind, value)
         self.suggestions = suggestions
-        message = f"{value!r} is not a known {kind.__name__} name"
-        if suggestions:
-            message += f" -- did you mean {' or '.join(suggestions)}?"
-        self.args = (message,)
+        super().__init__(kind, value)
+
+    def _message(self) -> str:
+        message = f"{self.value!r} is not a known {self.kind.__name__} name"
+        if self.suggestions:
+            message += f" -- did you mean {' or '.join(self.suggestions)}?"
+        return message
 
 
 class StatFileError(RioError, ValueError):
