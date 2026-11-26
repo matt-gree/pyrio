@@ -57,6 +57,7 @@ Sources live under `src/pyrio/`. **`import pyrio` is the core**; each separate j
 | `__init__.py` | The core's public API: an explicit `__all__`, re-exports only, no logic. |
 | `__main__.py` | The `pyrio` command (`pyrio decode FILE`), argparse. |
 | `_errors.py` | `RioError`, `UnknownCodeError`, `UnknownNameError`, `StatFileError`. |
+| `_float32.py` | `f32`: single-precision rounding for the ports of the game's float math (characters, hit, live ball, running). |
 | `_enum.py` | `CodeEnum`: id/label enums, lookup by either, ordering. |
 | `_codes.py` | The game's coded values (`Stadium`, `PitchType`, `AtBatResult`, `Position`, …), plus `Side`, `Bases`, `InputDirection`. |
 | `_characters.py` | `Character`, `CharacterFamily`, `CharacterAttributes` and its enums, read from `_data/character_attributes.csv`. |
@@ -77,7 +78,7 @@ Sources live under `src/pyrio/`. **`import pyrio` is the core**; each separate j
 Outside the package: `tests/` (mirrors the public namespaces, shares `tests/fixtures/`), `examples/` (run by `tests/test_examples.py`), `tools/` (developer scripts, never shipped), `docs/`.
 
 **Boundaries, enforced by import-linter (`lint-imports`, contracts in `pyproject.toml`):**
-- Core layers import one way: `_errors` ← `_enum` ← `_codes`/`_characters`/`_names` ← `_stats`/`_team_names` ← `_game` ← `_decode`/`_serialize`.
+- Core layers import one way: `_errors`/`_float32` ← `_enum` ← `_codes`/`_characters`/`_names` ← `_stats`/`_team_names` ← `_game` ← `_decode`/`_serialize`.
 - The core imports no public submodule. `geometry` sits on the core, `sim` and `svg` on `geometry`, and `web`, `plot`, `pandas` and `ratings` on top.
 - The core, `geometry`, `sim`, `svg` and `ratings` need only the standard library.
 - Only `pyrio.web` imports httpx, only `pyrio.pandas` imports pandas, only `pyrio.plot` imports matplotlib. Nothing imports `pyrio.web`.

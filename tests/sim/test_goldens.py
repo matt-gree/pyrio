@@ -83,18 +83,18 @@ def random_inputs(rng: random.Random) -> HitInputs:
     return HitInputs(
         batter=rng.choice(list(Character)),
         pitcher=rng.choice(list(Character)),
-        pitch=pitch,
-        charge=charge,
+        pitch_type=pitch,
+        charge_type=charge,
         swing=rng.choice([SwingType.SLAP, SwingType.CHARGE, SwingType.STAR, SwingType.STAR]),
-        hand=rng.choice(list(Hand)),
-        stick=InputDirection(rng.randrange(16)),
+        batting_hand=rng.choice(list(Hand)),
+        input_direction=InputDirection(rng.randrange(16)),
         batter_x=batter_x,
         ball_x=batter_x + rng.uniform(-0.95, 0.45),
         ball_z=rng.uniform(-1.0, 1.0),
-        charge_up=rng.choice([0.0, 0.0, 0.35, 0.8, 1.0, 1.0]),
-        charge_down=rng.choice([0.0, 0.5, 1.0, rng.random()]),
-        contact_frame=rng.choice([*range(2, 11), *range(15)]),
-        chem_links_on_base=rng.randrange(4),
+        charge_power_up=rng.choice([0.0, 0.0, 0.35, 0.8, 1.0, 1.0]),
+        charge_power_down=rng.choice([0.0, 0.5, 1.0, rng.random()]),
+        swing_frame=rng.choice([*range(2, 11), *range(15)]),
+        chemistry_links_on_base=rng.randrange(4),
         stars=rng.randrange(6),
         is_captain=rng.random() < 0.5,
         batter_is_superstar=rng.random() < 0.3,
@@ -102,7 +102,7 @@ def random_inputs(rng: random.Random) -> HitInputs:
         is_easy_batting=rng.random() < 0.2,
         stadium=rng.choice(list(Stadium)),
         mods=frozenset(m for m in _HIT_MODS if rng.random() < 0.3),
-        seeds=(rng.randrange(32768), rng.randrange(32768), rng.randrange(32768)),
+        rng=(rng.randrange(32768), rng.randrange(32768), rng.randrange(32768)),
         overrides=overrides,
     )
 
@@ -112,14 +112,14 @@ def star_inputs() -> list[HitInputs]:
         HitInputs(
             batter=batter,
             pitcher=Character.MARIO,
-            pitch=PitchType.CURVE,
+            pitch_type=PitchType.CURVE,
             swing=SwingType.STAR,
-            hand=Hand.RIGHT,
+            batting_hand=Hand.RIGHT,
             batter_x=0.0,
             ball_x=0.0,
             stars=stars,
             is_captain=is_captain,
-            charge_up=charge_up,
+            charge_power_up=charge_up,
         )
         for batter in Character
         for stars, is_captain, charge_up in ((5, True, 0.0), (5, False, 1.0), (1, False, 0.0))
@@ -169,7 +169,7 @@ def hit_record(result: HitResult) -> dict[str, Any]:
         "acceleration": list(result.acceleration),
         "ball_energy": result.ball_energy,
         "hang_frames": result.hang_frames,
-        "landing": list(result.landing),
+        "landing": list(result.landing_location),
         "trajectory": [len(trajectory), max(p[1] for p in trajectory), list(trajectory[-1])],
         "garlic": None
         if result.garlic_trajectory is None

@@ -14,7 +14,6 @@ ported: rewriting a formula to taste is how a reproduction stops reproducing.
 from __future__ import annotations
 
 import math
-import struct
 from dataclasses import dataclass, field, replace
 from enum import Enum
 from types import MappingProxyType
@@ -31,6 +30,7 @@ from .._codes import (
     Stadium,
     SwingType,
 )
+from .._float32 import f32 as _f32
 from .._game import horizontal_degrees, vertical_degrees
 from ..geometry import physics
 from . import _tables as tables
@@ -143,7 +143,7 @@ class HitInputs:
 
     **Star swings.** Give what the player controls: ``swing=SwingType.STAR``,
     the team's ``stars``, whether the batter ``is_captain``, and the charge as
-    held (``charge_up=1.0`` for a fully charged swing). The library then
+    held (``charge_power_up=1.0`` for a fully charged swing). The library then
     decides the swing the way the game does: a fully charged star swing with
     five stars is a moonshot; a captain's star swing costs one star, a
     captain-class character's two when someone else is captain, and anyone
@@ -154,17 +154,17 @@ class HitInputs:
 
     batter: Character
     pitcher: Character
-    pitch: PitchType
-    charge: ChargeType | None = None
+    pitch_type: PitchType
+    charge_type: ChargeType | None = None
     """What a charge pitch was: ``SLIDER``, ``PERFECT`` or ``CAPTAIN_STAR``. None otherwise."""
 
     swing: SwingType
     """``SLAP``, ``CHARGE`` or ``STAR``. Bunts aren't simulated."""
 
-    hand: Hand
+    batting_hand: Hand
     """The batter's hand."""
 
-    stick: InputDirection = _NO_STICK
+    input_direction: InputDirection = _NO_STICK
     """The stick directions held at contact."""
 
     batter_x: float
@@ -176,16 +176,16 @@ class HitInputs:
     ball_z: float = 0.0
     """The ball's ``z`` at contact, where the flight starts."""
 
-    charge_up: float = 0.0
+    charge_power_up: float = 0.0
     """How far the swing was charged, 0 to 1."""
 
-    charge_down: float = 0.0
+    charge_power_down: float = 0.0
     """How much of a full charge was still held at release, 0 to 1."""
 
-    contact_frame: int = 5
+    swing_frame: int = 5
     """The frame of the swing the ball was met on, 2 to 10."""
 
-    chem_links_on_base: int = 0
+    chemistry_links_on_base: int = 0
     """Chemistry links between the batter and runners on base, 0 to 3."""
 
     stars: int = 0
@@ -208,7 +208,7 @@ class HitInputs:
     """Where the hit is played: it decides the ground height and whether the ground bounces."""
 
     mods: frozenset[Mod] = frozenset()
-    seeds: tuple[int, int, int] = tables.DEFAULT_SEEDS
+    rng: tuple[int, int, int] = tables.DEFAULT_SEEDS
     """The three RNG values a stat file records for the contact (``RNG1``-``RNG3``)."""
 
     overrides: HitOverrides = HitOverrides()
@@ -262,18 +262,18 @@ class HitInputs:
         return cls(
             batter=batter.character,
             pitcher=pitcher.character,
-            pitch=pitch.type,
-            charge=pitch.charge_type if pitch.type is PitchType.CHARGE else None,
+            pitch_type=pitch.type,
+            charge_type=pitch.charge_type if pitch.type is PitchType.CHARGE else None,
             swing=swing,
-            hand=batter.batting_hand,
-            stick=contact.input_direction,
+            batting_hand=batter.batting_hand,
+            input_direction=contact.input_direction,
             batter_x=pitch.bat_location[0],
             ball_x=contact.location[0],
             ball_z=contact.location[1],
-            charge_up=charge_up,
-            charge_down=charge_down,
-            contact_frame=contact.swing_frame,
-            chem_links_on_base=state.chemistry_links_on_base,
+            charge_power_up=charge_up,
+            charge_power_down=charge_down,
+            swing_frame=contact.swing_frame,
+            chemistry_links_on_base=state.chemistry_links_on_base,
             stars=stars or 0,
             is_captain=batter.is_captain,
             batter_is_superstar=batter.is_superstar,
@@ -282,24 +282,25 @@ class HitInputs:
             pitcher_stamina=state.pitcher_stamina,
             stadium=stadium,
             mods=mods,
-            seeds=contact.rng,
+            rng=contact.rng,
         )
 
     def __post_init__(self) -> None:
         if self.swing not in (SwingType.SLAP, SwingType.CHARGE, SwingType.STAR):
             raise ValueError(f"can't simulate a {self.swing.label} swing: only slap, charge, star")
-        charged = self.charge not in (None, ChargeType.NONE)
-        if (self.pitch is PitchType.CHARGE) != charged:
+        charged = self.charge_type not in (None, ChargeType.NONE)
+        if (self.pitch_type is PitchType.CHARGE) != charged:
             raise ValueError(
                 "a charge pitch needs its charge type, and only a charge pitch has one: "
-                f"got {self.pitch.label} with {self.charge}"
+                f"got {self.pitch_type.label} with {self.charge_type}"
             )
         if not 0 <= self.stars <= 5:
             raise ValueError(f"stars must be 0 to 5, not {self.stars}")
-        if not 0 <= self.chem_links_on_base <= 3:
-            raise ValueError(f"chem_links_on_base must be 0 to 3, not {self.chem_links_on_base}")
-        if not 0 <= self.contact_frame < len(tables.HORIZONTAL_ANGLE_RANGES[0][0]):
-            raise ValueError(f"contact_frame {self.contact_frame} is outside the swing")
+        if not 0 <= self.chemistry_links_on_base <= 3:
+            links = self.chemistry_links_on_base
+            raise ValueError(f"chemistry_links_on_base must be 0 to 3, not {links}")
+        if not 0 <= self.swing_frame < len(tables.HORIZONTAL_ANGLE_RANGES[0][0]):
+            raise ValueError(f"swing_frame {self.swing_frame} is outside the swing")
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -340,7 +341,7 @@ class HitResult:
     """The second garlic ball's flight from the split, or None for any other hit."""
 
     inputs: HitInputs = field(repr=False)
-    """What was simulated: the players, the swing, the stadium and the seeds."""
+    """What was simulated: the players, the swing, the stadium and the RNG."""
 
     @property
     def horizontal_angle_deg(self) -> float:
@@ -353,14 +354,14 @@ class HitResult:
         return vertical_degrees(self.vertical_angle)
 
     @property
-    def landing(self) -> Point:
+    def landing_location(self) -> Point:
         """Where the flight ends, one frame after it first comes down."""
         return self.trajectory[-1]
 
     @property
     def distance(self) -> float:
         """Horizontal distance from home plate to the landing."""
-        x, _, z = self.landing
+        x, _, z = self.landing_location
         return math.sqrt(x**2 + z**2)
 
     @property
@@ -433,12 +434,6 @@ def _to_int32(x: int) -> int:
     return x - 0x100000000 if x & 0x80000000 else x
 
 
-def _f32(x: float) -> float:
-    """Narrow to single precision, where the game's ``(float)`` cast changes a result."""
-    value: float = struct.unpack("f", struct.pack("f", x))[0]
-    return value
-
-
 def _wrap_angle(a: int) -> int:
     return a % 0x1000
 
@@ -500,10 +495,10 @@ class _Simulation:
         if inputs.pitcher_is_superstar:
             pitcher = pitcher.with_superstar()
 
-        self.state1, self.state2, self.frames_at_play = inputs.seeds
+        self.state1, self.state2, self.frames_at_play = inputs.rng
 
-        self.pitch = inputs.pitch.id
-        self.charge_pitch = 0 if inputs.charge is None else inputs.charge.id
+        self.pitch = inputs.pitch_type.id
+        self.charge_pitch = 0 if inputs.charge_type is None else inputs.charge_type.id
         self.cursed_ball = _pitched_cursed_ball(
             pitcher.cursed_ball,
             captain_star_pitch=inputs.is_star_pitch and pitcher.captain_star is not None,
@@ -534,21 +529,21 @@ class _Simulation:
 
         self.batter_x = inputs.batter_x
         self.ball_x = inputs.ball_x
-        self.is_right_handed = inputs.hand is Hand.RIGHT
-        self.chem_links = inputs.chem_links_on_base
-        self.contact_frame = inputs.contact_frame
+        self.is_right_handed = inputs.batting_hand is Hand.RIGHT
+        self.chem_links = inputs.chemistry_links_on_base
+        self.contact_frame = inputs.swing_frame
         self.easy = 1 if inputs.is_easy_batting else 0
-        self.stick_up = InputDirection.UP in inputs.stick
-        self.stick_down = InputDirection.DOWN in inputs.stick
-        self.stick_left = InputDirection.LEFT in inputs.stick
-        self.stick_right = InputDirection.RIGHT in inputs.stick
+        self.stick_up = InputDirection.UP in inputs.input_direction
+        self.stick_down = InputDirection.DOWN in inputs.input_direction
+        self.stick_left = InputDirection.LEFT in inputs.input_direction
+        self.stick_right = InputDirection.RIGHT in inputs.input_direction
         self.is_bunting = False
 
         captain_star = batter.captain_star
         self.captain_star = 0 if captain_star is None else captain_star.id
         self.star_swing_type = batter.star_swing.id
-        self.charge_up = inputs.charge_up
-        self.charge_down = inputs.charge_down
+        self.charge_up = inputs.charge_power_up
+        self.charge_down = inputs.charge_power_down
         self.swing = _CHARGE if inputs.swing is SwingType.CHARGE else _SLAP
         self.star_swing = 0  # the non-captain star swing in play (nonCaptainStarSwingActivated)
         self.captain_star_active = 0  # captainStarSwingActivated

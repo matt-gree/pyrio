@@ -160,12 +160,12 @@ def _time(params: Params, name: str, arg: str, value: datetime | None) -> None:
         params.append((name, str(epoch(arg, value))))
 
 
-def _limit_games(params: Params, arg: str, value: int | None) -> None:
+def _limit_games(params: Params, value: int | None) -> None:
     if value is None:
         params.append(("limit_games", "False"))
         return
     if isinstance(value, bool) or not isinstance(value, int) or value < 0:
-        raise ValueError(f"{arg} must be a non-negative integer or None, got {value!r}")
+        raise ValueError(f"limit_games must be a non-negative integer or None, got {value!r}")
     params.append(("limit_games", str(value)))
 
 
@@ -216,7 +216,7 @@ class EventFilter:
     fielder_positions: Sequence[Position] | None = None
     contacts: Sequence[ContactType] | None = None
     swings: Sequence[SwingType] | None = None
-    chem_links: Sequence[int] | None = None
+    chemistry_links: Sequence[int] | None = None
     batter_hands: Sequence[Hand] | None = None
     pitcher_hands: Sequence[Hand] | None = None
     innings: Sequence[int] | None = None
@@ -244,7 +244,7 @@ class EventFilter:
                 raise TypeError(f"contacts takes ContactType members, got {contact!r}")
             params.append(("contact", str(_CONTACT_IDS.get(contact, contact.id))))
         _codes(params, "swing", "swings", self.swings)
-        _ints(params, "chem_link", "chem_links", self.chem_links)
+        _ints(params, "chem_link", "chemistry_links", self.chemistry_links)
         _codes(params, "batter_hand", "batter_hands", self.batter_hands)
         _codes(params, "pitcher_hand", "pitcher_hands", self.pitcher_hands)
         _ints(params, "inning", "innings", self.innings)
@@ -267,11 +267,11 @@ class EventFilter:
 
 
 def games(
-    games: GameFilter, *, limit: int | None, linescore: bool, scoring_plays: bool
+    games: GameFilter, *, limit_games: int | None, linescore: bool, scoring_plays: bool
 ) -> Call[list[GameSummary]]:
     params: Params = []
     games.encode(params)
-    _limit_games(params, "limit", limit)
+    _limit_games(params, limit_games)
     _flag(params, "include_linescore", linescore)
     _flag(params, "include_scoring_plays", scoring_plays)
     return Call("GET", "/games/", decode.games, params)
@@ -293,7 +293,7 @@ def stats(
     # stat_retrieval.py, endpoint_detailed_stats()
     params: Params = []
     games.encode(params)
-    _limit_games(params, "limit_games", limit_games)
+    _limit_games(params, limit_games)
     _ints(params, "games", "game_ids", game_ids)
     _codes(params, "char_id", "characters", characters)
     _flag(params, "by_game", shape.by_game)
@@ -301,7 +301,7 @@ def stats(
     _flag(params, "by_roster_order", shape.by_roster_spot)
     _flag(params, "by_char", shape.by_character)
     _flag(params, "by_batting_hand", shape.by_batting_hand)
-    _flag(params, "by_fielding_hand", shape.by_pitching_hand)
+    _flag(params, "by_fielding_hand", shape.by_fielding_hand)
     _flag(params, "by_swing", shape.by_swing)
     _flag(params, "exclude_nonfair", exclude_fouls)
     _flag(params, "exclude_batting", exclude_batting)
@@ -318,15 +318,15 @@ def stats(
 
 
 def event_ids(
-    games: GameFilter, events: EventFilter, *, limit_games: int | None, limit: int
+    games: GameFilter, events: EventFilter, *, limit_games: int | None, limit_events: int
 ) -> Call[list[EventRef]]:
     params: Params = []
     games.encode(params)
     events.encode(params)
-    _limit_games(params, "limit_games", limit_games)
-    if isinstance(limit, bool) or not isinstance(limit, int) or limit < 0:
-        raise ValueError(f"limit must be a non-negative integer, got {limit!r}")
-    params.append(("limit_events", str(limit)))
+    _limit_games(params, limit_games)
+    if isinstance(limit_events, bool) or not isinstance(limit_events, int) or limit_events < 0:
+        raise ValueError(f"limit_events must be a non-negative integer, got {limit_events!r}")
+    params.append(("limit_events", str(limit_events)))
     return Call("GET", "/events/", decode.event_ids, params)
 
 
@@ -341,7 +341,7 @@ def landing_data(
     games.encode(params)
     events.encode(params)
     _ints(params, "events", "event_ids", event_ids)
-    _limit_games(params, "limit_games", limit_games)
+    _limit_games(params, limit_games)
     return Call("GET", "/landing_data/", decode.landing_data, params)
 
 
@@ -357,7 +357,7 @@ def star_chances(
     games.encode(params)
     events.encode(params)
     _ints(params, "events", "event_ids", event_ids)
-    _limit_games(params, "limit_games", limit_games)
+    _limit_games(params, limit_games)
     if by_inning:
         # This route reads `in ["true", "True", "T", "t"]`, not `== '1'`.
         params.append(("by_inning", "true"))

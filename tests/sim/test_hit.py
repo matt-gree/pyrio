@@ -32,15 +32,15 @@ from pyrio.sim import (
 BASE = HitInputs(
     batter=Character.MARIO,
     pitcher=Character.MARIO,
-    pitch=PitchType.CURVE,
+    pitch_type=PitchType.CURVE,
     swing=SwingType.CHARGE,
-    hand=Hand.RIGHT,
+    batting_hand=Hand.RIGHT,
     batter_x=0.0,
     ball_x=0.0,
-    charge_up=1.0,
-    charge_down=1.0,
+    charge_power_up=1.0,
+    charge_power_down=1.0,
 )
-STAR = replace(BASE, swing=SwingType.STAR, charge_up=0.0, charge_down=0.0)
+STAR = replace(BASE, swing=SwingType.STAR, charge_power_up=0.0, charge_power_down=0.0)
 
 
 def same_hit(a: HitResult, b: HitResult) -> bool:
@@ -55,9 +55,10 @@ def test_a_centred_charge_swing_is_perfect():
     assert hit.contact_type is ContactType.PERFECT
     assert hit.contact_absolute == 100.0
     assert hit.trajectory[0] == (0.0, Character.MARIO.attributes.pitching_height, 0.0)
-    assert hit.landing == hit.trajectory[-1]
+    assert hit.landing_location == hit.trajectory[-1]
     assert hit.hang_frames == len(hit.trajectory)
-    assert hit.distance == pytest.approx((hit.landing[0] ** 2 + hit.landing[2] ** 2) ** 0.5)
+    x, _, z = hit.landing_location
+    assert hit.distance == pytest.approx((x**2 + z**2) ** 0.5)
     assert hit.max_height >= hit.trajectory[0][1]
     assert hit.star_swing is None
     assert hit.moonshot is MoonshotStatus.NONE
@@ -107,15 +108,15 @@ def test_only_slap_charge_and_star_swings(swing: SwingType):
 
 def test_a_charge_pitch_needs_its_charge_type():
     with pytest.raises(ValueError, match="charge type"):
-        replace(BASE, pitch=PitchType.CHARGE)
+        replace(BASE, pitch_type=PitchType.CHARGE)
     with pytest.raises(ValueError, match="charge type"):
-        replace(BASE, charge=ChargeType.SLIDER)
-    replace(BASE, pitch=PitchType.CHARGE, charge=ChargeType.PERFECT)
-    replace(BASE, charge=ChargeType.NONE)  # the stat file's "N/A" for a curve
+        replace(BASE, charge_type=ChargeType.SLIDER)
+    replace(BASE, pitch_type=PitchType.CHARGE, charge_type=ChargeType.PERFECT)
+    replace(BASE, charge_type=ChargeType.NONE)  # the stat file's "N/A" for a curve
 
 
 @pytest.mark.parametrize(
-    ("field", "value"), [("stars", 6), ("stars", -1), ("chem_links_on_base", 4)]
+    ("field", "value"), [("stars", 6), ("stars", -1), ("chemistry_links_on_base", 4)]
 )
 def test_counts_are_range_checked(field: str, value: int):
     with pytest.raises(ValueError, match=field):
@@ -146,29 +147,30 @@ def test_anyone_else_spends_one_star_on_their_own_star_swing():
 def test_without_the_stars_a_star_swing_is_a_plain_swing_from_zero_charge():
     for stars in (0, 1):
         slap = simulate_hit(replace(STAR, stars=stars))
-        assert same_hit(slap, simulate_hit(replace(BASE, swing=SwingType.SLAP, charge_up=0.0)))
-        charging = simulate_hit(replace(STAR, stars=stars, charge_up=0.5))
-        expect = simulate_hit(replace(BASE, charge_up=0.0, charge_down=0.0))
+        plain = replace(BASE, swing=SwingType.SLAP, charge_power_up=0.0)
+        assert same_hit(slap, simulate_hit(plain))
+        charging = simulate_hit(replace(STAR, stars=stars, charge_power_up=0.5))
+        expect = simulate_hit(replace(BASE, charge_power_up=0.0, charge_power_down=0.0))
         assert same_hit(charging, expect)
 
 
 def test_a_star_swing_starts_from_zero_charge():
-    a = simulate_hit(replace(STAR, stars=3, charge_up=0.7, charge_down=1.0))
+    a = simulate_hit(replace(STAR, stars=3, charge_power_up=0.7, charge_power_down=1.0))
     b = simulate_hit(replace(STAR, stars=3))
     assert same_hit(a, b)
 
 
 def test_a_fully_charged_five_star_swing_is_a_moonshot():
-    hit = simulate_hit(replace(STAR, stars=5, charge_up=1.0))
+    hit = simulate_hit(replace(STAR, stars=5, charge_power_up=1.0))
     assert hit.moonshot is MoonshotStatus.MOONSHOT
     assert hit.star_swing is None
-    four = simulate_hit(replace(STAR, stars=4, charge_up=1.0))
+    four = simulate_hit(replace(STAR, stars=4, charge_power_up=1.0))
     assert four.moonshot is MoonshotStatus.NONE
-    assert hit.power > simulate_hit(replace(BASE, charge_up=0.0, charge_down=0.0)).power
+    assert hit.power > simulate_hit(replace(BASE, charge_power_up=0.0, charge_power_down=0.0)).power
 
 
 def test_a_moonshot_without_perfect_contact_fails():
-    hit = simulate_hit(replace(STAR, stars=5, charge_up=1.0, ball_x=-0.7))
+    hit = simulate_hit(replace(STAR, stars=5, charge_power_up=1.0, ball_x=-0.7))
     assert hit.contact_type is not ContactType.PERFECT
     assert hit.moonshot is MoonshotStatus.FAILED
 
@@ -192,7 +194,7 @@ def test_tag_to_mod():
 
 
 def test_remove_slice_sends_an_early_charge_contact_foul():
-    early = replace(BASE, contact_frame=2)
+    early = replace(BASE, swing_frame=2)
     sliced = simulate_hit(early)
     fixed = simulate_hit(replace(early, mods=frozenset({Mod.REMOVE_SLICE})))
     assert sliced.horizontal_angle == 0x400  # dead up the middle
@@ -227,8 +229,8 @@ def test_a_captain_star_pitch_is_fully_cursed():
 
 
 def test_the_stick_and_hand_move_the_hit():
-    late = replace(BASE, contact_frame=8)
-    push = simulate_hit(replace(late, stick=InputDirection.RIGHT))
+    late = replace(BASE, swing_frame=8)
+    push = simulate_hit(replace(late, input_direction=InputDirection.RIGHT))
     assert push.horizontal_angle == simulate_hit(late).horizontal_angle - 200
-    lefty = simulate_hit(replace(BASE, hand=Hand.LEFT))
+    lefty = simulate_hit(replace(BASE, batting_hand=Hand.LEFT))
     assert lefty.horizontal_angle != simulate_hit(BASE).horizontal_angle

@@ -7,18 +7,14 @@ solves a natural cubic spline per axis; ``spline_evaluate`` reads it back.
 from __future__ import annotations
 
 import math
-import struct
 from typing import TYPE_CHECKING
+
+from .._float32 import f32 as _f32
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
 
 __all__ = ["make_spline"]
-
-
-def _f32(x: float) -> float:
-    value: float = struct.unpack("f", struct.pack("f", x))[0]
-    return value
 
 
 def _second_derivatives(t: list[float], v: list[float], n: int) -> list[float]:

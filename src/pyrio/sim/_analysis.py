@@ -24,7 +24,7 @@ from ._hit import HitInputs, Mod, simulate_hit
 from ._live_ball import LiveBallOutcome, hazard_seed, play_out
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterable
+    from collections.abc import Iterable
 
     from .._characters import Character
     from .._codes import Side, Stadium
@@ -36,7 +36,6 @@ if TYPE_CHECKING:
 __all__ = [
     "ContactRecord",
     "Highlights",
-    "best",
     "find_highlights",
     "format_highlights",
     "simulate_contacts",
@@ -104,8 +103,8 @@ class ContactRecord:
         return self.hit.hang_frames
 
     @property
-    def landing(self) -> Point:
-        return self.hit.landing
+    def landing_location(self) -> Point:
+        return self.hit.landing_location
 
     @property
     def trajectory(self) -> tuple[Point, ...]:
@@ -178,7 +177,7 @@ class ContactRecord:
         first = attempt(seed)
         if seed is not None or not hazards or self._agrees(first.outcome):
             return first
-        base = hazard_seed(self.hit.inputs.seeds)
+        base = hazard_seed(self.hit.inputs.rng)
         for offset in range(1, _DICE_TRIES):
             played = attempt(base + offset)
             if self._agrees(played.outcome):
@@ -243,23 +242,12 @@ class Highlights:
 
     hardest_hit: ContactRecord | None
     longest_flight: ContactRecord | None
-    highest_apex: ContactRecord | None
+    highest_flight: ContactRecord | None
     deepest_robbery: ContactRecord | None
     """The caught ball whose flight would have come down deepest."""
 
     robbed_home_runs: tuple[ContactRecord, ...]
     """Caught balls whose flight clears the wall. Empty unless a stadium was given."""
-
-
-def best(
-    contacts: Iterable[ContactRecord], key: Callable[[ContactRecord], float]
-) -> ContactRecord | None:
-    """The contact with the highest ``key``, or None if there are none.
-
-    ``best(contacts, key=lambda c: c.power)`` is the hardest hit. Ties go to
-    the earliest contact.
-    """
-    return max(contacts, key=key, default=None)
 
 
 def find_highlights(
@@ -273,10 +261,10 @@ def find_highlights(
     fair = [c for c in contacts if c.is_fair]
     caught = [c for c in fair if c.caught]
     return Highlights(
-        hardest_hit=best(fair, key=lambda c: c.power),
-        longest_flight=best(fair, key=lambda c: c.distance),
-        highest_apex=best(fair, key=lambda c: c.max_height),
-        deepest_robbery=best(caught, key=lambda c: c.distance),
+        hardest_hit=max(fair, key=lambda c: c.power, default=None),
+        longest_flight=max(fair, key=lambda c: c.distance, default=None),
+        highest_flight=max(fair, key=lambda c: c.max_height, default=None),
+        deepest_robbery=max(caught, key=lambda c: c.distance, default=None),
         robbed_home_runs=()
         if stadium is None
         else tuple(c for c in caught if clears_wall(stadium, c.trajectory)),
@@ -295,9 +283,9 @@ def format_highlights(highlights: Highlights) -> list[str]:
             f"LONGEST FLIGHT: {c.batter} ({c.player}) - "
             f"{c.distance:.1f} units, {c.result}, inning {c.inning}"
         )
-    if c := highlights.highest_apex:
+    if c := highlights.highest_flight:
         lines.append(
-            f"HIGHEST APEX: {c.batter} ({c.player}) - "
+            f"HIGHEST FLIGHT: {c.batter} ({c.player}) - "
             f"apex {c.max_height:.1f}, {c.hang_frames} frame hang time"
         )
     if c := highlights.deepest_robbery:

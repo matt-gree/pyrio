@@ -337,7 +337,7 @@ def _scoring_play(play: _Obj) -> ScoringPlay:
                 initial_base=runner.int("initial_base"),
                 result_base=runner.int("result_base"),
                 out_type=runner.code("out_type", OutType),
-                out_location=runner.int("out_location"),
+                out_base=runner.int("out_location"),
                 steal=runner.code("steal", StealType),
             )
         )
@@ -437,7 +437,7 @@ def _live_game(game: _Obj) -> LiveGame:
             game.opt_int("chemistry_links_on_base") if "chemistry_links_on_base" in game else None
         ),
         batter_spot=game.int("batter"),
-        batter_hand=None if batter_hand is None else Hand(batter_hand),
+        batting_hand=None if batter_hand is None else Hand(batter_hand),
         pitcher_spot=game.int("pitcher"),
         batter_line=_live_line(game, "batter_stats", rio_batting_line),
         pitcher_line=_live_line(game, "pitcher_stats", rio_pitching_line),
@@ -650,7 +650,7 @@ class StatsShape:
     by_roster_spot: bool = False
     by_character: bool = False
     by_batting_hand: bool = False
-    by_pitching_hand: bool = False
+    by_fielding_hand: bool = False
     by_swing: bool = False
     include_pitcher_wins: bool = False
     include_runs_scored: bool = False
@@ -835,9 +835,9 @@ def _stat_rows(key: _Key, sections: _Obj, shape: StatsShape) -> Iterator[StatRow
 
     if "Pitching" in sections:
         pitching = sections.obj("Pitching")
-        if shape.by_pitching_hand:
+        if shape.by_fielding_hand:
             for hand, split in _labelled(pitching, Hand):
-                yield StatRow(**common, pitching_hand=hand, **_pitching(split, shape))  # type: ignore[arg-type]
+                yield StatRow(**common, fielding_hand=hand, **_pitching(split, shape))  # type: ignore[arg-type]
         else:
             group.update(_pitching(pitching, shape))
 

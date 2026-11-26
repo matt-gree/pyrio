@@ -27,7 +27,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from ._codes import AtBatResult, Bases, Side
-from ._stats import BattingLine
+from ._stats import BattingLine, ratio
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Iterator
@@ -128,12 +128,12 @@ class LinearWeights:
             for result in _WOBA_RESULTS
             if self.counts.get(result)
         )
-        return _ratio(credit, self.plate_appearances)
+        return ratio(credit, self.plate_appearances)
 
     @property
     def league_runs_per_pa(self) -> float:
         """Runs per plate appearance over the half innings measured."""
-        return _ratio(self.runs, self.plate_appearances)
+        return ratio(self.runs, self.plate_appearances)
 
     def woba(self, batting: Iterable[AtBat] | BattingLine) -> float:
         """Weighted on-base average: credited run value per plate appearance.
@@ -146,7 +146,7 @@ class LinearWeights:
         contact") is this, given at-bats with the walks filtered out.
         """
         credit, plate_appearances = self._tally(batting)
-        return _ratio(credit, plate_appearances)
+        return ratio(credit, plate_appearances)
 
     def wraa(self, batting: Iterable[AtBat] | BattingLine) -> float:
         """Weighted runs above average: ``(wOBA - league wOBA) * PA``."""
@@ -282,7 +282,3 @@ def _runs_to_come(half: HalfInning) -> list[int]:
 def _ordered(counter: Counter[tuple[Bases, int]]) -> dict[tuple[Bases, int], int]:
     order = {bases: i for i, bases in enumerate(_BASE_ORDER)}
     return {state: counter[state] for state in sorted(counter, key=lambda s: (order[s[0]], s[1]))}
-
-
-def _ratio(numerator: float, denominator: float) -> float:
-    return numerator / denominator if denominator else math.nan

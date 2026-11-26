@@ -82,8 +82,8 @@ def mismatches(cases: list[dict[str, Any]]) -> list[str]:
     for case in cases:
         run = simulate_run(
             Character(case["id"]),
-            start_base=case["s"],
-            end_base=case["e"],
+            initial_base=case["s"],
+            result_base=case["e"],
             is_superstar=case["sup"],
             hand=Hand.LEFT if case["side"] == "L" else Hand.RIGHT,
             rounding=case["path"] == "round",

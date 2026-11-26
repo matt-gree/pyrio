@@ -30,8 +30,8 @@ def _goldens() -> list[dict[str, Any]]:
 def _run(case: dict[str, Any]):
     return simulate_run(
         Character(case["id"]),
-        start_base=case["s"],
-        end_base=case["e"],
+        initial_base=case["s"],
+        result_base=case["e"],
         is_superstar=case["sup"],
         hand=Hand.LEFT if case["side"] == "L" else Hand.RIGHT,
         rounding=case["path"] == "round",
@@ -56,7 +56,7 @@ def test_the_batter_waits_30_frames_and_a_runner_5():
     batter = simulate_run(Character.MARIO)
     assert all(f.is_held for f in batter.trace[:29])
     assert not batter.trace[29].is_held
-    runner = simulate_run(Character.MARIO, start_base=1, end_base=2)
+    runner = simulate_run(Character.MARIO, initial_base=1, result_base=2)
     assert all(f.is_held for f in runner.trace[:4])
     assert not runner.trace[4].is_held
 
@@ -73,8 +73,8 @@ def test_faster_characters_and_mashing_get_there_sooner():
 
 
 def test_rounding_keeps_speed_and_stopping_slides():
-    straight = simulate_run(Character.MARIO, end_base=4)
-    rounded = simulate_run(Character.MARIO, end_base=4, rounding=True)
+    straight = simulate_run(Character.MARIO, result_base=4)
+    rounded = simulate_run(Character.MARIO, result_base=4, rounding=True)
     assert rounded.frames < straight.frames
     assert RunnerAction.SLIDE in {f.action for f in straight.trace}
     assert RunnerAction.SLIDE not in {f.action for f in rounded.trace}
@@ -82,9 +82,9 @@ def test_rounding_keeps_speed_and_stopping_slides():
 
 
 def test_a_rounding_runner_stopping_at_second_overruns_it():
-    run = simulate_run(Character.MARIO, end_base=2, rounding=True)
+    run = simulate_run(Character.MARIO, result_base=2, rounding=True)
     assert run.overrun
-    assert simulate_run(Character.MARIO, end_base=2).overrun == ()
+    assert simulate_run(Character.MARIO, result_base=2).overrun == ()
 
 
 def test_the_batter_starts_where_they_stand():
@@ -100,8 +100,8 @@ def test_the_batter_starts_where_they_stand():
 
 @pytest.mark.parametrize(("start", "end"), [(1, 1), (2, 1), (0, 5), (-1, 2)])
 def test_a_run_must_go_forward(start: int, end: int):
-    with pytest.raises(ValueError, match="start_base"):
-        simulate_run(Character.MARIO, start_base=start, end_base=end)
+    with pytest.raises(ValueError, match="initial_base"):
+        simulate_run(Character.MARIO, initial_base=start, result_base=end)
 
 
 def test_mash_every_must_be_positive():

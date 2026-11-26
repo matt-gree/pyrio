@@ -142,7 +142,7 @@ layers = [
     "pyrio._stats | pyrio._team_names",
     "pyrio._codes : pyrio._characters : pyrio._names",
     "pyrio._enum",
-    "pyrio._errors",
+    "pyrio._errors | pyrio._float32",
 ]
 
 [[tool.importlinter.contracts]]
@@ -152,7 +152,7 @@ layers = [
     "pyrio.web | pyrio.plot | pyrio.pandas | pyrio.ratings",
     "pyrio.svg | pyrio.sim",
     "pyrio.geometry",
-    "pyrio._errors : pyrio._enum : pyrio._codes : pyrio._characters : pyrio._names : pyrio._stats : pyrio._team_names : pyrio._game : pyrio._decode : pyrio._serialize : pyrio._run_values",
+    "pyrio._errors : pyrio._float32 : pyrio._enum : pyrio._codes : pyrio._characters : pyrio._names : pyrio._stats : pyrio._team_names : pyrio._game : pyrio._decode : pyrio._serialize : pyrio._run_values",
 ]
 
 [[tool.importlinter.contracts]]
@@ -165,6 +165,7 @@ source_modules = [
     "pyrio._decode",
     "pyrio._enum",
     "pyrio._errors",
+    "pyrio._float32",
     "pyrio._game",
     "pyrio._names",
     "pyrio._run_values",

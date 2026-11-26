@@ -9,8 +9,8 @@ stadium's collision mesh and hazards, until the play is settled.
     >>> from pyrio import Character, Hand, PitchType, SwingType
     >>> from pyrio.sim import HitInputs, simulate_hit
     >>> hit = simulate_hit(HitInputs(
-    ...     batter=Character.MARIO, pitcher=Character.LUIGI, pitch=PitchType.CURVE,
-    ...     swing=SwingType.CHARGE, hand=Hand.RIGHT, batter_x=0.0, ball_x=0.0,
+    ...     batter=Character.MARIO, pitcher=Character.LUIGI, pitch_type=PitchType.CURVE,
+    ...     swing=SwingType.CHARGE, batting_hand=Hand.RIGHT, batter_x=0.0, ball_x=0.0,
     ... ))
     >>> hit.contact_type
     <ContactType.PERFECT: 2>
@@ -21,7 +21,6 @@ from __future__ import annotations
 from ._analysis import (
     ContactRecord,
     Highlights,
-    best,
     find_highlights,
     format_highlights,
     simulate_contacts,
@@ -63,7 +62,6 @@ __all__ = [
     "RunnerAction",
     "RunnerFrame",
     "batter_location",
-    "best",
     "find_highlights",
     "format_highlights",
     "hazard_seed",

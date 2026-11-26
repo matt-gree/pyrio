@@ -251,16 +251,16 @@ def test_stats_by_user_and_swing(mock, rio, contract):
 
 def test_stats_hand_splits_become_rows(mock, rio, contract):
     mock.get("/stats/").respond(json=contract("stats_by_game_spot_hand.json"))
-    rows = rio.stats(by_game=True, by_roster_spot=True, by_batting_hand=True, by_pitching_hand=True)
+    rows = rio.stats(by_game=True, by_roster_spot=True, by_batting_hand=True, by_fielding_hand=True)
     assert {row.game_id for row in rows} == {3896251267}
     spot0 = [row for row in rows if row.roster_spot == 0]
     batting = [row for row in spot0 if row.batting_hand is not None]
-    pitching = [row for row in spot0 if row.pitching_hand is not None]
-    rest = [row for row in spot0 if row.batting_hand is None and row.pitching_hand is None]
+    pitching = [row for row in spot0 if row.fielding_hand is not None]
+    rest = [row for row in spot0 if row.batting_hand is None and row.fielding_hand is None]
     assert [row.batting_hand for row in batting] == [Hand.RIGHT]
     assert batting[0].batting is not None
     assert batting[0].pitching is None
-    assert [row.pitching_hand for row in pitching] == [Hand.LEFT]
+    assert [row.fielding_hand for row in pitching] == [Hand.LEFT]
     assert pitching[0].batting is None
     assert len(rest) == 1
     assert rest[0].fielding is not None
@@ -380,7 +380,7 @@ def test_a_landing_row_rebuilds_its_swing(mock, rio, contract):
     mock.get("/landing_data/").respond(json=contract("landing_data.json"))
     homer, _ = rio.landing_data()
     inputs = homer.hit_inputs(stadium=Stadium.PEACH_GARDEN)
-    assert (inputs.batter, inputs.swing, inputs.seeds) == (
+    assert (inputs.batter, inputs.swing, inputs.rng) == (
         Character.MARIO,
         SwingType.SLAP,
         homer.rng,
@@ -411,7 +411,7 @@ def test_live_games(mock, rio, contract):
     assert game.home.fielder(Position.PITCHER) == 0
     assert game.away.is_superstar == (False,) * 9
     assert game.runner_spots == (1, None, 0)
-    assert game.batter_hand is Hand.RIGHT
+    assert game.batting_hand is Hand.RIGHT
     assert game.batter is game.home.roster[2]
     assert game.pitcher is game.away.roster[0]
     assert game.chemistry_links_on_base == 1

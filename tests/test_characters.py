@@ -89,7 +89,7 @@ def test_families_sort_by_first_variant_id():
 @pytest.mark.parametrize("family", list(CharacterFamily), ids=str)
 def test_a_family_exposes_only_what_its_variants_share(family: CharacterFamily):
     for variant in family.variants:
-        assert variant.attributes.char_class is family.char_class
+        assert variant.attributes.character_class is family.character_class
         assert variant.is_captain is family.is_captain
         assert variant.attributes.abilities == family.abilities
 
@@ -239,7 +239,7 @@ def test_attribute_sheet_matches_the_enum():
 
 def test_sample_attributes():
     bowser = Character.BOWSER.attributes
-    assert bowser.char_class is CharacterClass.POWER
+    assert bowser.character_class is CharacterClass.POWER
     assert bowser.is_captain
     assert bowser.captain_star is CaptainStar.KILLER_BALL
     assert bowser.batting_stance is Hand.LEFT

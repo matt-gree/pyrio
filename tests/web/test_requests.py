@@ -58,7 +58,7 @@ def test_stats_flags_are_sent_as_1_with_the_servers_names(mock, rio):
         by_roster_spot=True,
         by_character=True,
         by_batting_hand=True,
-        by_pitching_hand=True,
+        by_fielding_hand=True,
         by_swing=True,
         exclude_fouls=True,
         exclude_batting=True,
@@ -125,12 +125,12 @@ def test_limit_games(mock, rio):
     route = mock.get("/games/").respond(json={"games": []})
     rio.games()
     assert dict(query(route))["limit_games"] == "50"
-    rio.games(limit=None)
+    rio.games(limit_games=None)
     assert dict(query(route))["limit_games"] == "False"  # pyrio <1.0 got a 400 for True
-    rio.games(limit=7)
+    rio.games(limit_games=7)
     assert dict(query(route))["limit_games"] == "7"
     with pytest.raises(ValueError, match="limit"):
-        rio.games(limit=-1)
+        rio.games(limit_games=-1)
 
 
 # --- parameter names (section 4a: "Parameter names the server never reads") -------
@@ -210,7 +210,7 @@ def test_event_filters_encode_enums_as_the_servers_ids(mock, rio):
         results=[AtBatResult.HOME_RUN],
         away_scores=[0],
         home_scores=[3],
-        limit=10,
+        limit_events=10,
     )
     sent = query(route)
     assert ("pitcher_char", "19") in sent

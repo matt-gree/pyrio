@@ -39,7 +39,7 @@ def draw_flights(ax, game: pyrio.Game, contacts: tuple[ContactRecord, ...]) -> N
         zs = [p[2] for p in c.trajectory]
         color = "#aaaaaa" if c.is_foul else SIDE_COLOR[c.batting_side]
         ax.plot(xs, zs, color=color, alpha=0.2 if c.is_foul else 0.5, linewidth=1, zorder=2)
-        x, _, z = c.landing
+        x, _, z = c.landing_location
         if c.result in HIT_STYLE:
             hit_color, marker, size = HIT_STYLE[c.result]
             ax.scatter(x, z, color=hit_color, marker=marker, s=size, edgecolors="black", zorder=5)

@@ -89,7 +89,7 @@ def test_a_five_star_swing_is_rebuilt_fully_charged():
     for event, inputs in simulatable(game):
         assert event.contact is not None
         if event.contact.moonshot is MoonshotStatus.MOONSHOT:
-            assert inputs.charge_up == 1.0
+            assert inputs.charge_power_up == 1.0
             assert inputs.swing is SwingType.STAR
 
 
@@ -105,7 +105,7 @@ def test_a_pop_fly_star_swing_records_its_own_charge_not_a_held_one():
     assert event.contact is not None
     assert event.contact.charge_power_up == 1.0
     inputs = HitInputs.from_event(event, stadium=game.stadium)
-    assert (inputs.stars, inputs.charge_up, inputs.charge_down) == (5, 0.0, 0.0)
+    assert (inputs.stars, inputs.charge_power_up, inputs.charge_power_down) == (5, 0.0, 0.0)
     result = simulate_hit(inputs)
     assert result.moonshot is MoonshotStatus.NONE
     assert (result.power, result.vertical_angle) == (
@@ -169,7 +169,7 @@ def test_a_curve_with_a_stray_charge_type_simulates_as_a_curve():
     ]
     assert curves
     assert all(e.pitch is not None and e.pitch.charge_type is ChargeType.SLIDER for e in curves)
-    assert {HitInputs.from_event(e, stadium=game.stadium).charge for e in curves} == {None}
+    assert {HitInputs.from_event(e, stadium=game.stadium).charge_type for e in curves} == {None}
 
 
 def test_simulate_contacts_leaves_out_a_contact_it_cannot_reproduce():

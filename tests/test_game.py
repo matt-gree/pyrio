@@ -136,8 +136,8 @@ def test_game_state(game: Game):
 def test_runner(game: Game):
     runner = game.events[1].runners[1]
     assert runner.spot is game.away.roster[0]
-    assert runner.start_base == 1
-    assert runner.end_base == 1
+    assert runner.initial_base == 1
+    assert runner.result_base == 1
     assert runner.bases_advanced == 0
     assert not runner.scored
     assert not runner.is_out
@@ -167,9 +167,9 @@ def test_fielders_choice():
     )
     (choice,) = [e for e in game.events if e.is_fielders_choice]
     assert choice.result is AtBatResult.OUT
-    batter = next(r for r in choice.runners if r.start_base == 0)
+    batter = next(r for r in choice.runners if r.initial_base == 0)
     assert not batter.is_out
-    assert any(r.is_out for r in choice.runners if r.start_base > 0)
+    assert any(r.is_out for r in choice.runners if r.initial_base > 0)
     plain_outs = [
         e for e in game.events if e.result is AtBatResult.OUT and not e.is_fielders_choice
     ]
@@ -277,7 +277,7 @@ def test_outs_on_the_bases_can_leave_an_at_bat_unfinished():
     assert (at_bat.inning, at_bat.batting_side, at_bat.pitches) == (1, Side.AWAY, 5)
     # Both runners were caught stealing with one out, ending the half mid-count.
     assert at_bat.final.state.outs == 1
-    assert [r.start_base for r in at_bat.final.runners if r.out_type is OutType.TAG] == [1, 3]
+    assert [r.initial_base for r in at_bat.final.runners if r.out_type is OutType.TAG] == [1, 3]
     following = game.at_bats[game.at_bats.index(at_bat) + 1]
     assert (following.inning, following.batting_side) == (1, Side.HOME)
 

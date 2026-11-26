@@ -204,7 +204,6 @@ SIM = [
     "RunnerFrame",
     "TAG_TO_MOD",
     "batter_location",
-    "best",
     "find_highlights",
     "format_highlights",
     "hazard_seed",

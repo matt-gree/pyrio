@@ -50,7 +50,7 @@ class AsyncRioClient(_base.ClientBase):
     For code inside an event loop, such as a Discord bot::
 
         async with AsyncRioClient.from_env() as rio:
-            games = await rio.games(tags=["S13 Superstars Off"], limit=100)
+            games = await rio.games(tags=["S13 Superstars Off"], limit_games=100)
 
     It reads nothing implicitly: pass ``api_key`` or use :meth:`from_env`. Public
     reads need no key; calling an endpoint that does without one raises
@@ -175,13 +175,13 @@ class AsyncRioClient(_base.ClientBase):
         stadiums: Sequence[Stadium] | None = None,
         start_time: datetime | None = None,
         end_time: datetime | None = None,
-        limit: int | None = 50,
+        limit_games: int | None = 50,
         include_linescore: bool = False,
         include_scoring_plays: bool = False,
     ) -> list[GameSummary]:
         """Finished games, newest first.
 
-        ``limit`` caps how many (``None`` for every match). Games match every
+        ``limit_games`` caps how many (``None`` for every match). Games match every
         filter given; within one filter, any listed value matches. Times are
         compared against when a game ended and must be timezone-aware.
 
@@ -203,7 +203,7 @@ class AsyncRioClient(_base.ClientBase):
                     start_time=start_time,
                     end_time=end_time,
                 ),
-                limit=limit,
+                limit_games=limit_games,
                 linescore=include_linescore,
                 scoring_plays=include_scoring_plays,
             )
@@ -231,7 +231,7 @@ class AsyncRioClient(_base.ClientBase):
         by_roster_spot: bool = False,
         by_character: bool = False,
         by_batting_hand: bool = False,
-        by_pitching_hand: bool = False,
+        by_fielding_hand: bool = False,
         by_swing: bool = False,
         exclude_fouls: bool = False,
         exclude_batting: bool = False,
@@ -255,7 +255,7 @@ class AsyncRioClient(_base.ClientBase):
             by_roster_spot=by_roster_spot,
             by_character=by_character,
             by_batting_hand=by_batting_hand,
-            by_pitching_hand=by_pitching_hand,
+            by_fielding_hand=by_fielding_hand,
             by_swing=by_swing,
             include_pitcher_wins=include_pitcher_wins,
             include_runs_scored=include_runs_scored,
@@ -309,7 +309,7 @@ class AsyncRioClient(_base.ClientBase):
         fielder_positions: Sequence[Position] | None = None,
         contacts: Sequence[ContactType] | None = None,
         swings: Sequence[SwingType] | None = None,
-        chem_links: Sequence[int] | None = None,
+        chemistry_links: Sequence[int] | None = None,
         batter_hands: Sequence[Hand] | None = None,
         pitcher_hands: Sequence[Hand] | None = None,
         innings: Sequence[int] | None = None,
@@ -323,11 +323,11 @@ class AsyncRioClient(_base.ClientBase):
         only_star_chances: bool = False,
         users_as_batter: bool = False,
         users_as_pitcher: bool = False,
-        limit: int = 1000,
+        limit_events: int = 1000,
     ) -> list[EventRef]:
         """The events matching every filter, as references, in game and event order.
 
-        ``limit`` caps the events (Rio web allows at most 150,000).
+        ``limit_events`` caps the events (Rio web allows at most 150,000).
         ``users_as_batter``/``users_as_pitcher`` keep only events where one of
         ``users`` or ``vs_users`` was batting/pitching. ``contacts`` may
         include ``ContactType.MISS``.
@@ -355,7 +355,7 @@ class AsyncRioClient(_base.ClientBase):
                     fielder_positions=fielder_positions,
                     contacts=contacts,
                     swings=swings,
-                    chem_links=chem_links,
+                    chemistry_links=chemistry_links,
                     batter_hands=batter_hands,
                     pitcher_hands=pitcher_hands,
                     innings=innings,
@@ -371,7 +371,7 @@ class AsyncRioClient(_base.ClientBase):
                     users_as_pitcher=users_as_pitcher,
                 ),
                 limit_games=limit_games,
-                limit=limit,
+                limit_events=limit_events,
             )
         )
 
@@ -398,7 +398,7 @@ class AsyncRioClient(_base.ClientBase):
         fielder_positions: Sequence[Position] | None = None,
         contacts: Sequence[ContactType] | None = None,
         swings: Sequence[SwingType] | None = None,
-        chem_links: Sequence[int] | None = None,
+        chemistry_links: Sequence[int] | None = None,
         batter_hands: Sequence[Hand] | None = None,
         pitcher_hands: Sequence[Hand] | None = None,
         innings: Sequence[int] | None = None,
@@ -441,7 +441,7 @@ class AsyncRioClient(_base.ClientBase):
                     fielder_positions=fielder_positions,
                     contacts=contacts,
                     swings=swings,
-                    chem_links=chem_links,
+                    chemistry_links=chemistry_links,
                     batter_hands=batter_hands,
                     pitcher_hands=pitcher_hands,
                     innings=innings,
@@ -484,7 +484,7 @@ class AsyncRioClient(_base.ClientBase):
         fielder_positions: Sequence[Position] | None = None,
         contacts: Sequence[ContactType] | None = None,
         swings: Sequence[SwingType] | None = None,
-        chem_links: Sequence[int] | None = None,
+        chemistry_links: Sequence[int] | None = None,
         batter_hands: Sequence[Hand] | None = None,
         pitcher_hands: Sequence[Hand] | None = None,
         innings: Sequence[int] | None = None,
@@ -527,7 +527,7 @@ class AsyncRioClient(_base.ClientBase):
                     fielder_positions=fielder_positions,
                     contacts=contacts,
                     swings=swings,
-                    chem_links=chem_links,
+                    chemistry_links=chemistry_links,
                     batter_hands=batter_hands,
                     pitcher_hands=pitcher_hands,
                     innings=innings,

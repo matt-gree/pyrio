@@ -97,7 +97,7 @@ def test_every_era_decodes_consistently(path: Path):
         assert event.batter_spot.side is event.state.batting_side
         assert event.pitcher_spot.side is event.state.batting_side.other
         assert event.catcher_spot.side is event.state.batting_side.other
-        assert event.runners[0].start_base == 0
+        assert event.runners[0].initial_base == 0
         if event.fielding is not None:
             assert event.fielding.spot.side is event.state.batting_side.other
 
@@ -462,7 +462,7 @@ def test_a_runner_put_out_has_no_end_base():
     batter = event.runners[0]
     assert batter.is_out
     assert batter.out_type is OutType.CAUGHT
-    assert batter.end_base is None
+    assert batter.result_base is None
     assert batter.bases_advanced == 0
 
 
@@ -762,8 +762,8 @@ def test_a_walk_moves_the_batter_and_the_forced_runners():
     for i, raw in walks:
         assert raw["Runner Batter"]["Runner Result Base"] == 0  # Rio never moves them
         event = game.events[i]
-        on = {r.start_base for r in event.runners if r.start_base}
+        on = {r.initial_base for r in event.runners if r.initial_base}
         for runner in event.runners:
-            forced = runner.start_base == 0 or all(b in on for b in range(1, runner.start_base))
-            expected = runner.start_base + 1 if forced else runner.start_base
-            assert runner.end_base == expected
+            forced = runner.initial_base == 0 or all(b in on for b in range(1, runner.initial_base))
+            expected = runner.initial_base + 1 if forced else runner.initial_base
+            assert runner.result_base == expected

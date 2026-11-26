@@ -35,16 +35,16 @@ from __future__ import annotations
 
 import math
 import random
-import struct
 from dataclasses import dataclass
 from enum import Enum
 from functools import cache
 from typing import TYPE_CHECKING, Any, Literal, TypeAlias, cast
 
 from .._codes import Stadium
+from .._float32 import f32 as _f32
 from ..geometry import HazardKind, physics
 from ..geometry._files import park_sheet
-from ..geometry._mesh import FOUL_BIT, MeshTriangle, mesh_triangles
+from ..geometry._mesh import FOUL_BIT, MeshTriangle, Surface, mesh_triangles
 from ._hit import Mod
 from ._physics import GRAVITY_PER_FRAME_SQUARED, VELOCITY_KEPT_PER_FRAME
 
@@ -208,7 +208,7 @@ def play_out(
         hit.inputs.stadium,
         hit.trajectory,
         acceleration=acceleration,
-        seed=hazard_seed(hit.inputs.seeds) if seed is None else seed,
+        seed=hazard_seed(hit.inputs.rng) if seed is None else seed,
         hazards=hazards if hazards is not None else Mod.HAZARDS_OFF not in hit.inputs.mods,
         mystery_blocks=mystery_blocks,
         star_plants=star_plants,
@@ -299,23 +299,16 @@ class _Options:
     stop_at: tuple[float, float] | None
 
 
-# BALL_COLLISION_TYPE (collision_primitives.h), as ``Surface`` ids.
-_GRASS, _WALL, _OUT_OF_PLAY, _FOUL_POLE, _UNCLIMBABLE_WALL, _DIRT = 1, 2, 3, 4, 5, 6
-_PIT_WALL, _PIT, _ROUGH, _WATER, _CHOMP_PEN = 7, 8, 9, 10, 11
+# BALL_COLLISION_TYPE (collision_primitives.h): the field's ``Surface`` ids,
+# as plain ints for the hot loop.
+_GRASS, _WALL, _OUT_OF_PLAY = Surface.GRASS.id, Surface.WALL.id, Surface.OUT_OF_PLAY.id
+_FOUL_POLE, _UNCLIMBABLE_WALL = Surface.FOUL_POLE.id, Surface.UNCLIMBABLE_WALL.id
+_DIRT, _PIT_WALL, _PIT = Surface.DIRT.id, Surface.PIT_WALL.id, Surface.PIT.id
+_ROUGH, _WATER, _CHOMP_PEN = Surface.ROUGH.id, Surface.WATER.id, Surface.CHOMP_PEN.id
 # Hazard surfaces.
 _HAZARD_WALL, _STAR_PAD, _HAZARD_STRUCTURE, _SAND_STAR = 0x20, 0x22, 0x23, 0x32
 _SURFACE_NAMES = {
-    _GRASS: "grass",
-    _WALL: "wall",
-    _OUT_OF_PLAY: "out of play",
-    _FOUL_POLE: "foul pole",
-    _UNCLIMBABLE_WALL: "back wall",
-    _DIRT: "dirt",
-    _PIT_WALL: "pit wall",
-    _PIT: "pit",
-    _ROUGH: "rough",
-    _WATER: "water",
-    _CHOMP_PEN: "chomp pen",
+    **{surface.id: surface.label for surface in Surface},
     _HAZARD_WALL: "hazard wall",
     _STAR_PAD: "star pad",
     _HAZARD_STRUCTURE: "hazard",
@@ -353,12 +346,6 @@ _Hit: TypeAlias = tuple[float, _Vec, _Vec, int]
 
 def _name(kind: int) -> str:
     return _SURFACE_NAMES.get(kind, hex(kind))
-
-
-def _f32(x: float) -> float:
-    """``x`` rounded to a single-precision float, as the game stores it."""
-    value: float = struct.unpack("f", struct.pack("f", x))[0]
-    return value
 
 
 # --- vectors -------------------------------------------------------------------
@@ -1036,7 +1023,7 @@ class _LiveBall:
             self._check_dead()
             return
         _, point, n, tag = hit
-        kind = tag & 0x7F
+        kind = tag & ~FOUL_BIT
         was_in_air = b.state == _IN_AIR
         if hazard:
             hazard.on_hit(b, kind)
@@ -1168,12 +1155,12 @@ class _LiveBall:
         b = self.ball
         if self.over_wall:
             self.over_wall += 1
-        if (self.terrain & 0x7F) != _OUT_OF_PLAY or self.outcome:
+        if (self.terrain & ~FOUL_BIT) != _OUT_OF_PLAY or self.outcome:
             return
         foul = self._is_foul(b.location[0], b.location[2], self.terrain)
         if b.state == _IN_AIR and self.over_wall >= _OVER_WALL_FRAMES:
             self._settle(LiveBallOutcome.FOUL if foul else LiveBallOutcome.HOME_RUN)
-        elif b.state == _LANDED and (self.previous_terrain & 0x7F) == _OUT_OF_PLAY:
+        elif b.state == _LANDED and (self.previous_terrain & ~FOUL_BIT) == _OUT_OF_PLAY:
             self._settle(LiveBallOutcome.GROUND_RULE_DOUBLE)
         if not self.over_wall:
             self.over_wall = 1

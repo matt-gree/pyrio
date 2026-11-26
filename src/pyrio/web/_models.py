@@ -6,11 +6,10 @@ for display. Grouping keys and optional sections are ``None`` when absent.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
-from dataclasses import dataclass, fields
+from collections.abc import Mapping  # noqa: TC003 -- dataclass fields are resolved at runtime
+from dataclasses import dataclass
 from datetime import datetime  # noqa: TC003 -- dataclass fields are resolved at runtime
 from enum import Enum
-from typing import Self
 
 from .._characters import Character  # noqa: TC001
 from .._codes import (
@@ -29,7 +28,8 @@ from .._codes import (
     StealType,
     SwingType,
 )
-from .._stats import BattingLine, PitchingLine  # noqa: TC001
+from .._game import leader
+from .._stats import BattingLine, Line, PitchingLine
 from .._team_names import TeamName  # noqa: TC001
 from ..sim import HitInputs, Mod
 
@@ -108,34 +108,8 @@ class CommunityKind(_Label):
 # --- lines -----------------------------------------------------------------
 
 
-class _Sum:
-    """Field-wise addition, so ``sum(lines)`` totals a list of web-only lines."""
-
-    __slots__ = ()
-
-    def __add__(self, other: object) -> Self:
-        if type(other) is not type(self):
-            return NotImplemented
-        values: dict[str, object] = {}
-        for f in fields(self):  # type: ignore[arg-type]
-            mine: object = getattr(self, f.name)
-            theirs: object = getattr(other, f.name)
-            if isinstance(mine, Mapping) and isinstance(theirs, Mapping):
-                left: Mapping[object, int] = mine  # pyright: ignore[reportUnknownVariableType]
-                right: Mapping[object, int] = theirs  # pyright: ignore[reportUnknownVariableType]
-                values[f.name] = {k: left.get(k, 0) + right.get(k, 0) for k in {*left, *right}}
-            else:
-                values[f.name] = mine + theirs  # type: ignore[operator]
-        return type(self)(**values)
-
-    def __radd__(self, other: object) -> Self:
-        if other == 0:
-            return self
-        return NotImplemented
-
-
 @dataclass(frozen=True, slots=True, kw_only=True)
-class ContactLine(_Sum):
+class ContactLine(Line):
     """Batted-ball counts from Rio web's ``/stats/``, which stat files don't summarize.
 
     Counted per pitch the batter saw, so ``plate_appearances`` and
@@ -169,7 +143,7 @@ class ContactLine(_Sum):
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class FieldingLine(_Sum):
+class FieldingLine(Line):
     """Fielding counts from Rio web's ``/stats/``."""
 
     pitches_at: Mapping[Position, int]
@@ -186,7 +160,7 @@ class FieldingLine(_Sum):
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class RecordLine(_Sum):
+class RecordLine(Line):
     """Wins and losses from Rio web's ``/stats/`` (its "Misc" section).
 
     Rio web counts one row per character in a game. Grouped by character or
@@ -219,7 +193,7 @@ class StatRow:
     A hand split is a grouping key too, but only for the section it splits:
     with ``by_batting_hand``, a group's batting arrives in one row per hand
     (``batting_hand`` set, the other sections ``None``) and its other sections
-    in the row where ``batting_hand`` is ``None``. ``by_pitching_hand`` does the
+    in the row where ``batting_hand`` is ``None``. ``by_fielding_hand`` does the
     same for pitching.
 
     Rio web's ``/stats/`` doesn't report earned runs, home runs allowed or
@@ -234,7 +208,7 @@ class StatRow:
     roster_spot: int | None = None
     character: Character | None = None
     batting_hand: Hand | None = None
-    pitching_hand: Hand | None = None
+    fielding_hand: Hand | None = None
 
     batting: BattingLine | None = None
     contact: ContactLine | None = None
@@ -305,7 +279,7 @@ class PlayRunner:
     result_base: int
     """Where the play left them; 4 means they scored."""
     out_type: OutType
-    out_location: int
+    out_base: int
     steal: StealType
 
 
@@ -359,9 +333,7 @@ class GameSummary:
         Not a core ``GameResult``: ``/games/`` doesn't return who quit, so mercy,
         quits and crashes can't be told apart here.
         """
-        if self.home.score == self.away.score:
-            return None
-        return Side.HOME if self.home.score > self.away.score else Side.AWAY
+        return leader(self.away.score, self.home.score)
 
     def team(self, side: Side) -> TeamSummary:
         """The team on ``side``."""
@@ -446,7 +418,7 @@ class LiveGame:
     is_star_chance: bool
     chemistry_links_on_base: int | None
     batter_spot: int
-    batter_hand: Hand | None
+    batting_hand: Hand | None
     pitcher_spot: int
     batter_line: BattingLine | None
     """The batter's game so far, when the client reported it."""
@@ -571,23 +543,23 @@ class LandingRow:
         return HitInputs(
             batter=self.batter,
             pitcher=self.pitcher,
-            pitch=self.pitch_type,
-            charge=self.charge_type if self.pitch_type is PitchType.CHARGE else None,
+            pitch_type=self.pitch_type,
+            charge_type=self.charge_type if self.pitch_type is PitchType.CHARGE else None,
             swing=self.swing,
-            hand=self.batting_hand,
-            stick=self.input_direction,
+            batting_hand=self.batting_hand,
+            input_direction=self.input_direction,
             batter_x=self.bat_location[0],
             ball_x=self.location[0],
             ball_z=self.location[1],
-            charge_up=self.charge_power_up,
-            charge_down=self.charge_power_down,
-            contact_frame=self.swing_frame,
-            chem_links_on_base=self.chemistry_links_on_base,
+            charge_power_up=self.charge_power_up,
+            charge_power_down=self.charge_power_down,
+            swing_frame=self.swing_frame,
+            chemistry_links_on_base=self.chemistry_links_on_base,
             batter_is_superstar=superstars,
             pitcher_is_superstar=superstars,
             stadium=stadium,
             mods=mods,
-            seeds=self.rng,
+            rng=self.rng,
         )
 
 

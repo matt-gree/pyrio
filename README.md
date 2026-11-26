@@ -134,7 +134,7 @@ at-bats you pass to split by anything: star swings, a player, walks left out.
 from pyrio.web import RioClient
 
 with RioClient.from_env() as rio:          # reads PYRIO_API_KEY if set
-    games = rio.games(tags=["S13 Superstars Off"], limit=50)
+    games = rio.games(tags=["S13 Superstars Off"], limit_games=50)
     rows = rio.stats(users=["MattGree"], by_character=True)
 ```
 

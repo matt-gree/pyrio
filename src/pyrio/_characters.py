@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import csv
 import io
-import struct
 from dataclasses import dataclass, replace
 from enum import Enum
 from functools import cache
@@ -14,6 +13,7 @@ from typing import Final, Self, cast
 from ._codes import Hand
 from ._enum import CodeEnum
 from ._errors import UnknownCodeError
+from ._float32 import f32 as _f32
 from ._names import NameIndex, nicknames
 
 __all__ = [
@@ -187,9 +187,9 @@ class CharacterFamily(Enum):
         return Character(nicknames()["families"][self.label]["default"])
 
     @property
-    def char_class(self) -> CharacterClass:
+    def character_class(self) -> CharacterClass:
         """The class every variant shares."""
-        return self.variants[0].attributes.char_class
+        return self.variants[0].attributes.character_class
 
     @property
     def is_captain(self) -> bool:
@@ -399,7 +399,7 @@ class CharacterAttributes:
     :meth:`with_superstar` the record with it on.
     """
 
-    char_class: CharacterClass
+    character_class: CharacterClass
     is_captain: bool
     abilities: frozenset[Ability]
     # pitching
@@ -523,11 +523,6 @@ _JOGGING_SPEEDS: Final = (
 )  # fmt: skip
 
 
-def _f32(x: float) -> float:
-    value: float = struct.unpack("f", struct.pack("f", x))[0]
-    return value
-
-
 def _boost(value: int, increase: int, ceiling: int | None) -> int:
     return value + increase if ceiling is None else min(value + increase, ceiling)
 
@@ -551,7 +546,7 @@ def _from_row(row: dict[str, str]) -> CharacterAttributes:
         raise ValueError(f"{row['Character']}: captain star pitch and swing differ")
     captain_star = number("Captain Star Pitch")
     return CharacterAttributes(
-        char_class=CharacterClass(number("Character Class")),
+        character_class=CharacterClass(number("Character Class")),
         is_captain=flag("Captain Character"),
         abilities=frozenset(ability for ability in Ability if flag(ability.value)),
         weight=number("Weight"),

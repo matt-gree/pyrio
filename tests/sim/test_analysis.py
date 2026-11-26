@@ -26,7 +26,6 @@ from pyrio.sim import (
     HitOverrides,
     LiveBallOutcome,
     Mod,
-    best,
     find_highlights,
     format_highlights,
     hazard_seed,
@@ -38,13 +37,13 @@ from pyrio.sim import (
 INPUTS = HitInputs(
     batter=Character.MARIO,
     pitcher=Character.MARIO,
-    pitch=PitchType.CURVE,
+    pitch_type=PitchType.CURVE,
     swing=SwingType.CHARGE,
-    hand=Hand.RIGHT,
+    batting_hand=Hand.RIGHT,
     batter_x=0.0,
     ball_x=0.0,
-    charge_up=1.0,
-    charge_down=1.0,
+    charge_power_up=1.0,
+    charge_power_down=1.0,
 )
 
 
@@ -84,7 +83,7 @@ def test_record_properties():
     r = record(150)
     assert r.power == 150
     assert r.distance == r.hit.distance
-    assert r.landing == r.trajectory[-1]
+    assert r.landing_location == r.trajectory[-1]
     assert r.is_fair
     assert not r.caught
     assert r.is_hit
@@ -94,19 +93,13 @@ def test_record_properties():
     assert not foul.is_fair
 
 
-def test_best():
-    contacts = [record(120), record(200), record(160)]
-    assert best(contacts, key=lambda c: c.power) is contacts[1]
-    assert best([], key=lambda c: c.power) is None
-
-
 def test_highlights_count_fair_balls_only():
     foul = record(300, primary_result=PrimaryContactResult.FOUL)
     fair = record(150)
     found = find_highlights([foul, fair])
     assert found.hardest_hit is fair
     assert found.longest_flight is fair
-    assert found.highest_apex is fair
+    assert found.highest_flight is fair
     assert found.deepest_robbery is None
     assert found.robbed_home_runs == ()
 
@@ -222,6 +215,6 @@ def test_play_out_picks_hazard_dice_that_agree_with_the_record():
     assert play_out(record.hit, stop_at=stop_at).outcome is not LiveBallOutcome.FOUL
     assert record.play_out().outcome is LiveBallOutcome.FOUL
     # A seed given is a seed kept.
-    assert record.play_out(seed=hazard_seed(record.hit.inputs.seeds)) == play_out(
+    assert record.play_out(seed=hazard_seed(record.hit.inputs.rng)) == play_out(
         record.hit, stop_at=stop_at
     )

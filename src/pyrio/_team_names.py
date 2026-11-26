@@ -267,8 +267,8 @@ def team_name(roster: Sequence[Character | None], captain: Character | None) -> 
         if signature.members <= families:
             return signature.team
 
-    classes = Counter(character.attributes.char_class for character in characters)
-    captain_class = captain.attributes.char_class
+    classes = Counter(character.attributes.character_class for character in characters)
+    captain_class = captain.attributes.character_class
     if all(classes[captain_class] > n for c, n in classes.items() if c is not captain_class):
         return teams.class_team
     return teams.default

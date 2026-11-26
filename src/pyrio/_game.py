@@ -68,8 +68,8 @@ __all__ = [
 
 _VERSION = re.compile(r"(\d+)\.(\d+)(?:\.(\d+))?(?:\.?([A-Za-z]+))?")
 
-_HOME_PLATE = 4  # Runner.end_base for a runner who scored
-_MERCY_LEAD = 10  # the mercy rule ends a game on a lead this size
+HOME_PLATE = 4  # Runner.result_base for a runner who scored
+MERCY_LEAD = 10  # the mercy rule ends a game on a lead this size
 _OUTS_PER_HALF = 3
 _ANGLE_UNITS_PER_TURN = 4096
 _STRAIGHT_AWAY = 0x400  # the horizontal angle straight up the middle
@@ -83,6 +83,13 @@ def horizontal_degrees(raw: int) -> float:
 def vertical_degrees(raw: int) -> float:
     """A raw vertical hit angle in degrees above level."""
     return raw * 360 / _ANGLE_UNITS_PER_TURN
+
+
+def leader(away_score: int, home_score: int) -> Side | None:
+    """The side with more runs, or ``None`` when the score is level."""
+    if away_score == home_score:
+        return None
+    return Side.AWAY if away_score > home_score else Side.HOME
 
 
 @dataclass(frozen=True, slots=True, order=True)
@@ -230,9 +237,7 @@ class GameState:
     @property
     def leader(self) -> Side | None:
         """The side ahead, or ``None`` when the score is level."""
-        if self.away_score == self.home_score:
-            return None
-        return Side.AWAY if self.away_score > self.home_score else Side.HOME
+        return leader(self.away_score, self.home_score)
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -347,9 +352,9 @@ class Runner:
     """
 
     spot: RosterSpot
-    start_base: int
+    initial_base: int
     """0 for the batter, else the base the runner started on."""
-    end_base: int | None
+    result_base: int | None
     """The base reached, 4 for home; ``None`` when the runner was put out."""
     out_type: OutType
     out_base: int | None
@@ -362,12 +367,12 @@ class Runner:
 
     @property
     def scored(self) -> bool:
-        return self.end_base == _HOME_PLATE
+        return self.result_base == HOME_PLATE
 
     @property
     def bases_advanced(self) -> int:
         """Bases gained on the play: 0 for a runner who was put out or held."""
-        return 0 if self.end_base is None else self.end_base - self.start_base
+        return 0 if self.result_base is None else self.result_base - self.initial_base
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -397,7 +402,7 @@ class Event:
     dead_ball_reason: DeadBallReason | None
     """From Rio 2.2.0; ``None`` before."""
     runners: tuple[Runner, ...]
-    """The batter (``start_base == 0``) first, then the runners on base."""
+    """The batter (``initial_base == 0``) first, then the runners on base."""
     pitch: Pitch | None
     contact: Contact | None
     fielding: Fielding | None
@@ -428,7 +433,7 @@ class Event:
             return ()
         safe = sorted(
             (r for r in self.runners if not r.is_out),
-            key=lambda r: (not r.scored, -r.start_base),
+            key=lambda r: (not r.scored, -r.initial_base),
         )
         return tuple(r.spot for r in safe[: self.runs])
 
@@ -474,8 +479,8 @@ class Event:
             return True
         if self.result is not AtBatResult.OUT:
             return False
-        batter_safe = any(r.start_base == 0 and not r.is_out for r in self.runners)
-        return batter_safe and any(r.start_base > 0 and r.is_out for r in self.runners)
+        batter_safe = any(r.initial_base == 0 and not r.is_out for r in self.runners)
+        return batter_safe and any(r.initial_base > 0 and r.is_out for r in self.runners)
 
     @property
     def is_lead_change(self) -> bool:
@@ -854,7 +859,7 @@ class HUDSnapshot:
             return False
         lead = self.home.score - self.away.score
         regulation = self.state.inning >= innings
-        mercy = self.mercy_rule is not False and abs(lead) >= _MERCY_LEAD
+        mercy = self.mercy_rule is not False and abs(lead) >= MERCY_LEAD
         half_over = self.state.outs + (play.outs_during_play or 0) >= _OUTS_PER_HALF
         if self.state.batting_side is Side.HOME:
             if regulation and lead > 0:

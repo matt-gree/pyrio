@@ -47,6 +47,8 @@ from ._codes import (
 from ._enum import CodeEnum
 from ._errors import StatFileError, UnknownCodeError
 from ._game import (
+    HOME_PLATE,
+    MERCY_LEAD,
     Contact,
     Event,
     Fielding,
@@ -59,6 +61,7 @@ from ._game import (
     Runner,
     Team,
     Version,
+    leader,
 )
 from ._stats import rio_batting_line, rio_pitching_line
 from ._team_names import TeamName
@@ -129,7 +132,6 @@ _UNDECODED = re.compile(r"Unable to Decode\. Invalid Value \((\d+)\)\.")
 
 _UNFINISHED_PLAY = 255  # "Num Outs During Play" when the game ended mid-play
 _NO_BASE = 255  # "Runner Result Base" for a runner put out
-_HOME_PLATE = 4
 _NO_POSITION = 0xFF  # "Inv" in cPosition
 # Some games (seen from 2.0.1 to 2.1.1, all with no tag set) write 255 for both
 # teams' stars at every event while star swings and pitches still happen: the
@@ -451,9 +453,7 @@ def _result(
     events: tuple[Event, ...],
 ) -> GameResult:
     quit_by, crashed = _quitter(root)
-    winner = (
-        None if away_score == home_score else (Side.AWAY if away_score > home_score else Side.HOME)
-    )
+    winner = leader(away_score, home_score)
     # The mercy rule ends a game on a lead of 10 or more, but a home team that
     # trails always gets its half of the inning to answer: an away mercy win
     # ends on the home side batting.
@@ -461,7 +461,7 @@ def _result(
         quit_by is None
         and not crashed
         and innings_played < innings_selected
-        and abs(away_score - home_score) >= 10
+        and abs(away_score - home_score) >= MERCY_LEAD
         and (winner is Side.HOME or (bool(events) and events[-1].state.batting_side is Side.HOME))
     )
     return GameResult(winner=winner, is_mercy=is_mercy, quit_by=quit_by, crashed=crashed)
@@ -673,18 +673,18 @@ def _runners(node: _Node, batting: Team, result: AtBatResult) -> tuple[Runner, .
             continue
         out_type = runner.coded("Out Type", OutType)
         is_out = out_type is not OutType.NONE
-        end_base: int | None = runner.integer("Runner Result Base")
-        if is_out or end_base == _NO_BASE:
-            end_base = None
+        result_base: int | None = runner.integer("Runner Result Base")
+        if is_out or result_base == _NO_BASE:
+            result_base = None
         elif result is AtBatResult.HOME_RUN:
             # Every runner scores on a home run. Before 2.2.0 Rio usually left
             # the end base at the start base, because the result came first.
-            end_base = _HOME_PLATE
+            result_base = HOME_PLATE
         runners.append(
             Runner(
                 spot=runner.spot("Runner Roster Loc", batting),
-                start_base=runner.integer("Runner Initial Base"),
-                end_base=end_base,
+                initial_base=runner.integer("Runner Initial Base"),
+                result_base=result_base,
                 out_type=out_type,
                 out_base=runner.integer("Out Location") if is_out else None,
                 steal=runner.coded("Steal", StealType),
@@ -700,15 +700,15 @@ def _walk_runners(runners: list[Runner]) -> tuple[Runner, ...]:
     # anyone moves, so the batter's end base reads 0 and the forced runners
     # haven't advanced. Each is put on the next base, as the game does; a
     # runner already moved (a steal on the pitch) is left alone.
-    occupied = {r.start_base for r in runners if r.start_base}
+    occupied = {r.initial_base for r in runners if r.initial_base}
     forced = 0  # bases from first that are filled in a row, so forced to move
     while forced + 1 in occupied:
         forced += 1
     corrected: list[Runner] = []
     for runner in runners:
-        moves = runner.start_base == 0 or runner.start_base <= forced
-        if moves and not runner.is_out and runner.end_base in (0, runner.start_base):
-            runner = replace(runner, end_base=runner.start_base + 1)
+        moves = runner.initial_base == 0 or runner.initial_base <= forced
+        if moves and not runner.is_out and runner.result_base in (0, runner.initial_base):
+            runner = replace(runner, result_base=runner.initial_base + 1)
         corrected.append(runner)
     return tuple(corrected)
 
@@ -807,7 +807,7 @@ def _correct_legacy_contact(
        the same at-bat with one more strike.
     """
     primary, secondary = contact.primary_result, contact.secondary_result
-    batter = next((runner for runner in runners if runner.start_base == 0), None)
+    batter = next((runner for runner in runners if runner.initial_base == 0), None)
     if (
         primary in (PrimaryContactResult.FAIR, PrimaryContactResult.FIELDED)
         and secondary is SecondaryContactResult.OUT_CAUGHT
@@ -969,7 +969,7 @@ def _play_runs(root: _Node, state: GameState, fielding_roster: tuple[RosterSpot,
         1
         for key in ("Runner Batter", "Runner 1B", "Runner 2B", "Runner 3B")
         if (runner := root.maybe_node(key)) is not None
-        and runner.integer("Runner Result Base") == _HOME_PLATE
+        and runner.integer("Runner Result Base") == HOME_PLATE
     )
 
 

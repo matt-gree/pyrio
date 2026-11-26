@@ -132,13 +132,13 @@ def test_a_simulated_hit_plays_out():
         HitInputs(
             batter=Character.MARIO,
             pitcher=Character.MARIO,
-            pitch=PitchType.CURVE,
+            pitch_type=PitchType.CURVE,
             swing=SwingType.CHARGE,
-            hand=Hand.RIGHT,
+            batting_hand=Hand.RIGHT,
             batter_x=0.0,
             ball_x=0.0,
-            charge_up=1.0,
-            charge_down=1.0,
+            charge_power_up=1.0,
+            charge_power_down=1.0,
         )
     )
     result = play_out_flight(Stadium.MARIO_STADIUM, hit.trajectory, acceleration=hit.acceleration)
@@ -185,14 +185,14 @@ def _hit(**changes: object) -> HitResult:
     inputs = HitInputs(
         batter=Character.MARIO,
         pitcher=Character.LUIGI,
-        pitch=PitchType.CURVE,
+        pitch_type=PitchType.CURVE,
         swing=SwingType.CHARGE,
-        hand=Hand.RIGHT,
+        batting_hand=Hand.RIGHT,
         batter_x=0.0,
         ball_x=0.0,
-        charge_up=1.0,
-        charge_down=1.0,
-        seeds=(1565, 20008, 1628),
+        charge_power_up=1.0,
+        charge_power_down=1.0,
+        rng=(1565, 20008, 1628),
     )
     return simulate_hit(replace(inputs, **changes))
 
@@ -204,7 +204,7 @@ def test_play_out_takes_a_hit_and_plays_it_at_its_stadium():
         Stadium.BOWSER_CASTLE,
         hit.trajectory,
         acceleration=hit.acceleration,
-        seed=hazard_seed(hit.inputs.seeds),
+        seed=hazard_seed(hit.inputs.rng),
     )
     assert play_out(hit, seed=5, hazards=False) == play_out_flight(
         Stadium.BOWSER_CASTLE,
@@ -221,12 +221,12 @@ def test_hazard_seed_mixes_the_three_rng_values():
 
 def test_garlic_halves_play_out_without_the_hits_push():
     hit = _hit(
-        batter=Character.WARIO, swing=SwingType.STAR, stars=5, is_captain=True, charge_up=0.0
+        batter=Character.WARIO, swing=SwingType.STAR, stars=5, is_captain=True, charge_power_up=0.0
     )
     if hit.garlic_trajectory is None:
         pytest.skip("this swing didn't split")
     assert play_out(hit) == play_out_flight(
-        hit.inputs.stadium, hit.trajectory, seed=hazard_seed(hit.inputs.seeds)
+        hit.inputs.stadium, hit.trajectory, seed=hazard_seed(hit.inputs.rng)
     )
 
 

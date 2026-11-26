@@ -10,7 +10,6 @@ are the game's ``gameplay_tables.c``.
 from __future__ import annotations
 
 import math
-import struct
 from dataclasses import dataclass
 from enum import Enum
 from functools import cache
@@ -18,6 +17,7 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING
 
 from .._codes import Hand
+from .._float32 import f32 as _f32
 from ._spline import make_spline
 
 if TYPE_CHECKING:
@@ -81,11 +81,6 @@ _INITIAL_BOX_POSITION: _XZ = (0.0, 0.4)  # initialBoxPosition: where every at-ba
 _MAX_FRAMES = 4000
 _OVERRUN_LIMIT_FRAMES = 300
 _HOME = 4
-
-
-def _f32(x: float) -> float:
-    value: float = struct.unpack("f", struct.pack("f", x))[0]
-    return value
 
 
 def _lerp_range(v: float, a: float, b: float, c: float, d: float) -> float:
@@ -215,15 +210,15 @@ class RunResult:
 def simulate_run(
     character: Character,
     *,
-    start_base: int = 0,
-    end_base: int = 1,
+    initial_base: int = 0,
+    result_base: int = 1,
     is_superstar: bool = False,
     hand: Hand = Hand.RIGHT,
     box_position: tuple[float, float] | None = None,
     rounding: bool = False,
     mash_every: int | None = 3,
 ) -> RunResult:
-    """Run from ``start_base`` to ``end_base``, frame by frame from contact.
+    """Run from ``initial_base`` to ``result_base``, frame by frame from contact.
 
     Bases are numbered as ``Runner`` numbers them: 0 is the batter (from
     ``batter_location(character, hand, box_position)``), 1 to 3 a runner on
@@ -236,14 +231,16 @@ def simulate_run(
     mashing); the default, 3, is a quick human's twenty presses a second, and
     1 is a press every frame. Stamina wears down as the game does.
     """
-    if not 0 <= start_base < end_base <= _HOME:
-        raise ValueError(f"need 0 <= start_base < end_base <= 4, got {start_base} and {end_base}")
+    if not 0 <= initial_base < result_base <= _HOME:
+        raise ValueError(
+            f"need 0 <= initial_base < result_base <= 4, got {initial_base} and {result_base}"
+        )
     if mash_every is not None and mash_every < 1:
         raise ValueError(f"mash_every must be 1 or more (or None), not {mash_every}")
     attributes = character.attributes.with_superstar() if is_superstar else character.attributes
     k = _speed_constants(attributes.speed)
     margin = _f32(_BASE_REACH_MARGIN)
-    is_batter = start_base == 0
+    is_batter = initial_base == 0
     if is_batter:
         x, _, z = batter_location(character, hand, box_position)
         home: _XZ = (x, z)
@@ -258,11 +255,11 @@ def simulate_run(
         return start, _RUNNING_BASES[(leg + 1) % 4]
 
     pct = _f32(0.0) if is_batter else _f32(_f32(_LEADOFF) + margin)
-    bases_run = _f32(0.0) if is_batter else _f32(start_base + pct)
+    bases_run = _f32(0.0) if is_batter else _f32(initial_base + pct)
     position = (
         home
         if is_batter
-        else _lerp(_RUNNING_BASES[start_base], _RUNNING_BASES[(start_base + 1) % 4], pct)
+        else _lerp(_RUNNING_BASES[initial_base], _RUNNING_BASES[(initial_base + 1) % 4], pct)
     )
     start = position
 
@@ -447,7 +444,7 @@ def simulate_run(
             elif pct >= _f32(1 - margin):
                 reached = int(bases_run) + 1
         standing_on = -1 if reached < 0 else reached % 4
-        if reached > start_base and reached not in base_frames:
+        if reached > initial_base and reached not in base_frames:
             base_frames[reached] = f
 
         # running_updatePosition: the straight line, blended onto the rounding spline.
@@ -474,11 +471,11 @@ def simulate_run(
             action=action,
         )
         (trace if arrived_at is None else overrun).append(state)
-        if arrived_at is None and reached == end_base:
-            if rounding and is_rounding and end_base < _HOME:
+        if arrived_at is None and reached == result_base:
+            if rounding and is_rounding and result_base < _HOME:
                 arrived_at = f  # a rounding runner stopping at second or third overruns it
             else:
                 return result(f)
         if overrun_done or (arrived_at is not None and f - arrived_at > _OVERRUN_LIMIT_FRAMES):
             return result(arrived_at if arrived_at is not None else f)
-    raise RuntimeError(f"the runner never reached base {end_base}")  # pragma: no cover
+    raise RuntimeError(f"the runner never reached base {result_base}")  # pragma: no cover

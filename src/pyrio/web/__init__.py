@@ -5,7 +5,7 @@ Install with ``pip install 'projectrio[web]'``, which adds httpx::
     from pyrio.web import RioClient
 
     with RioClient.from_env() as rio:
-        games = rio.games(tags=["S13 Superstars Off"], limit=50)
+        games = rio.games(tags=["S13 Superstars Off"], limit_games=50)
         games[0].home.captain          # Character.MARIO
         rio.stats(users=["MattGree"], by_character=True)[0].batting.ops
 

@@ -12,6 +12,7 @@ fields and the same numbers.
 from __future__ import annotations
 
 import math
+from collections.abc import Mapping
 from dataclasses import dataclass, fields
 from typing import TYPE_CHECKING, Self
 
@@ -21,21 +22,32 @@ if TYPE_CHECKING:
 __all__ = ["BattingLine", "PitchingLine", "format_batting_line", "format_pitching_line"]
 
 
-def _ratio(numerator: float, denominator: float) -> float:
+def ratio(numerator: float, denominator: float) -> float:
     return numerator / denominator if denominator else math.nan
 
 
-class _Line:
-    """Field-wise addition for the line dataclasses."""
+class Line:
+    """Field-wise addition for the stat-line dataclasses, so ``sum(lines)`` totals them.
+
+    A field holding counts by key (a ``Mapping``) adds key by key.
+    """
 
     __slots__ = ()
 
     def __add__(self, other: object) -> Self:
         if type(other) is not type(self):
             return NotImplemented
-        return type(self)(
-            **{f.name: getattr(self, f.name) + getattr(other, f.name) for f in fields(self)}  # type: ignore[arg-type]
-        )
+        values: dict[str, object] = {}
+        for f in fields(self):  # type: ignore[arg-type]
+            mine: object = getattr(self, f.name)
+            theirs: object = getattr(other, f.name)
+            if isinstance(mine, Mapping) and isinstance(theirs, Mapping):
+                left: Mapping[object, int] = mine  # pyright: ignore[reportUnknownVariableType]
+                right: Mapping[object, int] = theirs  # pyright: ignore[reportUnknownVariableType]
+                values[f.name] = {k: left.get(k, 0) + right.get(k, 0) for k in {*left, *right}}
+            else:
+                values[f.name] = mine + theirs  # type: ignore[operator]
+        return type(self)(**values)
 
     def __radd__(self, other: object) -> Self:
         # Lets sum(lines) work: sum() starts from 0.
@@ -45,7 +57,7 @@ class _Line:
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class BattingLine(_Line):
+class BattingLine(Line):
     """A batter's counting stats, for one game or summed over many.
 
     ``walks`` are four-ball walks only; ``hit_by_pitch`` is counted separately.
@@ -79,17 +91,17 @@ class BattingLine(_Line):
     @property
     def avg(self) -> float:
         """Batting average: hits per at bat."""
-        return _ratio(self.hits, self.at_bats)
+        return ratio(self.hits, self.at_bats)
 
     @property
     def obp(self) -> float:
         """On-base percentage: times on base per plate appearance."""
-        return _ratio(self.hits + self.walks + self.hit_by_pitch, self.plate_appearances)
+        return ratio(self.hits + self.walks + self.hit_by_pitch, self.plate_appearances)
 
     @property
     def slg(self) -> float:
         """Slugging: total bases per at bat."""
-        return _ratio(self.total_bases, self.at_bats)
+        return ratio(self.total_bases, self.at_bats)
 
     @property
     def ops(self) -> float:
@@ -104,11 +116,11 @@ class BattingLine(_Line):
     @property
     def k_pct(self) -> float:
         """Strikeouts per plate appearance, as a fraction (0.25, not 25)."""
-        return _ratio(self.strikeouts, self.plate_appearances)
+        return ratio(self.strikeouts, self.plate_appearances)
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class PitchingLine(_Line):
+class PitchingLine(Line):
     """A pitcher's counting stats, for one game or summed over many.
 
     ``walks`` are four-ball walks only; ``hit_by_pitch`` is counted separately.
@@ -138,31 +150,31 @@ class PitchingLine(_Line):
 
     def era_over(self, innings: int) -> float:
         """Earned runs per ``innings`` innings, for leagues that play shorter games."""
-        return _ratio(self.earned_runs * innings * 3, self.outs_pitched)
+        return ratio(self.earned_runs * innings * 3, self.outs_pitched)
 
     @property
     def whip(self) -> float:
         """Walks plus hits per inning pitched."""
-        return _ratio(self.walks + self.hits_allowed, self.innings_pitched)
+        return ratio(self.walks + self.hits_allowed, self.innings_pitched)
 
     @property
     def k_pct(self) -> float:
         """Strikeouts per batter faced, as a fraction (0.25, not 25)."""
-        return _ratio(self.strikeouts, self.batters_faced)
+        return ratio(self.strikeouts, self.batters_faced)
 
     @property
     def k_per_bb(self) -> float:
         """Strikeouts per walk."""
-        return _ratio(self.strikeouts, self.walks)
+        return ratio(self.strikeouts, self.walks)
 
     @property
     def avg_against(self) -> float:
         """Hits per at bat against: batters faced, less walks and hit batters."""
-        return _ratio(self.hits_allowed, self.batters_faced - self.walks - self.hit_by_pitch)
+        return ratio(self.hits_allowed, self.batters_faced - self.walks - self.hit_by_pitch)
 
     @property
     def pitches_per_inning(self) -> float:
-        return _ratio(self.pitches_thrown, self.innings_pitched)
+        return ratio(self.pitches_thrown, self.innings_pitched)
 
 
 def format_batting_line(line: BattingLine) -> str:

@@ -69,7 +69,7 @@ the end maps the old names to the new.
   jogging speed over 15 frames, the sprint (up to 1.4 times jogging speed) and the
   diving catch's window and Sliding Catch bonus. 99.4% of 15,700 recorded fly-ball
   catches fall inside it.
-- **Running the bases**: `pyrio.sim.simulate_run(character, start_base=, end_base=)`
+- **Running the bases**: `pyrio.sim.simulate_run(character, initial_base=, result_base=)`
   runs a batter or runner frame by frame from contact, with the batter's delay, a
   runner's lead, acceleration, mashing, stamina, rounding (or stopping on first and
   sliding into the rest) and the overrun past a base, giving the frame they reach each
@@ -117,7 +117,7 @@ the end maps the old names to the new.
   `simulate_contacts(game, mods=...)`: `REMOVE_SLICE` and `FIX_NON_RED_TOAD_REACH`
   change the hit, and `HAZARDS_OFF` plays the bare park (a stat file can't say a game
   had no hazards; `play_out(hazards=...)` still decides outright). Star swings resolve from
-  `stars` and `is_captain`, as in the game. `find_highlights` and `best` for game
+  `stars` and `is_captain`, as in the game. `find_highlights` for game
   summaries.
 - **Per-character batting-box and fielding data** on `CharacterAttributes`, read from
   the game through the decomp by `tools/extract_character_tables.py`: the box ranges,
