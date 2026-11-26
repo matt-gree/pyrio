@@ -344,6 +344,10 @@ _LEGACY_FIELDS: dict[str, str] = {
     # Written by 0.1.6 through 1.9.1; renamed in 1.9.2 (ProjectRio ee757054f4), when the
     # count changed from pitches to batters.
     "Pitches Per Position": "replaced by 'Batters Per Position' in 1.9.2",
+    # Roster keys up to 1.9.4, renamed "Away/Home Roster N" in 1.9.5 (ProjectRio
+    # a22c97dea9). The decoder looks for them to spot early 1.9.5 test builds.
+    "Team 0 Roster 0": "replaced by 'Away/Home Roster 0' in 1.9.5",
+    "Team 1 Roster 0": "replaced by 'Away/Home Roster 0' in 1.9.5",
 }
 
 

@@ -742,6 +742,34 @@ def test_bunts_before_2_3_0_are_read_from_the_contact():
     assert not any(e.pitch and e.pitch.swing is SwingType.NONE and e.contact for e in game.events)
 
 
+@pytest.mark.parametrize(
+    ("version", "swing"), [("1.9.4", SwingType.NONE), ("1.9.5", SwingType.BUNT)]
+)
+def test_1_9_2_to_1_9_4_dont_say_which_swing_met_the_ball(version: str, swing: SwingType):
+    # From 1.9.2 to 1.9.4 the tracker logged a contact's swing from the miss
+    # flag, so a contact with no swing may have been any swing, not a bunt.
+    data = load(V1_9_3)
+    data["Version"] = version
+    if version == "1.9.5":  # with the roster keys 1.9.5 renamed
+        stats = data["Character Game Stats"]
+        for key in list(stats):
+            team, index = key.split(" ")[1], key.split(" ")[-1]
+            stats[f"{'Away' if team == '0' else 'Home'} Roster {index}"] = stats.pop(key)
+    event = next(e for e in data["Events"] if "Contact" in e.get("Pitch", {}))
+    event["Pitch"]["Type of Swing"] = 0
+    game = read_game(data)
+    played = next(e for e in game.events if e.number == event["Event Num"])
+    assert played.pitch is not None
+    assert played.pitch.swing is swing
+
+
+def test_an_early_1_9_5_build_with_the_old_roster_keys_is_read_as_1_9_4():
+    game = read_game(V1_9_5_OLD_LAYOUT)
+    contacts = [e.pitch.swing for e in game.events if e.pitch and e.contact]
+    assert SwingType.NONE in contacts
+    assert SwingType.BUNT not in contacts
+
+
 def test_a_2_3_0_file_keeps_its_swing_none():
     data = load(STAT_FILES / "2.3.0/synthetic.SpiceOrange-Vs-MattGree.json")
     event = next(e for e in data["Events"] if "Contact" in e.get("Pitch", {}))

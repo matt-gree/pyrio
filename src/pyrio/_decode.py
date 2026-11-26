@@ -119,6 +119,14 @@ _CONTACT_RESULTS_FIXED = Version(2, 3, 0)
 # pitch with no swing that was hit can only have been bunted. A missed bunt
 # still can't be told from a take.
 _BUNT_SWING_RECORDED = Version(2, 3, 0)
+# (c) From 1.9.2 to 1.9.4 a swing that met the ball was often logged with no
+# swing type too: the tracker took it from the game's miss flag, which a
+# contact leaves at 0 (ProjectRio 63a82055b1, fixed at 1.9.5 by 0856704ce1).
+# There a contact with no swing may be any swing, so it stays SwingType.NONE.
+# Test builds labelled 1.9.5 that still wrote the 1.9.4 roster keys predate
+# the key rename (2023-02); the swing fix came two months before it, so some
+# of them have it and some don't, and they're read as 1.9.4.
+_CONTACT_SWING_LOGGED = Version(1, 9, 2), Version(1, 9, 5)
 
 _SWAPPED_CAUGHT_LABELS = {
     "caught": AtBatResult.CAUGHT_LINE_DRIVE,
@@ -157,6 +165,7 @@ class _Rules:
     caught_labels_swapped: bool
     legacy_contact_results: bool
     bunts_unrecorded: bool
+    contact_swing_unrecorded: bool
 
 
 def _rules(version: Version) -> _Rules:
@@ -172,6 +181,7 @@ def _rules(version: Version) -> _Rules:
         caught_labels_swapped=version < _CAUGHT_LABELS_FIXED,
         legacy_contact_results=version < _CONTACT_RESULTS_FIXED,
         bunts_unrecorded=version < _BUNT_SWING_RECORDED,
+        contact_swing_unrecorded=_CONTACT_SWING_LOGGED[0] <= version < _CONTACT_SWING_LOGGED[1],
     )
 
 
@@ -363,6 +373,8 @@ def read_game(source: Source) -> Game:
     data, path = _load(source)
     root = _Node(data, "", path)
     rules = _rules(_file_version(root))
+    if rules.version == _CONTACT_SWING_LOGGED[1] and _has_team_number_roster_keys(root):
+        rules = replace(rules, contact_swing_unrecorded=True)
     away_roster, home_roster = _rosters(root, rules)
     away = Team(
         side=Side.AWAY,
@@ -483,6 +495,12 @@ def _quitter(root: _Node) -> tuple[Side | None, bool]:
             return None, True
         case _:
             raise root.error(f"unknown quitter {value!r}", "Quitter Team")
+
+
+def _has_team_number_roster_keys(root: _Node) -> bool:
+    """Whether the file names rosters "Team 0 Roster 0", the layout up to 1.9.4."""
+    stats = root.node("Character Game Stats")
+    return stats.has("Team 0 Roster 0") or stats.has("Team 1 Roster 0")
 
 
 def _rosters(root: _Node, rules: _Rules) -> tuple[tuple[RosterSpot, ...], tuple[RosterSpot, ...]]:
@@ -624,7 +642,11 @@ def _event(
         contact_node = pitch_node.maybe_node("Contact")
         if contact_node is not None:
             contact = _contact(contact_node)
-            if rules.bunts_unrecorded and pitch.swing is SwingType.NONE:
+            if (
+                rules.bunts_unrecorded
+                and not rules.contact_swing_unrecorded
+                and pitch.swing is SwingType.NONE
+            ):
                 pitch = replace(pitch, swing=SwingType.BUNT)
             if rules.legacy_contact_results:
                 contact = _correct_legacy_contact(
@@ -1004,7 +1026,11 @@ def _hud_play(
         contact_node = pitch_node.maybe_node("Contact")
         if contact_node is not None:
             contact = _contact(contact_node)
-            if rules.bunts_unrecorded and pitch.swing is SwingType.NONE:
+            if (
+                rules.bunts_unrecorded
+                and not rules.contact_swing_unrecorded
+                and pitch.swing is SwingType.NONE
+            ):
                 pitch = replace(pitch, swing=SwingType.BUNT)
             if rules.legacy_contact_results:
                 contact = _correct_legacy_contact(
