@@ -199,7 +199,11 @@ SIM = [
     "LiveBallOutcome",
     "LiveBallResult",
     "Mod",
+    "RunResult",
+    "RunnerAction",
+    "RunnerFrame",
     "TAG_TO_MOD",
+    "batter_location",
     "best",
     "find_highlights",
     "format_highlights",
@@ -209,6 +213,7 @@ SIM = [
     "simulate_all_zones",
     "simulate_contacts",
     "simulate_hit",
+    "simulate_run",
     "simulate_trajectory",
 ]
 

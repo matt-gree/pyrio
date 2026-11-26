@@ -69,6 +69,13 @@ the end maps the old names to the new.
   jogging speed over 15 frames, the sprint (up to 1.4 times jogging speed) and the
   diving catch's window and Sliding Catch bonus. 99.4% of 15,700 recorded fly-ball
   catches fall inside it.
+- **Running the bases**: `pyrio.sim.simulate_run(character, start_base=, end_base=)`
+  runs a batter or runner frame by frame from contact, with the batter's delay, a
+  runner's lead, acceleration, mashing, stamina, rounding (or stopping on first and
+  sliding into the rest) and the overrun past a base, giving the frame they reach each
+  base and their path; `batter_location()` places the batter from their box. A port of
+  the frontend's running model (Nicholas Lannutti's, from the decomp), matching it
+  exactly on 1,056 runs; `tools/check_running_parity.py` re-checks it.
 - **`LandingRow.hit_inputs(stadium=...)`** rebuilds a Rio web batted ball for
   `simulate_hit`, and `LandingRow` uses the model's names and shapes (`rng`,
   `velocity`, `location`, `landing_location`, `input_direction`, `hang_frames`).

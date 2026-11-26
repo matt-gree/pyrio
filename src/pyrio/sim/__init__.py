@@ -1,9 +1,10 @@
-"""Hit simulation: from a swing to the ball's contact, flight and play-out.
+"""Simulation: a swing's contact, flight and play-out, and runners on the bases.
 
 :func:`simulate_hit` reproduces the game's contact stage exactly from the
 three RNG values a stat file records, then flies the ball to where it first
 comes down. :func:`play_out` carries a flight on from there, against the
-stadium's collision mesh and hazards, until the play is settled::
+stadium's collision mesh and hazards, until the play is settled.
+:func:`simulate_run` runs a runner from base to base, frame by frame::
 
     >>> from pyrio import Character, Hand, PitchType, SwingType
     >>> from pyrio.sim import HitInputs, simulate_hit
@@ -44,6 +45,7 @@ from ._live_ball import (
     play_out,
     play_out_flight,
 )
+from ._running import RunnerAction, RunnerFrame, RunResult, batter_location, simulate_run
 
 __all__ = [
     "TAG_TO_MOD",
@@ -57,6 +59,10 @@ __all__ = [
     "LiveBallOutcome",
     "LiveBallResult",
     "Mod",
+    "RunResult",
+    "RunnerAction",
+    "RunnerFrame",
+    "batter_location",
     "best",
     "find_highlights",
     "format_highlights",
@@ -66,5 +72,6 @@ __all__ = [
     "simulate_all_zones",
     "simulate_contacts",
     "simulate_hit",
+    "simulate_run",
     "simulate_trajectory",
 ]
