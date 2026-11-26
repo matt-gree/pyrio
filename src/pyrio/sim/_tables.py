@@ -392,6 +392,34 @@ CAPTAIN_STAR_VERTICAL_ANGLES: Final[tuple[tuple[tuple[int, ...], ...], ...]] = (
     ((350, 600), (350, 600), (350, 600), (350, 600), (350, 600)),
 )
 
+# Bunts. The game keeps each angle range twice and interpolates between the
+# copies by the batter's slap contact size, but every pair is equal, so one
+# copy is the range at any contact size.
+# buntHorizontalAngles0OnRight, [contact] -> (low, high), before the side is chosen.
+BUNT_HORIZONTAL_ANGLES: Final[tuple[tuple[int, int], ...]] = (
+    (256, 960),
+    (480, 640),
+    (512, 576),
+    (480, 640),
+    (256, 960),
+)
+# buntVerticalAngles, [contact][StaticRandomInt1 odd] -> (low, high).
+BUNT_VERTICAL_ANGLES: Final[tuple[tuple[tuple[int, int], tuple[int, int]], ...]] = (
+    ((-256, 960), (-256, 960)),
+    ((-96, 64), (-96, 96)),
+    ((-64, 32), (-64, 32)),
+    ((-96, 64), (-96, 96)),
+    ((-256, 960), (-256, 960)),
+)
+# buntPower, [contact] -> (low, high).
+BUNT_POWER: Final[tuple[tuple[int, int], ...]] = (
+    (20, 50),
+    (45, 60),
+    (30, 45),
+    (45, 60),
+    (20, 50),
+)
+
 # Exit speed range and added gravity, [swing][contact] -> (low, high, gravity
 # in 1e-5 units). Rows 4 and 5 are unused by slap, charge and star. BallHitArray
 EXIT_VELOCITIES: Final[tuple[tuple[tuple[int, ...], ...], ...]] = (

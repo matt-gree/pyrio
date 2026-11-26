@@ -20,7 +20,7 @@ from .._codes import (
     SwingType,
 )
 from ..geometry import clears_wall
-from ._hit import HitInputs, Mod, simulate_hit
+from ._hit import SIMULATED_SWINGS, HitInputs, Mod, simulate_hit
 from ._live_ball import LiveBallOutcome, hazard_seed, play_out
 
 if TYPE_CHECKING:
@@ -40,8 +40,6 @@ __all__ = [
     "format_highlights",
     "simulate_contacts",
 ]
-
-_SIMULATED_SWINGS = (SwingType.SLAP, SwingType.CHARGE, SwingType.STAR)
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -205,14 +203,14 @@ _DEAD_BALLS = frozenset(
 def simulate_contacts(
     game: Game, *, mods: frozenset[Mod] = frozenset()
 ) -> tuple[ContactRecord, ...]:
-    """Every slap, charge and star swing the batter connected on, simulated again.
+    """Every ball the batter put in play, simulated again: swings and bunts.
 
     Each contact is rebuilt with :meth:`HitInputs.from_event` from the RNG
     values the stat file records, at the game's stadium, in event order.
-    Bunts aren't simulated, and a file from a client too old to record the
-    RNG gives an empty tuple. A contact whose recorded inputs the simulation
-    rejects (the ball outside the bat's reach, a charge pitch with no charge
-    type) is left out rather than failing the game.
+    A file from a client too old to record the RNG gives an empty tuple. A
+    contact whose swing the file didn't record (Rio 1.9.2-1.9.4), or whose
+    recorded inputs the simulation rejects (the ball outside the bat's reach, a
+    charge pitch with no charge type), is left out rather than failing the game.
 
     ``mods`` are the gecko codes the game was played with, which a stat file
     doesn't record: build them from the game's Rio web tags with ``TAG_TO_MOD``.
@@ -224,7 +222,7 @@ def simulate_contacts(
         pitch, contact = event.pitch, event.contact
         if pitch is None or contact is None or contact.rng is None:
             continue
-        if pitch.swing not in _SIMULATED_SWINGS:
+        if pitch.swing not in SIMULATED_SWINGS:
             continue
         try:
             hit = simulate_hit(HitInputs.from_event(event, stadium=game.stadium, mods=mods))

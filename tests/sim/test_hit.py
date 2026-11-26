@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import pathlib
 from dataclasses import replace
 
 import pytest
 
+import pyrio
 from pyrio import (
     CaptainStar,
     Character,
@@ -41,6 +43,12 @@ BASE = HitInputs(
     charge_power_down=1.0,
 )
 STAR = replace(BASE, swing=SwingType.STAR, charge_power_up=0.0, charge_power_down=0.0)
+BUNT = replace(BASE, swing=SwingType.BUNT, charge_power_up=0.0, charge_power_down=0.0)
+GAME_FILE = (
+    pathlib.Path(__file__).parent.parent
+    / "fixtures"
+    / "20260618T191655_SpiceOrange-Vs-MattGree_3896251267.json"
+)
 
 
 def same_hit(a: HitResult, b: HitResult) -> bool:
@@ -100,10 +108,9 @@ def test_overrides_force_their_decision():
 # --- validation ------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("swing", [SwingType.BUNT, SwingType.NONE])
-def test_only_slap_charge_and_star_swings(swing: SwingType):
-    with pytest.raises(ValueError, match="only slap, charge, star"):
-        replace(BASE, swing=swing)
+def test_a_swing_must_be_one_the_game_plays():
+    with pytest.raises(ValueError, match="only slap, charge, star, bunt"):
+        replace(BASE, swing=SwingType.NONE)
 
 
 def test_a_charge_pitch_needs_its_charge_type():
@@ -182,6 +189,67 @@ def test_captain_star_effects():
     wario = simulate_hit(replace(STAR, batter=Character.WARIO, stars=1, is_captain=True))
     assert wario.garlic_trajectory
     assert wario.garlic_trajectory[0] in wario.trajectory
+
+
+# --- bunts: calculateBuntHorizontalAngle and friends ------------------------------
+
+
+def test_a_recorded_bunt_is_played_again_exactly():
+    game = pyrio.read_game(GAME_FILE)
+    event = next(e for e in game.events if e.pitch and e.pitch.swing is SwingType.BUNT)
+    assert event.contact is not None
+    hit = simulate_hit(HitInputs.from_event(event, stadium=game.stadium))
+    recorded = event.contact
+    assert hit.contact_type is recorded.type
+    assert hit.horizontal_angle == recorded.horizontal_angle
+    assert hit.vertical_angle == recorded.vertical_angle
+    assert hit.power == recorded.power
+
+
+def test_a_bunt_has_its_own_power_and_no_curve_or_added_gravity():
+    hit = simulate_hit(BUNT)
+    assert hit.contact_type is ContactType.PERFECT
+    assert 30 <= hit.power < 45
+    assert hit.acceleration == (0.0, 0.0, 0.0)
+    assert hit.star_swing is None
+    assert hit.ball_energy == 0.0
+
+
+def test_with_the_stick_centred_the_rng_picks_the_bunts_side():
+    even = simulate_hit(replace(BUNT, rng=(7769, 5358, 1828)))
+    odd = simulate_hit(replace(BUNT, rng=(7769, 5359, 1828)))
+    assert even.horizontal_angle + odd.horizontal_angle == 0x800
+
+
+@pytest.mark.parametrize("hand", [Hand.RIGHT, Hand.LEFT])
+def test_the_stick_picks_the_bunts_side(hand: Hand):
+    # Left pulls a right-handed batter's bunt and pushes a left-handed one's, so
+    # either way it goes to the same side of the field, whatever the RNG.
+    for rng in ((7769, 5358, 1828), (7769, 5359, 1828)):
+        left = simulate_hit(
+            replace(BUNT, batting_hand=hand, input_direction=InputDirection.LEFT, rng=rng)
+        )
+        right = simulate_hit(
+            replace(BUNT, batting_hand=hand, input_direction=InputDirection.RIGHT, rng=rng)
+        )
+        assert left.horizontal_angle + right.horizontal_angle == 0x800
+        assert left.horizontal_angle > 0x400
+
+
+def test_superstar_bunting_is_not_capped():
+    goomba = Character.GOOMBA.attributes
+    assert goomba.bunt_contact_size_multiplier == 80
+    assert goomba.with_superstar().bunt_contact_size_multiplier == 130
+    assert Character.WALUIGI.attributes.with_superstar().slap_contact_size_multiplier == 100
+
+
+def test_a_contact_whose_swing_went_unrecorded_is_not_simulated():
+    game = pyrio.read_game(GAME_FILE)
+    event = next(e for e in game.events if e.pitch and e.contact)
+    assert event.pitch is not None
+    unrecorded = replace(event, pitch=replace(event.pitch, swing=SwingType.NONE))
+    with pytest.raises(ValueError, match="didn't record the swing"):
+        HitInputs.from_event(unrecorded, stadium=game.stadium)
 
 
 # --- mods ------------------------------------------------------------------------

@@ -55,6 +55,7 @@ __all__ = [
 
 
 _NO_STICK: Final = InputDirection(0)
+SIMULATED_SWINGS: Final = (SwingType.SLAP, SwingType.CHARGE, SwingType.STAR, SwingType.BUNT)
 
 
 class Mod(Enum):
@@ -159,7 +160,7 @@ class HitInputs:
     """What a charge pitch was: ``SLIDER``, ``PERFECT`` or ``CAPTAIN_STAR``. None otherwise."""
 
     swing: SwingType
-    """``SLAP``, ``CHARGE`` or ``STAR``. Bunts aren't simulated."""
+    """``SLAP``, ``CHARGE``, ``STAR`` or ``BUNT``."""
 
     batting_hand: Hand
     """The batter's hand."""
@@ -222,7 +223,8 @@ class HitInputs:
         ``stadium`` is the game's (``game.stadium``); ``mods`` are the gecko mods
         the game was played with, which a stat file doesn't record (see
         ``TAG_TO_MOD``). Raises ``ValueError`` for an event with no contact, a
-        bunt, or a file too old to record the swing's RNG.
+        swing the file didn't record (a contact with ``SwingType.NONE``, from
+        Rio 1.9.2-1.9.4), or a file too old to record the swing's RNG.
 
         A star swing is rebuilt from what the player did: five-star moonshots
         are fully charged, and any other star swing held no charge (the full
@@ -238,6 +240,8 @@ class HitInputs:
             raise ValueError(f"event {event.number} has no contact to simulate")
         if contact.rng is None or contact.location is None or pitch.bat_location is None:
             raise ValueError(f"event {event.number} is from a client too old to simulate")
+        if pitch.swing is SwingType.NONE:
+            raise ValueError(f"event {event.number}'s file didn't record the swing")
         batter, pitcher = event.batter_spot, event.pitcher_spot
         state = event.state
         stars = state.stars(state.batting_side)
@@ -286,8 +290,10 @@ class HitInputs:
         )
 
     def __post_init__(self) -> None:
-        if self.swing not in (SwingType.SLAP, SwingType.CHARGE, SwingType.STAR):
-            raise ValueError(f"can't simulate a {self.swing.label} swing: only slap, charge, star")
+        if self.swing not in SIMULATED_SWINGS:
+            raise ValueError(
+                f"can't simulate a {self.swing.label} swing: only slap, charge, star, bunt"
+            )
         charged = self.charge_type not in (None, ChargeType.NONE)
         if (self.pitch_type is PitchType.CHARGE) != charged:
             raise ValueError(
@@ -434,6 +440,12 @@ def _to_int32(x: int) -> int:
     return x - 0x100000000 if x & 0x80000000 else x
 
 
+def _remainder(a: int, n: int) -> int:
+    """C's ``a % n``: the sign follows ``a``, unlike Python's."""
+    r = abs(a) % abs(n)
+    return -r if a < 0 else r
+
+
 def _wrap_angle(a: int) -> int:
     return a % 0x1000
 
@@ -513,7 +525,7 @@ class _Simulation:
         self.charge_power = boosted.charge_hit_power
         self.slap_contact_size = boosted.slap_contact_size_multiplier
         self.charge_contact_size = boosted.charge_contact_size_multiplier
-        self.bunting = boosted.bunting
+        self.bunt_contact_size = boosted.bunt_contact_size_multiplier
         self.horizontal_trajectory = batter.horizontal_hit_trajectory.id
         self.vertical_trajectory = batter.vertical_hit_trajectory.id
         self.has_super_curve = batter.has_super_curve
@@ -537,7 +549,7 @@ class _Simulation:
         self.stick_down = InputDirection.DOWN in inputs.input_direction
         self.stick_left = InputDirection.LEFT in inputs.input_direction
         self.stick_right = InputDirection.RIGHT in inputs.input_direction
-        self.is_bunting = False
+        self.is_bunting = inputs.swing is SwingType.BUNT
 
         captain_star = batter.captain_star
         self.captain_star = 0 if captain_star is None else captain_star.id
@@ -545,6 +557,8 @@ class _Simulation:
         self.charge_up = inputs.charge_power_up
         self.charge_down = inputs.charge_power_down
         self.swing = _CHARGE if inputs.swing is SwingType.CHARGE else _SLAP
+        if self.is_bunting:
+            self.swing = _BUNT
         self.star_swing = 0  # the non-captain star swing in play (nonCaptainStarSwingActivated)
         self.captain_star_active = 0  # captainStarSwingActivated
         self.star_swing_connected = False  # didNonCaptainStarSwingConnect
@@ -672,7 +686,7 @@ class _Simulation:
             else:
                 contact_size = self.charge_contact_size
         else:
-            contact_size = self.bunting
+            contact_size = self.bunt_contact_size
 
         offset = self.ball_x - self.batter_x
         if not self.is_right_handed:
@@ -746,6 +760,9 @@ class _Simulation:
                 self.hit_type += _SOUR_CHANGE_UP_SLAP if swing == _SLAP else _SOUR_CHANGE_UP_CHARGE
 
     def _horizontal_angle(self) -> None:
+        if self.is_bunting:
+            self._bunt_horizontal_angle()
+            return
         is_charge = 0 if self.swing == _SLAP else 1
         stick = _NO_PUSH_PULL
         if not self.stick_right:
@@ -772,13 +789,40 @@ class _Simulation:
         if self.overrides.horizontal_angle is not None:
             self.horizontal_angle = self.overrides.horizontal_angle
 
+    def _bunt_horizontal_angle(self) -> None:
+        """``calculateBuntHorizontalAngle``: a range by contact, then which side.
+
+        A sour contact goes to its own side. Otherwise the stick picks the
+        side, or, held neither way, the second RNG value's parity does.
+        """
+        low, high = tables.BUNT_HORIZONTAL_ANGLES[self.contact_type]
+        angle = low + _remainder(self.state1, high - low)
+        if self.contact_type == _SOUR_LEFT:
+            pull = True
+        elif self.contact_type == _SOUR_RIGHT:
+            pull = False
+        elif self.stick_left:
+            pull = self.is_right_handed
+        elif self.stick_right:
+            pull = not self.is_right_handed
+        else:
+            pull = self.state2 % 2 != 0
+        if pull == self.is_right_handed:
+            angle = (0x800 - angle) if angle <= 0x800 else (0x1800 - angle)
+        self.horizontal_angle = _wrap_angle(angle)
+        if self.overrides.horizontal_angle is not None:
+            self.horizontal_angle = self.overrides.horizontal_angle
+
     def _vertical_angle(self) -> None:
         forced_zone = 0
         up_down = 0
         is_charge = 0 if self.swing == _SLAP else 1
         lower = higher = 0
 
-        if self.captain_star_active == 0:
+        if self.is_bunting:
+            # calculateBuntVerticalAngle: the row by the first RNG value's parity.
+            lower, higher = tables.BUNT_VERTICAL_ANGLES[self.contact_type][self.state1 % 2]
+        elif self.captain_star_active == 0:
             if self.is_moonshot:
                 # A connected moonshot takes the charge column's top zone.
                 lower, higher = tables.VERTICAL_ZONE_ANGLES[1][self.contact_type][2]
@@ -869,6 +913,14 @@ class _Simulation:
             self.horizontal_angle = _wrap_angle(self.horizontal_angle + 0x800)
 
     def _power(self) -> None:
+        if self.is_bunting:
+            # calculateBuntHorizontalPower: a range by contact, nothing else.
+            # A bunt adds no gravity: the ball's per-pitch reset left it at 0.
+            low, high = tables.BUNT_POWER[self.contact_type]
+            self.power = low + _remainder(self.state1, high - low)
+            if self.overrides.power is not None:
+                self.power = _truncate(self.overrides.power)
+            return
         contact = self.contact_type
         charged = self.charge_up
         exit_velocity = tables.EXIT_VELOCITIES[self.swing][contact]
@@ -1017,6 +1069,7 @@ class _Simulation:
         captain = self.captain_star_active
         if (
             captain == 0
+            and not self.is_bunting
             and self.contact_type not in (_SOUR_LEFT, _SOUR_RIGHT)
             and self.charge_up >= 1.0
         ):

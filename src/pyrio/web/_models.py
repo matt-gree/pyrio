@@ -531,10 +531,17 @@ class LandingRow:
 
         Rio web serves neither the stadium, whether superstars were on, nor the
         gecko mods, so they're the caller's (from the game or its tag set).
-        Raises ``ValueError`` for a bunt, and for a star swing: the row has
-        neither the team's stars nor the moonshot flag that decide which swing
-        the game gave (use ``HitInputs.from_event`` on the stat file instead).
+        Raises ``ValueError`` for a star swing: the row has neither the team's
+        stars nor the moonshot flag that decide which swing the game gave. Also
+        for a row with no swing type: before Rio 2.3.0 that was a bunt, but from
+        1.9.2 to 1.9.4 it was often any swing, and a row doesn't say which
+        client wrote it. Use ``HitInputs.from_event`` on the stat file for both.
         """
+        if self.swing is SwingType.NONE:
+            raise ValueError(
+                f"event {self.event_number} of game {self.game_id} has no swing type, which a "
+                "landing row can't resolve: a bunt before Rio 2.3.0, or a 1.9.2-1.9.4 swing"
+            )
         if self.swing is SwingType.STAR:
             raise ValueError(
                 f"event {self.event_number} of game {self.game_id} is a star swing, which a "

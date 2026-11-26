@@ -419,7 +419,7 @@ class CharacterAttributes:
     batting_stance: Hand
     slap_hit_power: int
     charge_hit_power: int
-    bunting: int
+    bunt_contact_size_multiplier: int
     horizontal_hit_trajectory: HorizontalHitTrajectory
     vertical_hit_trajectory: VerticalHitTrajectory
     slap_contact_size_multiplier: int
@@ -503,7 +503,9 @@ _SUPERSTAR_BOOSTS: dict[str, tuple[int, int | None]] = {
     "speed": (50, None),
     "slap_hit_power": (50, 100),
     "charge_hit_power": (50, 100),
-    "bunting": (50, 100),
+    # Uncapped: a bunt reads the raw stat, where slaps and charges read it capped
+    # at 100 (batter.c, contactSize_capped against buntingContactSize).
+    "bunt_contact_size_multiplier": (50, None),
     "slap_contact_size_multiplier": (50, 100),
     "charge_contact_size_multiplier": (50, 100),
 }
@@ -563,7 +565,7 @@ def _from_row(row: dict[str, str]) -> CharacterAttributes:
         batting_stance=Hand(number("Batting Stance")),
         slap_hit_power=number("Slap Hit Power"),
         charge_hit_power=number("Charge Hit Power"),
-        bunting=number("Bunting"),
+        bunt_contact_size_multiplier=number("Bunt Contact Size Multiplier"),
         horizontal_hit_trajectory=HorizontalHitTrajectory(number("Horizontal Hit Trajectory")),
         vertical_hit_trajectory=VerticalHitTrajectory(number("Vertical Hit Trajectory")),
         slap_contact_size_multiplier=number("Slap Contact Size Multiplier"),

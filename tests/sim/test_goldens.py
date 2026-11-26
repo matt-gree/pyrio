@@ -4,7 +4,9 @@
 modules and held to them number for number until they were deleted. This file
 keeps that hold: ``tests/fixtures/sim_goldens.json.gz`` records the results
 over the same spread of inputs the parity tests used, written while the port
-and the originals still agreed exactly.
+and the originals still agreed exactly. Bunts came later, from the 0.x bunt
+simulation (pre-1.0 PR 10): their section was written once the port matched
+it on every one of several thousand random bunts.
 
 A change that moves any of these numbers changes the simulation. If that's
 intended, regenerate the record and review the diff::
@@ -22,6 +24,7 @@ import json
 import math
 import pathlib
 import random
+from dataclasses import replace
 from typing import Any
 
 import pytest
@@ -105,6 +108,11 @@ def random_inputs(rng: random.Random) -> HitInputs:
         rng=(rng.randrange(32768), rng.randrange(32768), rng.randrange(32768)),
         overrides=overrides,
     )
+
+
+def bunt_inputs(rng: random.Random) -> HitInputs:
+    inputs = random_inputs(rng)
+    return replace(inputs, swing=SwingType.BUNT, charge_power_up=0.0, charge_power_down=0.0)
 
 
 def star_inputs() -> list[HitInputs]:
@@ -211,6 +219,13 @@ def compute() -> dict[str, Any]:
             zones.append([hit_record(r) for r in simulate_all_zones(random_inputs(rng))])
         except ValueError:
             continue
+    rng = random.Random(13)
+    bunts: list[dict[str, Any] | None] = []
+    for _ in range(300):
+        try:
+            bunts.append(hit_record(simulate_hit(bunt_inputs(rng))))
+        except ValueError:
+            bunts.append(None)
     live: list[dict[str, Any]] = []
     for stadium in Stadium:
         rng = random.Random(stadium.id)
@@ -225,6 +240,7 @@ def compute() -> dict[str, Any]:
     return {
         "hits": hits,
         "stars": [hit_record(simulate_hit(i)) for i in star_inputs()],
+        "bunts": bunts,
         "trajectories": trajectories,
         "zones": zones,
         "live_ball": live,
@@ -260,7 +276,9 @@ def results() -> tuple[dict[str, Any], dict[str, Any]]:
     return json.loads(json.dumps(compute())), recorded
 
 
-@pytest.mark.parametrize("section", ["hits", "stars", "trajectories", "zones", "live_ball"])
+@pytest.mark.parametrize(
+    "section", ["hits", "stars", "bunts", "trajectories", "zones", "live_ball"]
+)
 def test_matches_the_record(section: str, results: tuple[dict[str, Any], dict[str, Any]]):
     new, recorded = results
     assert len(recorded[section]) > 0
@@ -270,6 +288,7 @@ def test_matches_the_record(section: str, results: tuple[dict[str, Any], dict[st
 def test_the_record_is_not_vacuous(results: tuple[dict[str, Any], dict[str, Any]]):
     _, recorded = results
     assert sum(h is not None for h in recorded["hits"]) > 600
+    assert sum(b is not None for b in recorded["bunts"]) > 150
     kinds = {e[1] for r in recorded["live_ball"] for e in r["events"]}
     assert len(kinds) >= 6
 

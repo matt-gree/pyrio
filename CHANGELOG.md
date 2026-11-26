@@ -19,7 +19,9 @@ the end maps the old names to the new.
   1.9.2 home/away flip (as `Side`, never a team number), the 1.9.2–1.9.4 crossed
   captain flags, hex and decimal game ids, the pre-2.3.0 swapped result labels and
   contact results, bunts logged with no swing before 2.3.0 (read as `SwingType.BUNT`
-  when the ball was hit), renamed keys and comma-grouped numbers. Pre-0.1.9 files read
+  when the ball was hit, except from 1.9.2 to 1.9.4, which logged many swings that
+  way, so a contact's missing swing stays `SwingType.NONE`), renamed keys and
+  comma-grouped numbers. Pre-0.1.9 files read
   too: a bobbling fielder's uninitialised position is `None`, a pitch with no
   recorded swing is `SwingType.NONE`, 0.1.7's raw star-pitch byte is read as a
   flag, and the trailing commas in 0.1.7–0.1.8 crash files are repaired.
@@ -117,7 +119,9 @@ the end maps the old names to the new.
   `simulate_contacts(game, mods=...)`: `REMOVE_SLICE` and `FIX_NON_RED_TOAD_REACH`
   change the hit, and `HAZARDS_OFF` plays the bare park (a stat file can't say a game
   had no hazards; `play_out(hazards=...)` still decides outright). Star swings resolve from
-  `stars` and `is_captain`, as in the game. `find_highlights` for game
+  `stars` and `is_captain`, as in the game. Bunts are simulated too, with the game's bunt
+  contact size (a superstar's isn't capped at 100) and its own angle and power tables,
+  and reproduce 749 of 752 recorded bunts exactly. `find_highlights` for game
   summaries.
 - **Per-character batting-box and fielding data** on `CharacterAttributes`, read from
   the game through the decomp by `tools/extract_character_tables.py`: the box ranges,

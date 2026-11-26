@@ -390,6 +390,11 @@ def test_a_landing_row_rebuilds_its_swing(mock, rio, contract):
     star = dataclasses.replace(homer, swing=SwingType.STAR)
     with pytest.raises(ValueError, match="star swing"):
         star.hit_inputs(stadium=Stadium.PEACH_GARDEN)
+    bunt = dataclasses.replace(homer, swing=SwingType.BUNT)
+    simulate_hit(bunt.hit_inputs(stadium=Stadium.PEACH_GARDEN))
+    unrecorded = dataclasses.replace(homer, swing=SwingType.NONE)
+    with pytest.raises(ValueError, match="no swing type"):
+        unrecorded.hit_inputs(stadium=Stadium.PEACH_GARDEN)
 
 
 # --- live games and reference data ----------------------------------------------

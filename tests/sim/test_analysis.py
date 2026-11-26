@@ -127,10 +127,10 @@ def test_format_highlights():
     assert format_highlights(find_highlights([])) == []
 
 
-def test_simulate_contacts_covers_every_swing_that_connected():
+def test_simulate_contacts_covers_every_ball_in_play():
     game = pyrio.read_game(GAME_FILE)
     records = simulate_contacts(game)
-    swings = (SwingType.SLAP, SwingType.CHARGE, SwingType.STAR)
+    swings = (SwingType.SLAP, SwingType.CHARGE, SwingType.STAR, SwingType.BUNT)
     expected = [
         e
         for e in game.events
