@@ -41,6 +41,7 @@ from ._codes import (
     SwingType,
 )
 from ._stats import BattingLine, PitchingLine
+from ._team_names import team_name
 
 if TYPE_CHECKING:
     from datetime import datetime
@@ -177,6 +178,14 @@ class Team:
             if spot.is_captain:
                 return spot
         raise ValueError(f"the {self.side} team has no captain")
+
+    @property
+    def name(self) -> TeamName | None:
+        """The team name the game gives this roster and captain (``pyrio.team_name``).
+
+        ``None`` only for a captain who can't lead a team, as in a corrupt file.
+        """
+        return team_name([spot.character for spot in self.roster], self.captain.character)
 
     @property
     def batting(self) -> BattingLine:
@@ -422,6 +431,22 @@ class Event:
         return tuple(r.spot for r in safe[: self.runs])
 
     @property
+    def outs_after(self) -> int | None:
+        """Outs in the half inning once the play was over (3 if it ended the half).
+
+        ``None`` where ``outs_during_play`` is: files before Rio 1.9.2, and a
+        game that ended mid-play.
+        """
+        if self.outs_during_play is None:
+            return None
+        return self.state.outs + self.outs_during_play
+
+    def score_after(self, side: Side) -> int:
+        """One side's runs once the play was over."""
+        runs = self.runs if side is self.state.batting_side else 0
+        return self.state.score(side) + runs
+
+    @property
     def is_first_pitch(self) -> bool:
         """The first pitch of an at-bat: a pitch on an 0-0 count."""
         return self.pitch is not None and self.state.balls == 0 and self.state.strikes == 0
@@ -482,6 +507,11 @@ class Event:
     def has_wall_jump(self) -> bool:
         """The first fielder to touch the ball wall-jumped for it."""
         return self.fielding is not None and self.fielding.action is FielderAction.WALL_JUMP
+
+    @property
+    def has_sliding_catch(self) -> bool:
+        """The first fielder to touch the ball slid or dove for it."""
+        return self.fielding is not None and self.fielding.action is FielderAction.SLIDING
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -786,6 +816,14 @@ class HUDSnapshot:
     def port(self, side: Side) -> int | None:
         """The controller port one side's player is on, or ``None`` before Rio 2.2.0."""
         return self.away_port if side is Side.AWAY else self.home_port
+
+    def logo(self, side: Side) -> TeamName | None:
+        """The team name one side plays under, as the file reports it (from Rio 2.2.0)."""
+        return self.away_logo if side is Side.AWAY else self.home_logo
+
+    def inning_runs(self, side: Side) -> tuple[int, ...] | None:
+        """One side's runs per inning so far, ``play`` included (from Rio 2.2.0)."""
+        return self.away_inning_runs if side is Side.AWAY else self.home_inning_runs
 
     def fielder(self, position: Position, side: Side | None = None) -> RosterSpot | None:
         """Who is fielding a position, on ``side`` or else the fielding side.

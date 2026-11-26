@@ -344,7 +344,7 @@ def _scoring_play(play: _Obj) -> ScoringPlay:
     return ScoringPlay(
         inning=play.int("inning"),
         batting_side=_half_inning(play, "half_inning"),
-        event_num=play.int("event_num"),
+        event_number=play.int("event_num"),
         runs=play.int("result_rbi"),
         result=play.code("result_of_ab", AtBatResult),
         batter=play.code("batter", Character),
@@ -522,11 +522,11 @@ def event_ids(data: object) -> list[EventRef]:
             refs.append(
                 EventRef(
                     game_id=game_id,
-                    event_num=_int_key(body.endpoint, event_key, events.where),
+                    event_number=_int_key(body.endpoint, event_key, events.where),
                     event_id=events.int(event_key),
                 )
             )
-    refs.sort(key=lambda ref: (ref.game_id, ref.event_num))
+    refs.sort(key=lambda ref: (ref.game_id, ref.event_number))
     return refs
 
 
@@ -568,11 +568,16 @@ def landing_data(data: object) -> list[LandingRow]:
 
 def _landing_row(row: _Obj) -> LandingRow:
     position = row.opt_int("fielder_position")
+    fielder_x = row.opt_float("fielder_x_pos")
+    fielder_location = None
+    if fielder_x is not None:
+        fielder_location = (fielder_x, row.float("fielder_y_pos"), row.float("fielder_z_pos"))
+    jump = row.opt_int("fielder_jump")
     return LandingRow(
         game_id=row.int("game_id"),
-        event_num=row.int("event_num"),
+        event_number=row.int("event_num"),
         result=row.code("final_result", AtBatResult),
-        chem_links=row.int("chem_links_ob"),
+        chemistry_links_on_base=row.int("chem_links_ob"),
         batter=row.code("batter_char_id", Character),
         pitcher=row.code("pitcher_char_id", Character),
         fielder=row.opt_code("fielder_char_id", Character),
@@ -583,7 +588,7 @@ def _landing_row(row: _Obj) -> LandingRow:
         pitch_type=row.code("pitch_type", PitchType),
         charge_type=row.code("charge_pitch_type", ChargeType),
         swing=row.code("type_of_swing", SwingType),
-        contact=row.opt_code("type_of_contact", ContactType),
+        contact_type=row.opt_code("type_of_contact", ContactType),
         power=row.int("ball_power"),
         # Rio web stores the stat file's "Vert Angle" in ball_horiz_angle and
         # "Horiz Angle" in ball_vert_angle (populate_db.py:701-702), so each is
@@ -592,33 +597,32 @@ def _landing_row(row: _Obj) -> LandingRow:
         horizontal_angle=row.int("ball_vert_angle"),
         contact_absolute=row.float("contact_absolute"),
         contact_quality=row.float("contact_quality"),
-        rng1=row.float("rng1"),
-        rng2=row.float("rng2"),
-        rng3=row.float("rng3"),
-        ball_velocity_x=row.float("ball_x_velocity"),
-        ball_velocity_y=row.float("ball_y_velocity"),
-        ball_velocity_z=row.float("ball_z_velocity"),
-        contact_location_x=row.float("ball_x_contact_pos"),
-        contact_location_z=row.float("ball_z_contact_pos"),
-        landing_location_x=row.float("ball_x_landing_pos"),
-        landing_location_y=row.float("ball_y_landing_pos"),
-        landing_location_z=row.float("ball_z_landing_pos"),
+        # Rio web serves the seeds as floats (9747.0); the game draws integers.
+        rng=(int(row.float("rng1")), int(row.float("rng2")), int(row.float("rng3"))),
+        velocity=(
+            row.float("ball_x_velocity"),
+            row.float("ball_y_velocity"),
+            row.float("ball_z_velocity"),
+        ),
+        location=(row.float("ball_x_contact_pos"), row.float("ball_z_contact_pos")),
+        landing_location=(
+            row.float("ball_x_landing_pos"),
+            row.float("ball_y_landing_pos"),
+            row.float("ball_z_landing_pos"),
+        ),
         max_height=row.float("ball_max_height"),
-        hang_time=row.float("ball_hang_time"),
-        stick=_stick(row),
+        hang_frames=int(row.float("ball_hang_time")),
+        input_direction=_stick(row),
         charge_power_up=row.float("charge_power_up"),
         charge_power_down=row.float("charge_power_down"),
         swing_frame=row.int("frame_of_swing"),
-        bat_contact_location_x=row.float("bat_x_contact_pos"),
-        bat_contact_location_z=row.float("bat_z_contact_pos"),
+        bat_location=(row.float("bat_x_contact_pos"), row.float("bat_z_contact_pos")),
         # The game writes 0xFF for "no position".
         fielder_position=None
         if position in (None, 0xFF)
         else row.code("fielder_position", Position),
-        fielder_location_x=row.opt_float("fielder_x_pos"),
-        fielder_location_y=row.opt_float("fielder_y_pos"),
-        fielder_location_z=row.opt_float("fielder_z_pos"),
-        fielder_jump=row.opt_int("fielder_jump"),
+        fielder_location=fielder_location,
+        fielder_jumped=None if jump is None else bool(jump),
         manual_select=row.opt_code("manual_select_state", ManualSelect),
     )
 

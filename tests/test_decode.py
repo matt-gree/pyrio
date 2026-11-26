@@ -603,6 +603,8 @@ def test_hud_encoded_and_decoded_alike():
     assert encoded.away.score == 9
     assert (encoded.away_port, encoded.port(Side.HOME)) == (0, 1)
     assert encoded.home_inning_runs == (0, 0, 0, 2, 5, 0, 3, 2, 0)
+    assert encoded.inning_runs(Side.HOME) == encoded.home_inning_runs
+    assert encoded.logo(Side.AWAY) is encoded.away_logo
     assert encoded.batter_spot is encoded.away.roster[2]
     assert encoded.fielding_positions[encoded.away.roster[0]] is Position.SECOND_BASE
     assert str(encoded.state.bases) == "123"

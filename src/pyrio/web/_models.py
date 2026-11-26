@@ -31,6 +31,7 @@ from .._codes import (
 )
 from .._stats import BattingLine, PitchingLine  # noqa: TC001
 from .._team_names import TeamName  # noqa: TC001
+from ..sim import HitInputs, Mod
 
 __all__ = [
     "Community",
@@ -314,7 +315,7 @@ class ScoringPlay:
 
     inning: int
     batting_side: Side
-    event_num: int
+    event_number: int
     runs: int
     result: AtBatResult
     batter: Character
@@ -473,7 +474,7 @@ class EventRef:
     """Where an event lives: its game, its number in that game and its Rio web id."""
 
     game_id: int
-    event_num: int
+    event_number: int
     event_id: int
 
 
@@ -502,14 +503,15 @@ class StarChanceRow:
 class LandingRow:
     """One batted ball, from :meth:`RioClient.landing_data`.
 
-    Locations are in the game's field units; velocities are per frame.
+    Named as the stat-file model names the same values (``Contact``,
+    ``Pitch``, ``Fielding``): world units, velocities per frame, raw angles.
+    :meth:`hit_inputs` rebuilds the swing for :func:`pyrio.sim.simulate_hit`.
     """
 
     game_id: int
-    event_num: int
+    event_number: int
     result: AtBatResult
-    chem_links: int
-    """Chemistry links on base."""
+    chemistry_links_on_base: int
     batter: Character
     pitcher: Character
     fielder: Character | None
@@ -520,38 +522,73 @@ class LandingRow:
     pitch_type: PitchType
     charge_type: ChargeType
     swing: SwingType
-    contact: ContactType | None
+    contact_type: ContactType | None
     power: int
     vertical_angle: int
     horizontal_angle: int
     contact_absolute: float
     contact_quality: float
-    rng1: float
-    rng2: float
-    rng3: float
-    ball_velocity_x: float
-    ball_velocity_y: float
-    ball_velocity_z: float
-    contact_location_x: float
-    contact_location_z: float
-    landing_location_x: float
-    landing_location_y: float
-    landing_location_z: float
+    rng: tuple[int, int, int]
+    """The three random numbers the game drew for the hit (``Contact.rng``)."""
+    velocity: tuple[float, float, float]
+    location: tuple[float, float]
+    """Where the ball was when it met the bat, ``(x, z)`` (``Contact.location``)."""
+    landing_location: tuple[float, float, float]
     max_height: float
-    hang_time: float
-    stick: InputDirection
+    hang_frames: int
+    input_direction: InputDirection
     charge_power_up: float
     charge_power_down: float
     swing_frame: int
     """The frame of the swing on which contact was made."""
-    bat_contact_location_x: float
-    bat_contact_location_z: float
+    bat_location: tuple[float, float]
+    """Where the batter held the bat, ``(x, z)`` (``Pitch.bat_location``)."""
     fielder_position: Position | None
-    fielder_location_x: float | None
-    fielder_location_y: float | None
-    fielder_location_z: float | None
-    fielder_jump: int | None
+    fielder_location: tuple[float, float, float] | None
+    fielder_jumped: bool | None
     manual_select: ManualSelect | None
+
+    def hit_inputs(
+        self,
+        *,
+        stadium: Stadium,
+        superstars: bool = False,
+        mods: frozenset[Mod] = frozenset(),
+    ) -> HitInputs:
+        """The inputs that produced this batted ball, to simulate it again.
+
+        Rio web serves neither the stadium, whether superstars were on, nor the
+        gecko mods, so they're the caller's (from the game or its tag set).
+        Raises ``ValueError`` for a bunt, and for a star swing: the row has
+        neither the team's stars nor the moonshot flag that decide which swing
+        the game gave (use ``HitInputs.from_event`` on the stat file instead).
+        """
+        if self.swing is SwingType.STAR:
+            raise ValueError(
+                f"event {self.event_number} of game {self.game_id} is a star swing, which a "
+                "landing row can't rebuild: it has no star count or moonshot flag"
+            )
+        return HitInputs(
+            batter=self.batter,
+            pitcher=self.pitcher,
+            pitch=self.pitch_type,
+            charge=self.charge_type if self.pitch_type is PitchType.CHARGE else None,
+            swing=self.swing,
+            hand=self.batting_hand,
+            stick=self.input_direction,
+            batter_x=self.bat_location[0],
+            ball_x=self.location[0],
+            ball_z=self.location[1],
+            charge_up=self.charge_power_up,
+            charge_down=self.charge_power_down,
+            contact_frame=self.swing_frame,
+            chem_links_on_base=self.chemistry_links_on_base,
+            batter_is_superstar=superstars,
+            pitcher_is_superstar=superstars,
+            stadium=stadium,
+            mods=mods,
+            seeds=self.rng,
+        )
 
 
 # --- reference data ---------------------------------------------------------

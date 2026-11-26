@@ -13,6 +13,7 @@ from pyrio import (
     Bases,
     BattingLine,
     Character,
+    FielderAction,
     Game,
     MoonshotStatus,
     OutType,
@@ -21,6 +22,7 @@ from pyrio import (
     StealType,
     Version,
     read_game,
+    team_name,
 )
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -351,9 +353,34 @@ def test_scorers_match_the_runs_the_score_counted(game: Game):
 
 def test_contact_angles_speed_and_distance(game: Game):
     contact = next(e.contact for e in game.events if e.contact and e.contact.power)
-    assert contact.horizontal_angle is not None and contact.vertical_angle is not None
+    assert contact.horizontal_angle is not None
+    assert contact.vertical_angle is not None
     assert contact.horizontal_angle_deg == (contact.horizontal_angle - 1024) * 360 / 4096
     assert contact.vertical_angle_deg == contact.vertical_angle * 360 / 4096
     x, _, z = contact.landing_location
     assert contact.distance == pytest.approx((x * x + z * z) ** 0.5)
     assert contact.exit_speed > 0
+
+
+def test_a_team_knows_its_name(game: Game):
+    for side in Side:
+        team = game.team(side)
+        expected = team_name([s.character for s in team.roster], team.captain.character)
+        assert team.name is expected
+        assert team.name is not None
+
+
+def test_the_situation_after_a_play(game: Game):
+    scoring = next(e for e in game.events if e.runs > 0 and e.outs_during_play is not None)
+    side = scoring.state.batting_side
+    assert scoring.score_after(side) == scoring.state.score(side) + scoring.runs
+    assert scoring.score_after(side.other) == scoring.state.score(side.other)
+    outs = scoring.outs_during_play
+    assert outs is not None
+    assert scoring.outs_after == scoring.state.outs + outs
+
+
+def test_sliding_catches(game: Game):
+    for event in game.events:
+        sliding = event.fielding is not None and event.fielding.action is FielderAction.SLIDING
+        assert event.has_sliding_catch is sliding

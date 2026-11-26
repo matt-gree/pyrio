@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import math
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
@@ -27,6 +28,7 @@ from pyrio import (
     SwingType,
     TeamName,
 )
+from pyrio.sim import simulate_hit
 from pyrio.web import (
     APIResponseError,
     CommunityKind,
@@ -305,7 +307,7 @@ def test_event_ids_read_the_bare_game_keyed_object(mock, rio, contract):
     mock.get("/events/").respond(json=contract("events.json"))
     refs = rio.event_ids(tags=["S13 Superstars Off"])
     assert len(refs) == 4
-    assert [(r.game_id, r.event_num) for r in refs] == [
+    assert [(r.game_id, r.event_number) for r in refs] == [
         (1189820580, 0),
         (3896251267, 0),
         (3896251267, 1),
@@ -361,8 +363,8 @@ def test_landing_data(mock, rio, contract):
     assert homer.batting_hand is Hand.RIGHT  # a boolean column: false is right
     assert homer.pitching_hand is Hand.LEFT
     assert homer.swing is SwingType.SLAP
-    assert homer.contact is ContactType.PERFECT
-    assert homer.stick == InputDirection.LEFT | InputDirection.UP
+    assert homer.contact_type is ContactType.PERFECT
+    assert homer.input_direction == InputDirection.LEFT | InputDirection.UP
     assert homer.fielder_position is None
     assert homer.manual_select is None
     # Rio web stores the angles in each other's columns; the decoder swaps back.
@@ -370,7 +372,24 @@ def test_landing_data(mock, rio, contract):
     assert caught.fielder is Character.DIDDY
     assert caught.fielder_position is Position.CENTER_FIELD
     assert caught.manual_select is ManualSelect.CLOSEST_TO_BALL
-    assert caught.contact is ContactType.SOUR_RIGHT
+    assert caught.contact_type is ContactType.SOUR_RIGHT
+    assert caught.fielder_location is not None
+
+
+def test_a_landing_row_rebuilds_its_swing(mock, rio, contract):
+    mock.get("/landing_data/").respond(json=contract("landing_data.json"))
+    homer, _ = rio.landing_data()
+    inputs = homer.hit_inputs(stadium=Stadium.PEACH_GARDEN)
+    assert (inputs.batter, inputs.swing, inputs.seeds) == (
+        Character.MARIO,
+        SwingType.SLAP,
+        homer.rng,
+    )
+    assert (inputs.batter_x, inputs.ball_x) == (homer.bat_location[0], homer.location[0])
+    simulate_hit(inputs)  # the row has everything the simulation needs
+    star = dataclasses.replace(homer, swing=SwingType.STAR)
+    with pytest.raises(ValueError, match="star swing"):
+        star.hit_inputs(stadium=Stadium.PEACH_GARDEN)
 
 
 # --- live games and reference data ----------------------------------------------

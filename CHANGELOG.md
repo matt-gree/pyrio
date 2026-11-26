@@ -54,6 +54,16 @@ the end maps the old names to the new.
 - **`Event.is_fielders_choice`**: the batter safe on a play that put another runner out,
   which Rio called an `OUT` before 2.3.0.
 - **`Game.inning_runs(side)`**: a line score, `None` for a half never batted.
+- **`Team.name`**: the team name the game gives the roster and captain, and on a HUD
+  file `logo(side)` and `inning_runs(side)` beside `team(side)` and `port(side)`.
+- **The situation after a play**: `Event.outs_after` and `Event.score_after(side)`, and
+  `Event.has_sliding_catch` beside `has_wall_jump`.
+- **`Contact.horizontal_angle_deg`, `vertical_angle_deg`, `exit_speed` and `distance`**,
+  and the simulation's `HitResult` names its flight as `Contact` does (`max_height`,
+  `hang_frames`, raw `vertical_angle` with `vertical_angle_deg`).
+- **`LandingRow.hit_inputs(stadium=...)`** rebuilds a Rio web batted ball for
+  `simulate_hit`, and `LandingRow` uses the model's names and shapes (`rng`,
+  `velocity`, `location`, `landing_location`, `input_direction`, `hang_frames`).
 - **`AtBat`, `Game.at_bats` and `HalfInning.at_bats`**: events grouped by plate
   appearance, every event in exactly one. An at-bat ends on a result, or with none when
   the next event has a new batter or half inning (a third out made on the bases), so
