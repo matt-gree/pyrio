@@ -141,9 +141,7 @@ def test_a_simulated_hit_plays_out():
             charge_down=1.0,
         )
     )
-    result = play_out_flight(
-        Stadium.MARIO_STADIUM, hit.trajectory, acceleration=hit.acceleration_per_frame
-    )
+    result = play_out_flight(Stadium.MARIO_STADIUM, hit.trajectory, acceleration=hit.acceleration)
     assert result.land_frame is not None
     assert result.trajectory[0] == hit.trajectory[0]
 
@@ -205,13 +203,13 @@ def test_play_out_takes_a_hit_and_plays_it_at_its_stadium():
     assert played == play_out_flight(
         Stadium.BOWSER_CASTLE,
         hit.trajectory,
-        acceleration=hit.acceleration_per_frame,
+        acceleration=hit.acceleration,
         seed=hazard_seed(hit.inputs.seeds),
     )
     assert play_out(hit, seed=5, hazards=False) == play_out_flight(
         Stadium.BOWSER_CASTLE,
         hit.trajectory,
-        acceleration=hit.acceleration_per_frame,
+        acceleration=hit.acceleration,
         seed=5,
         hazards=False,
     )

@@ -203,7 +203,7 @@ def play_out(
     home run).
     """
     # After a garlic ball splits, both halves fly under drag and gravity alone.
-    acceleration = (0.0, 0.0, 0.0) if hit.garlic_trajectory else hit.acceleration_per_frame
+    acceleration = (0.0, 0.0, 0.0) if hit.garlic_trajectory else hit.acceleration
     return play_out_flight(
         hit.inputs.stadium,
         hit.trajectory,
@@ -237,7 +237,7 @@ def play_out_flight(
 
     ``trajectory`` is one point per frame from the contact point, and
     ``acceleration`` the steady push per frame the ball keeps once it leaves
-    that path (a hit's ``acceleration_per_frame``). For a flight from
+    that path (a hit's ``acceleration``). For a flight from
     somewhere else: a recorded landing, or one made up to test a park.
     """
     flight = [(p[0], p[1], p[2]) for p in trajectory]

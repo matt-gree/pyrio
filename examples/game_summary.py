@@ -73,7 +73,7 @@ def draw_hit_profile(ax, contacts: tuple[ContactRecord, ...]) -> None:
     fair = [c for c in contacts if c.is_fair]
     ax.scatter(
         [c.distance for c in fair],
-        [c.apex_height for c in fair],
+        [c.max_height for c in fair],
         s=[20 + c.hang_frames * 0.8 for c in fair],
         c=[
             "#e08a00" if c.result is AtBatResult.HOME_RUN else "#2e8b3a" if c.is_hit else "#999999"

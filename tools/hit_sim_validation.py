@@ -58,14 +58,14 @@ CHECKS = (
     # shortest) scales an error there by up to 250 in Contact Absolute.
     Check("contact_absolute", lambda c: c.absolute, lambda r: r.contact_absolute, 2.5e-3),
     Check("contact_quality", lambda c: c.quality, lambda r: r.contact_quality, 1e-3),
-    Check("horizontal_angle", lambda c: c.horizontal_angle, lambda r: r.horizontal_angle_raw),
-    Check("vertical_angle", lambda c: c.vertical_angle, lambda r: r.vertical_angle_raw),
+    Check("horizontal_angle", lambda c: c.horizontal_angle, lambda r: r.horizontal_angle),
+    Check("vertical_angle", lambda c: c.vertical_angle, lambda r: r.vertical_angle),
     Check("power", lambda c: c.power, lambda r: r.power),
     *(
         Check(
             f"velocity_{axis}",
             lambda c, i=i: c.velocity[i],
-            lambda r, i=i: r.velocity_per_frame[i],
+            lambda r, i=i: r.velocity[i],
             1e-3,
         )
         for i, axis in enumerate("xyz")

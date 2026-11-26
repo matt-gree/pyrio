@@ -31,6 +31,7 @@ from .._codes import (
     Stadium,
     SwingType,
 )
+from .._game import horizontal_degrees, vertical_degrees
 from ..geometry import physics
 from . import _tables as tables
 from ._physics import GRAVITY_PER_FRAME_SQUARED, VELOCITY_KEPT_PER_FRAME
@@ -90,10 +91,10 @@ class HitOverrides:
     swings, moonshots, and hit types that force a zone.
     """
 
-    horizontal_angle_raw: int | None = None
+    horizontal_angle: int | None = None
     """The final horizontal angle, in raw units (4096 to a turn)."""
 
-    vertical_angle_raw: int | None = None
+    vertical_angle: int | None = None
     """The vertical angle, in raw units, before angles past straight up fold back."""
 
     power: int | None = None
@@ -127,8 +128,8 @@ class HitOverrides:
         stay the game's.
         """
         return cls(
-            vertical_angle_raw=contact.vertical_angle,
-            horizontal_angle_raw=contact.horizontal_angle,
+            vertical_angle=contact.vertical_angle,
+            horizontal_angle=contact.horizontal_angle,
             power=contact.power,
         )
 
@@ -312,19 +313,17 @@ class HitResult:
     contact_quality: float
     """How good the contact was within its type, 0 to 1."""
 
-    horizontal_angle_raw: int
+    horizontal_angle: int
     """Raw units, 4096 to a turn; 1024 is straight up the middle."""
 
-    vertical_angle_raw: int
-    horizontal_angle_deg: float
-    """Degrees from straight up the middle."""
+    vertical_angle: int
+    """Raw units, 4096 to a turn; 0 is level."""
 
-    vertical_angle_deg: float
     power: int
     """The game's hit power (the stat file's ``Ball Power``)."""
 
-    velocity_per_frame: Point
-    acceleration_per_frame: Point
+    velocity: Point
+    acceleration: Point
     """The steady push the curve and the contact's added gravity give each frame."""
 
     ball_energy: float
@@ -344,6 +343,16 @@ class HitResult:
     """What was simulated: the players, the swing, the stadium and the seeds."""
 
     @property
+    def horizontal_angle_deg(self) -> float:
+        """Degrees from straight up the middle, positive toward left field (third base)."""
+        return horizontal_degrees(self.horizontal_angle)
+
+    @property
+    def vertical_angle_deg(self) -> float:
+        """Degrees above level."""
+        return vertical_degrees(self.vertical_angle)
+
+    @property
     def landing(self) -> Point:
         """Where the flight ends, one frame after it first comes down."""
         return self.trajectory[-1]
@@ -360,7 +369,7 @@ class HitResult:
         return len(self.trajectory)
 
     @property
-    def apex_height(self) -> float:
+    def max_height(self) -> float:
         """The flight's highest point."""
         return max(p[1] for p in self.trajectory)
 
@@ -765,8 +774,8 @@ class _Simulation:
         if not self.is_right_handed:
             low = (0x800 - low) if low < 0x801 else (0x1800 - low)
         self.horizontal_angle = _wrap_angle(low)
-        if self.overrides.horizontal_angle_raw is not None:
-            self.horizontal_angle = self.overrides.horizontal_angle_raw
+        if self.overrides.horizontal_angle is not None:
+            self.horizontal_angle = self.overrides.horizontal_angle
 
     def _vertical_angle(self) -> None:
         forced_zone = 0
@@ -850,8 +859,8 @@ class _Simulation:
         span = higher - lower
         angle = lower if span == 0 else lower + (self.state1 - _truncate(self.state1 / span) * span)
         self.vertical_angle = angle
-        if self.overrides.vertical_angle_raw is not None:
-            self.vertical_angle = self.overrides.vertical_angle_raw
+        if self.overrides.vertical_angle is not None:
+            self.vertical_angle = self.overrides.vertical_angle
 
         # Angles past straight up fold back, and turn the hit around.
         if self.vertical_angle < 0x401:
@@ -1178,13 +1187,11 @@ class _Simulation:
             contact_type=ContactType(self.contact_type),
             contact_absolute=self.contact_absolute,
             contact_quality=self.contact_quality,
-            horizontal_angle_raw=self.horizontal_angle,
-            vertical_angle_raw=self.vertical_angle,
-            horizontal_angle_deg=(self.horizontal_angle - 0x400) * 360 / 4096,
-            vertical_angle_deg=self.vertical_angle * 360 / 4096,
+            horizontal_angle=self.horizontal_angle,
+            vertical_angle=self.vertical_angle,
             power=self.power,
-            velocity_per_frame=(self.velocity[0], self.velocity[1], self.velocity[2]),
-            acceleration_per_frame=(
+            velocity=(self.velocity[0], self.velocity[1], self.velocity[2]),
+            acceleration=(
                 self.acceleration[0],
                 self.acceleration[1],
                 self.acceleration[2],

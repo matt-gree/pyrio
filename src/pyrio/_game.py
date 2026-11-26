@@ -12,6 +12,7 @@ and angles are the game's raw angle units, 4096 to a full turn.
 
 from __future__ import annotations
 
+import math
 import re
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
@@ -69,6 +70,18 @@ _VERSION = re.compile(r"(\d+)\.(\d+)(?:\.(\d+))?(?:\.?([A-Za-z]+))?")
 _HOME_PLATE = 4  # Runner.end_base for a runner who scored
 _MERCY_LEAD = 10  # the mercy rule ends a game on a lead this size
 _OUTS_PER_HALF = 3
+_ANGLE_UNITS_PER_TURN = 4096
+_STRAIGHT_AWAY = 0x400  # the horizontal angle straight up the middle
+
+
+def horizontal_degrees(raw: int) -> float:
+    """A raw horizontal hit angle in degrees from center, positive toward left field."""
+    return (raw - _STRAIGHT_AWAY) * 360 / _ANGLE_UNITS_PER_TURN
+
+
+def vertical_degrees(raw: int) -> float:
+    """A raw vertical hit angle in degrees above level."""
+    return raw * 360 / _ANGLE_UNITS_PER_TURN
 
 
 @dataclass(frozen=True, slots=True, order=True)
@@ -263,9 +276,35 @@ class Contact:
     """Where the ball was when it met the bat, ``(x, z)``."""
     landing_location: tuple[float, float, float]
     max_height: float
-    hang_time_frames: int | None
+    hang_frames: int | None
     primary_result: PrimaryContactResult
     secondary_result: SecondaryContactResult
+
+    @property
+    def horizontal_angle_deg(self) -> float | None:
+        """Degrees from straight up the middle, positive toward left field (third base)."""
+        return None if self.horizontal_angle is None else horizontal_degrees(self.horizontal_angle)
+
+    @property
+    def vertical_angle_deg(self) -> float | None:
+        """Degrees above level: the launch angle."""
+        return None if self.vertical_angle is None else vertical_degrees(self.vertical_angle)
+
+    @property
+    def exit_speed(self) -> float:
+        """How fast the ball left the bat, in world units per frame."""
+        x, y, z = self.velocity
+        return math.sqrt(x * x + y * y + z * z)
+
+    @property
+    def distance(self) -> float:
+        """Horizontal distance from home plate to ``landing_location``.
+
+        Rio records where the ball was first touched (a glove, a wall, the
+        stands), so a caught ball's distance is where it was caught.
+        """
+        x, _, z = self.landing_location
+        return math.sqrt(x * x + z * z)
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

@@ -58,7 +58,7 @@ def test_a_centred_charge_swing_is_perfect():
     assert hit.landing == hit.trajectory[-1]
     assert hit.hang_frames == len(hit.trajectory)
     assert hit.distance == pytest.approx((hit.landing[0] ** 2 + hit.landing[2] ** 2) ** 0.5)
-    assert hit.apex_height >= hit.trajectory[0][1]
+    assert hit.max_height >= hit.trajectory[0][1]
     assert hit.star_swing is None
     assert hit.moonshot is MoonshotStatus.NONE
     assert hit.garlic_trajectory is None
@@ -87,13 +87,13 @@ def test_simulate_trajectory_runs_a_fixed_number_of_frames():
 def test_simulate_all_zones_gives_five_hits():
     hits = simulate_all_zones(BASE)
     assert len(hits) == 5
-    assert len({h.vertical_angle_raw for h in hits}) > 1
+    assert len({h.vertical_angle for h in hits}) > 1
 
 
 def test_overrides_force_their_decision():
     assert simulate_hit(replace(BASE, overrides=HitOverrides(power=999))).power == 999
-    forced = simulate_hit(replace(BASE, overrides=HitOverrides(horizontal_angle_raw=0x500)))
-    assert forced.horizontal_angle_raw == 0x500
+    forced = simulate_hit(replace(BASE, overrides=HitOverrides(horizontal_angle=0x500)))
+    assert forced.horizontal_angle == 0x500
 
 
 # --- validation ------------------------------------------------------------------
@@ -195,8 +195,8 @@ def test_remove_slice_sends_an_early_charge_contact_foul():
     early = replace(BASE, contact_frame=2)
     sliced = simulate_hit(early)
     fixed = simulate_hit(replace(early, mods=frozenset({Mod.REMOVE_SLICE})))
-    assert sliced.horizontal_angle_raw == 0x400  # dead up the middle
-    assert fixed.horizontal_angle_raw != 0x400
+    assert sliced.horizontal_angle == 0x400  # dead up the middle
+    assert fixed.horizontal_angle != 0x400
 
 
 def test_the_toad_reach_fix_applies_only_to_non_red_toads():
@@ -229,6 +229,6 @@ def test_a_captain_star_pitch_is_fully_cursed():
 def test_the_stick_and_hand_move_the_hit():
     late = replace(BASE, contact_frame=8)
     push = simulate_hit(replace(late, stick=InputDirection.RIGHT))
-    assert push.horizontal_angle_raw == simulate_hit(late).horizontal_angle_raw - 200
+    assert push.horizontal_angle == simulate_hit(late).horizontal_angle - 200
     lefty = simulate_hit(replace(BASE, hand=Hand.LEFT))
-    assert lefty.horizontal_angle_raw != simulate_hit(BASE).horizontal_angle_raw
+    assert lefty.horizontal_angle != simulate_hit(BASE).horizontal_angle

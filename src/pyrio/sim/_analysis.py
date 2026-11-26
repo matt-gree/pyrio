@@ -112,8 +112,8 @@ class ContactRecord:
         return self.hit.trajectory
 
     @property
-    def apex_height(self) -> float:
-        return self.hit.apex_height
+    def max_height(self) -> float:
+        return self.hit.max_height
 
     @property
     def is_foul(self) -> bool:
@@ -275,7 +275,7 @@ def find_highlights(
     return Highlights(
         hardest_hit=best(fair, key=lambda c: c.power),
         longest_flight=best(fair, key=lambda c: c.distance),
-        highest_apex=best(fair, key=lambda c: c.apex_height),
+        highest_apex=best(fair, key=lambda c: c.max_height),
         deepest_robbery=best(caught, key=lambda c: c.distance),
         robbed_home_runs=()
         if stadium is None
@@ -298,7 +298,7 @@ def format_highlights(highlights: Highlights) -> list[str]:
     if c := highlights.highest_apex:
         lines.append(
             f"HIGHEST APEX: {c.batter} ({c.player}) - "
-            f"apex {c.apex_height:.1f}, {c.hang_frames} frame hang time"
+            f"apex {c.max_height:.1f}, {c.hang_frames} frame hang time"
         )
     if c := highlights.deepest_robbery:
         lines.append(

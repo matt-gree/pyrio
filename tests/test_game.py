@@ -347,3 +347,13 @@ def test_scorers_match_the_runs_the_score_counted(game: Game):
     for side in (Side.AWAY, Side.HOME):
         scored = sum(len(e.scorers) for e in game.events if e.state.batting_side is side)
         assert scored == game.team(side).score
+
+
+def test_contact_angles_speed_and_distance(game: Game):
+    contact = next(e.contact for e in game.events if e.contact and e.contact.power)
+    assert contact.horizontal_angle is not None and contact.vertical_angle is not None
+    assert contact.horizontal_angle_deg == (contact.horizontal_angle - 1024) * 360 / 4096
+    assert contact.vertical_angle_deg == contact.vertical_angle * 360 / 4096
+    x, _, z = contact.landing_location
+    assert contact.distance == pytest.approx((x * x + z * z) ** 0.5)
+    assert contact.exit_speed > 0

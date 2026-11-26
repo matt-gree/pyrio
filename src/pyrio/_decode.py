@@ -752,7 +752,7 @@ def _contact(node: _Node) -> Contact:
             node.number("Ball Landing Position - Z"),
         ),
         max_height=node.number("Ball Max Height"),
-        hang_time_frames=node.maybe_integer("Ball Hang Time"),
+        hang_frames=node.maybe_integer("Ball Hang Time"),
         primary_result=node.coded("Contact Result - Primary", PrimaryContactResult),
         secondary_result=node.coded("Contact Result - Secondary", SecondaryContactResult),
     )

@@ -51,8 +51,8 @@ def test_recorded_contacts_simulate_to_what_was_recorded(path: pathlib.Path):
         result = simulate_hit(inputs)
         if (
             result.contact_type is contact.type
-            and result.horizontal_angle_raw == contact.horizontal_angle
-            and result.vertical_angle_raw == contact.vertical_angle
+            and result.horizontal_angle == contact.horizontal_angle
+            and result.vertical_angle == contact.vertical_angle
             and contact.power in (None, result.power)
             and (
                 contact.quality is None
@@ -108,7 +108,7 @@ def test_a_pop_fly_star_swing_records_its_own_charge_not_a_held_one():
     assert (inputs.stars, inputs.charge_up, inputs.charge_down) == (5, 0.0, 0.0)
     result = simulate_hit(inputs)
     assert result.moonshot is MoonshotStatus.NONE
-    assert (result.power, result.vertical_angle_raw) == (
+    assert (result.power, result.vertical_angle) == (
         event.contact.power,
         event.contact.vertical_angle,
     )
@@ -196,5 +196,5 @@ def test_overrides_from_contact_fly_the_recorded_hit():
         assert event.contact is not None
         hit = simulate_hit(replace(inputs, overrides=HitOverrides.from_contact(event.contact)))
         assert hit.power == event.contact.power
-        assert event.contact.hang_time_frames is not None
-        assert abs(hit.hang_frames - event.contact.hang_time_frames) <= 3
+        assert event.contact.hang_frames is not None
+        assert abs(hit.hang_frames - event.contact.hang_frames) <= 3
