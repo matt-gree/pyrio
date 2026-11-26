@@ -62,6 +62,13 @@ the end maps the old names to the new.
 - **`Contact.horizontal_angle_deg`, `vertical_angle_deg`, `exit_speed` and `distance`**,
   and the simulation's `HitResult` names its flight as `Contact` does (`max_height`,
   `hang_frames`, raw `vertical_angle` with `vertical_angle_deg`).
+- **The bases and fielder reach** in `pyrio.geometry`: `BASE_LOCATIONS` (home, first,
+  second, third) and `MOUND_LOCATION` from the game's `base_MoundCoordinates`, and
+  `fielder_reach(character, position, frames)`, how far a fielder can run and dive
+  that many frames after contact, by the game's rules: the lockout, acceleration to
+  jogging speed over 15 frames, the sprint (up to 1.4 times jogging speed) and the
+  diving catch's window and Sliding Catch bonus. 99.4% of 15,700 recorded fly-ball
+  catches fall inside it.
 - **`LandingRow.hit_inputs(stadium=...)`** rebuilds a Rio web batted ball for
   `simulate_hit`, and `LandingRow` uses the model's names and shapes (`rng`,
   `velocity`, `location`, `landing_location`, `input_direction`, `hang_frames`).

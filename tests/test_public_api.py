@@ -155,10 +155,13 @@ def test_web_names():
 
 
 GEOMETRY = [
+    "BASE_LOCATIONS",
     "FIELDER_LOCKOUT_FRAMES",
     "FIELDER_START_LOCATIONS",
+    "FielderReach",
     "Hazard",
     "HazardKind",
+    "MOUND_LOCATION",
     "Point",
     "StadiumPhysics",
     "Surface",
@@ -168,6 +171,7 @@ GEOMETRY = [
     "boundary",
     "boundary_crossing",
     "clears_wall",
+    "fielder_reach",
     "hazards",
     "physics",
     "triangles",

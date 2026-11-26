@@ -66,7 +66,7 @@ Sources live under `src/pyrio/`. **`import pyrio` is the core**; each separate j
 | `_game.py` | The model: `Game`, `Team`, `RosterSpot`, `Event`, `GameState`, `Pitch`, `Contact`, `Fielding`, `Runner`, `GameResult`, `HUDSnapshot`, `Version`. Frozen dataclasses, no parsing. |
 | `_decode.py` | `read_game`, `read_hud`: the version-aware decoder. The only place that knows the stat-file format or any per-version rule. |
 | `_serialize.py` | `to_jsonable`. |
-| `geometry/` | Stadium geometry from the game's data (`geometry/_data/`): walls, boundary, collision triangles, hazards, physics, fielder starts and lockouts. Every function takes a `Stadium`. |
+| `geometry/` | Stadium geometry from the game's data (`geometry/_data/`): walls, boundary, collision triangles, hazards, physics; and what's the same at every park: the bases, fielder starts, lockouts and `fielder_reach`. Every per-stadium function takes a `Stadium`. |
 | `sim/` | `simulate_hit` and friends, `HitInputs.from_event`, `simulate_contacts`, `play_out` (the live ball), highlights. Ported from RioVisualizer and held to it by `tools/check_live_ball_parity.py`; `tests/sim/test_goldens.py` holds it to its own recorded results. |
 | `web/` | `RioClient`, `AsyncRioClient`, `DiskCache`, response models, `APIError` hierarchy. The only code that touches the network, and the only importer of httpx. Provisional until Rio web 2.0 settles. |
 | `ratings.py` | `Rating`, `update`, `win_probability` (Glicko-2, Rio web's parameters). |
