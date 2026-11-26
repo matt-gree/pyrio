@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "projectrio"
-version = "1.0.0.dev0"
+version = "1.0.0"
 description = "Project Rio for Python: Mario Superstar Baseball stat files, game data and the Rio web API"
 readme = "README.md"
 license = "MIT"
@@ -12,7 +12,7 @@ license-files = ["LICENSE"]
 authors = [{ name = "MattGree", email = "MattGreeMSSB@gmail.com" }]
 requires-python = ">=3.11"
 classifiers = [
-    "Development Status :: 4 - Beta",
+    "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3 :: Only",

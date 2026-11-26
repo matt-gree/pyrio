@@ -131,7 +131,9 @@ Guidelines, with the reasoning so you can judge edge cases.
 - Versioning: semantic versioning from 1.0.0. The version lives only in `pyproject.toml`; `pyrio.__version__` reads the installed distribution. Changes go in `CHANGELOG.md` (Keep a Changelog).
 - Commits: imperative subject lines, present tense ("Add X", "Fix Y"). Note breaking changes in the message.
 
-**Still to do (from the plan):** `pyright --verifytypes pyrio` in CI, mkdocs-material API docs with a cookbook page, and publishing to PyPI from a tag via trusted publishing.
+**Releasing:** bump `version` in `pyproject.toml`, date the `CHANGELOG.md` entry, merge to `main`, and push a `vX.Y.Z` tag. `.github/workflows/publish.yml` reruns CI, checks the tag matches the version, and publishes to PyPI by trusted publishing (no token). The wheel job also runs `pyright --verifytypes pyrio`, so every public name stays fully typed.
+
+**Still to do (from the plan):** mkdocs-material API docs with a cookbook page.
 
 **Branches and PRs.** Work on feature branches, PR into `main`. Keep PRs focused — refactors, features and fixes separately when reasonable. (The 1.0 rebuild is the exception: it lands as one branch, `v1.0.0-prep`.)
 

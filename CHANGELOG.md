@@ -4,7 +4,7 @@ All notable changes to pyrio are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and pyrio uses
 [semantic versioning](https://semver.org/) from 1.0.0 on.
 
-## [1.0.0] - Unreleased
+## [1.0.0] - 2026-11-26
 
 A rebuild, planned in [`docs/v1.0.0-audit.md`](docs/v1.0.0-audit.md). Nothing from
 0.1.0 is kept for compatibility: every module was rewritten or deleted. The table at
@@ -206,4 +206,4 @@ Everything from 0.1.0. Where it went:
 The first packaged release: stat-file parsing, the web client and the domain helpers
 in a flat layout.
 
-[1.0.0]: https://github.com/matt-gree/pyrio/compare/main...v1.0.0-prep
+[1.0.0]: https://github.com/matt-gree/pyrio/releases/tag/v1.0.0
