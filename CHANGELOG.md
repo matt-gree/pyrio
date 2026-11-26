@@ -48,6 +48,8 @@ the end maps the old names to the new.
   the team logo.
 - **`HitOverrides.from_contact(contact)`** pins a recorded contact's angles and power,
   to fly exactly the recorded hit.
+- **`Event.scorers`**: who scored on a play, as many runners as the score counted (Rio's
+  end bases alone are wrong on a third-out catch and on a walk).
 - **`Event.is_fielders_choice`**: the batter safe on a play that put another runner out,
   which Rio called an `OUT` before 2.3.0.
 - **`Game.inning_runs(side)`**: a line score, `None` for a half never batted.
