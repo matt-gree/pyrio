@@ -690,7 +690,27 @@ def _runners(node: _Node, batting: Team, result: AtBatResult) -> tuple[Runner, .
                 steal=runner.coded("Steal", StealType),
             )
         )
+    if result.is_walk:
+        return _walk_runners(runners)
     return tuple(runners)
+
+
+def _walk_runners(runners: list[Runner]) -> tuple[Runner, ...]:
+    # (b), every version: on a walk or hit by pitch Rio logs the result before
+    # anyone moves, so the batter's end base reads 0 and the forced runners
+    # haven't advanced. Each is put on the next base, as the game does; a
+    # runner already moved (a steal on the pitch) is left alone.
+    occupied = {r.start_base for r in runners if r.start_base}
+    forced = 0  # bases from first that are filled in a row, so forced to move
+    while forced + 1 in occupied:
+        forced += 1
+    corrected: list[Runner] = []
+    for runner in runners:
+        moves = runner.start_base == 0 or runner.start_base <= forced
+        if moves and not runner.is_out and runner.end_base in (0, runner.start_base):
+            runner = replace(runner, end_base=runner.start_base + 1)
+        corrected.append(runner)
+    return tuple(corrected)
 
 
 def _pitch(node: _Node, rules: _Rules) -> Pitch:

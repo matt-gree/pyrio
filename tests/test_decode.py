@@ -748,3 +748,22 @@ def test_a_2_3_0_file_keeps_its_swing_none():
     event["Pitch"]["Type of Swing"] = 0
     game = read_game(data)
     assert any(e.pitch and e.pitch.swing is SwingType.NONE and e.contact for e in game.events)
+
+
+def test_a_walk_moves_the_batter_and_the_forced_runners():
+    data = load(V2_1_1)
+    walks = [
+        (i, raw)
+        for i, raw in enumerate(data["Events"])
+        if raw["Result of AB"] in (AtBatResult.WALK.id, AtBatResult.HIT_BY_PITCH.id)
+    ]
+    assert walks
+    game = read_game(data)
+    for i, raw in walks:
+        assert raw["Runner Batter"]["Runner Result Base"] == 0  # Rio never moves them
+        event = game.events[i]
+        on = {r.start_base for r in event.runners if r.start_base}
+        for runner in event.runners:
+            forced = runner.start_base == 0 or all(b in on for b in range(1, runner.start_base))
+            expected = runner.start_base + 1 if forced else runner.start_base
+            assert runner.end_base == expected

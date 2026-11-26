@@ -340,7 +340,9 @@ class Runner:
     """A runner in an event, the batter included: where they started and finished.
 
     Rio writes the end base when the result is logged, which can be before the
-    play finishes; a game-ending play often has none at all. ``Event.runs`` is
+    play finishes; a game-ending play often has none at all. The decoder puts
+    right the two it can: every runner scores on a home run, and on a walk or
+    hit by pitch the batter and the forced runners take the next base. ``Event.runs`` is
     counted from the score instead, so it's always right.
     """
 
@@ -418,8 +420,8 @@ class Event:
 
         Rio writes where runners ended when the result is logged, which can be
         before the play is over: a runner who crossed the plate on a third-out
-        catch reads home though the run didn't count, and on a walk the forced
-        runners haven't moved yet. So ``runs`` says how many scored; the
+        catch reads home though the run didn't count, and on a steal or pickoff
+        runners can read mid-play. So ``runs`` says how many scored; the
         runners marked home, then the lead runners, say who.
         """
         if self.runs <= 0:
